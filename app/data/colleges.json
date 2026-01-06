@@ -1,0 +1,502 @@
+[
+
+  {
+    "id": "iit-bombay",
+    "slug": "iit-bombay",
+    "name": "Indian Institute of Technology Bombay (IIT Bombay)",
+    "location": "Mumbai, Maharashtra",
+    "established": 1958,
+    "type": "University",
+    "rank": 3,
+    "city": "Mumbai",
+    "affiliated": "Autonomous Institute under Ministry of Education, Government of India",
+    "image": "https://images.collegedunia.com/public/image/iit_bombay_sign_angle_1__dfa638c534baead270684e71cb29be01.jpeg?tr=w-1310,h-480,c-force",
+   
+  "about": {
+    "introduction": "IIT Bombay is a premier engineering institute in India, recognized globally for its academic excellence, vibrant campus life, and cutting-edge research. Established in 1958, it has grown into a hub of innovation, entrepreneurship, and interdisciplinary education.",
+    
+    "history": "Founded in 1958 with assistance from UNESCO and the Soviet Union, IIT Bombay was the second IIT to be established in India. It has since evolved into one of the top-ranked institutions in the country, fostering innovation and global collaborations.",
+    
+    "accreditation_affiliation": "IIT Bombay is recognized by the University Grants Commission (UGC) and the All India Council for Technical Education (AICTE). It holds a NAAC 'A++' accreditation, the highest possible grade in India.",
+    
+    "campus_infrastructure": "The 550-acre campus in Powai, Mumbai features state-of-the-art academic blocks, modern laboratories, digital classrooms, a world-class library, well-equipped hostels, sports complexes, food courts, and medical facilities. The lush green surroundings and lakes offer a peaceful learning environment.",
+    
+    "academic_excellence": "Ranked #3 in the NIRF 2023 rankings, IIT Bombay is acclaimed for its research contributions, innovative teaching methodologies, and interdisciplinary academic programs. It boasts several centers of excellence including those in AI, Robotics, Nanotechnology, and Energy Systems.",
+    
+    "excellence": "The institute consistently ranks among the top engineering colleges in Asia and India. It is known for high-impact research, numerous international collaborations, and successful industry partnerships. The innovation ecosystem here has led to the creation of numerous startups and patents.",
+    
+    "student_life": "IIT Bombay offers an enriching student life with 100+ clubs and student organizations. Flagship events like Mood Indigo (Asia’s largest cultural fest) and Techfest (Asia’s largest science and technology festival) define its vibrant culture. The campus promotes creativity, leadership, and diversity through year-round activities.",
+    
+    "studentLife": "Beyond academics, students engage in sports, music, dance, drama, entrepreneurship, and social initiatives. Facilities include sports stadiums, gymnasiums, hobby clubs, and student-run hostels that foster a strong community life.",
+    
+    "mission": "To foster an environment of excellence by imparting technical education and conducting research to serve society, while encouraging innovation, leadership, and entrepreneurship.",
+    
+    "vision": "To be the fountainhead of new ideas and innovations in science and technology, and continue to be a source of pride for India and the world.",
+    
+    "alumni": "IIT Bombay's alumni network includes influential leaders such as Nandan Nilekani (Co-founder, Infosys), Manohar B. Parrikar (Former Defence Minister of India), Parag Agrawal (Former CEO, Twitter), and several globally recognized entrepreneurs, scientists, and academicians.",
+    
+    "location": "The campus is located in Powai, Mumbai — nestled between hills and lakes — offering a unique blend of natural beauty and urban accessibility. It is well-connected by road, rail, and air.",
+    
+    "website": "https://www.iitb.ac.in"
+  },
+
+    "courses": {
+      "undergraduate": [
+        "B.Tech in Computer Science & Engineering",
+        "B.Tech in Electrical Engineering",
+        "B.Tech in Mechanical Engineering",
+  
+        "Dual Degree Programs"
+      ],
+      "dualDegree": [
+        "B.Tech in Computer Science & Engineering",
+        "B.Tech in Electrical Engineering",
+        "B.Tech in Mechanical Engineering",
+        "Dual Degree Programs"
+      ],
+      "postgraduate": [
+        "M.Tech Programs",
+        "MBA Program",
+        "M.Sc & Ph.D Programs"
+      ]
+    },
+    "admissions": {
+      "process": "UG: JEE Advanced rank + JoSAA counseling. PG: GATE/CAT/IIT JAM + interview.",
+      "dates": "UG: April-May (JEE Advanced), June-July (JoSAA). PG: Dec-Jan (Applications), Mar-Apr (Interviews)."
+    },
+    "rankings": {
+      "nirf": 3,
+      "qs": 172,
+
+    "excellence_areas": [
+        "Artificial Intelligence",
+        "Robotics",
+        "Quantum Computing"
+      ],
+
+    "description": "Ranked 1st for Engineering by NIRF 2024",
+    "source": "NIRF 2024",
+    "position": "1"
+    },
+    "placement": {
+      "highest_package": "2.1 Cr (International)",
+      "average_package": "21 LPA",
+      "top_recruiters": ["Google", "Microsoft", "Uber", "Samsung", "Goldman Sachs"]
+    },
+    "facilities": [
+      "📘Library",
+      "🛏️Hostels",
+      "⚽Sports Complex",
+      "🔬Labs",
+      "📶Wi-Fi Campus",
+      "🏥Medical Center",
+      "🍽️Cafeteria"
+    ],
+
+    "faqs": [
+  {
+    "question": "What courses are offered?",
+    "answer": "We offer undergraduate, postgraduate, and doctoral programs in engineering and sciences."
+  },
+  {
+    "question": "Is there hostel accommodation?",
+    "answer": "Yes, both boys and girls hostels are available on campus."
+  }
+]
+,
+   
+    "gallery": ["iitb", "iitb2", "iitb3", "iitb4", "four_months_plan"]
+
+    ,
+   
+    "contact": {
+      "email": "info@iitb.ac.in",
+      "phone": "+91 22 2572 2545",
+      "website": "https://www.iitb.ac.in",
+      "address": "IIT Bombay, Powai, Mumbai, Maharashtra 400076"
+    }
+  },
+{
+  "id": "iit-madras",
+  "slug": "iit-madras",
+  "name": "Indian Institute of Technology Madras (IIT Madras)",
+  "location": "Chennai, Tamil Nadu",
+  "established": 1959,
+  "type": "Institute of National Importance",
+  "rank": 1,
+  "city": "Chennai",
+  "affiliated": "Autonomous Institute under the Ministry of Education, Government of India",
+  "image": "https://d12aarmt01l54a.cloudfront.net/cms/images/Media-20240613112805/808-440.png",
+
+  "about": {
+    "introduction": "IIT Madras is India’s top-ranked engineering institute, renowned for its academic excellence, cutting-edge research, and vibrant student community. The 620-acre lush green campus is located in the heart of Chennai and is a hub of innovation and entrepreneurship.",
+    "history": "Established in 1959 with technical and financial assistance from the former Government of West Germany, IIT Madras is one of the earliest IITs and has evolved into a world-class technological institution.",
+    "accreditation_affiliation": "IIT Madras is recognized by UGC and AICTE and has received NAAC accreditation with 'A++'. It is also ranked globally by QS and THE rankings.",
+    "campus_infrastructure": "The campus has state-of-the-art research labs, modern classrooms, a central library with 1 million+ volumes, hostels for over 10,000 students, high-speed Wi-Fi, an innovation ecosystem (IITM Research Park), and extensive sports and cultural facilities.",
+    "academic_excellence": "IIT Madras consistently ranks #1 in the NIRF rankings (2016-2024) and is a leader in research, interdisciplinary programs, and online education initiatives such as the BSc in Data Science.",
+    "excellence": "IIT Madras is a pioneer in renewable energy, AI/ML, quantum computing, advanced materials, and aerospace research. The campus hosts India's first university-based Research Park with 200+ companies.",
+    "student_life": "Students enjoy a vibrant hostel life with over 20 hostels, cultural and technical clubs, and fests like Saarang (Asia’s largest cultural fest) and Shaastra (ISO-certified tech fest).",
+    "mission": "To foster excellence in education, research, and innovation to serve society.",
+    "vision": "To be a global leader in technological education and research, fostering inclusive growth and sustainability.",
+    "alumni": "Prominent alumni include Sundar Pichai (CEO, Google), Kris Gopalakrishnan (Co-founder, Infosys), and many leaders in academia, industry, and public service.",
+    "location": "The campus is located in Guindy, Chennai, within a protected forest reserve. It is well connected to Chennai International Airport and major transit hubs.",
+    "website": "https://www.iitm.ac.in"
+  },
+
+  "courses": {
+    "undergraduate": [
+      "B.Tech in Computer Science & Engineering",
+      "B.Tech in Electrical Engineering",
+      "B.Tech in Mechanical Engineering",
+      "B.Tech in Civil Engineering",
+      "B.Tech in Aerospace Engineering",
+      "B.Tech in Naval Architecture & Ocean Engineering",
+      "B.Tech in Chemical Engineering",
+      "B.Tech in Engineering Physics",
+      "B.Tech in Metallurgical & Materials Engineering",
+      "B.Tech in Biotechnology"
+    ],
+    "dual_degree": [
+      "B.Tech + M.Tech in Electrical Engineering",
+      "B.Tech + M.Tech in Mechanical Engineering",
+      "B.Tech + M.Tech in Ocean Engineering",
+      "B.Tech + M.Tech in Aerospace Engineering"
+    ],
+    "postgraduate": [
+      "M.Tech in Computer Science, AI, Data Science, Robotics, and other core engineering branches",
+      "MBA (through CAT)",
+      "M.Sc in Physics, Chemistry, and Mathematics",
+      "MA in Development Studies and English",
+      "MS (by research) in various departments",
+      "Ph.D in Engineering, Sciences, Humanities & Management"
+    ],
+    "online": [
+      "B.Sc in Data Science and Applications",
+      "Diplomas in Programming, Machine Learning, and AI"
+    ]
+  },
+
+  "admissions": {
+    "process": "UG: Admission is through JEE Advanced followed by JoSAA counseling. PG: Admission via GATE, JAM, CAT, or internal written test & interview (for MS/PhD).",
+    "dates": "UG: April-May (JEE Advanced), June-July (JoSAA). PG: Dec-Jan (Applications), Mar-Apr (Interviews)."
+  },
+
+  "rankings": {
+    "nirf": 1,
+    "qs": 285,
+    "times": 601,
+    "excellence_areas": [
+      "Artificial Intelligence and Machine Learning",
+      "Renewable Energy and Sustainability",
+      "Quantum Computing",
+      "Aerospace and Ocean Engineering",
+      "Entrepreneurship & Startups"
+    ],
+    "description": "Ranked 1st in India for Overall and Engineering by NIRF 2024.",
+    "source": "NIRF, QS, THE Rankings 2024",
+    "position": "1"
+  },
+
+  "placement": {
+    "highest_package": "₹1.98 Cr (International)",
+    "average_package": "₹22 LPA",
+    "top_recruiters": [
+      "Google",
+      "Apple",
+      "Amazon",
+      "Texas Instruments",
+      "Goldman Sachs",
+      "HSBC",
+      "Intel",
+      "Bosch",
+      "McKinsey & Company",
+      "TCS Research"
+    ]
+  },
+
+  "facilities": [
+    "📘 Central Library with 1M+ books and e-journals",
+    "🛏️ Hostels for 10,000+ students",
+    "⚽ Olympic-level Sports Complex",
+    "🏊 Swimming Pool and Indoor Stadium",
+    "🔬 Cutting-edge Research Labs",
+    "📶 High-speed Wi-Fi Campus",
+    "🏥 24x7 Medical Center with Ambulance",
+    "🌳 Nature Trails & Wildlife Reserve",
+    "🏦 On-campus Banks and ATMs",
+    "☕ Multiple Cafeterias & Food Courts"
+  ],
+
+  "faqs": [
+    {
+      "question": "Does IIT Madras offer online degree programs?",
+      "answer": "Yes, it offers a fully online B.Sc in Data Science and Applications, and multiple diploma programs."
+    },
+    {
+      "question": "What is unique about the IIT Madras campus?",
+      "answer": "It is located in a forest reserve with diverse wildlife, providing a serene environment for study."
+    },
+    {
+      "question": "What are the major fests at IIT Madras?",
+      "answer": "Saarang (cultural) and Shaastra (technical) are the two flagship annual events."
+    }
+  ],
+
+  "gallery": [
+    "madras01",
+    "iitm1",
+    "iitm2",
+    "iitm3",
+    "iitm4",
+    "iitm5",
+    "iitm6",
+    "iitm7",
+    "iitm8",
+    "saarang1",
+    "shaastra1"
+  ],
+
+  "contact": {
+    "email": "registrar@iitm.ac.in",
+    "phone": "+91 44 2257 8101",
+    "website": "https://www.iitm.ac.in",
+    "address": "IIT Madras, Sardar Patel Road, Chennai, Tamil Nadu 600036"
+  }
+}
+,
+  
+
+
+
+
+
+{
+  "id": "iit-hyderabad3",
+    "slug": "iit-hyderabad", 
+
+  "name": "Indian Institute of Technology Hyderabad (IIT Hyderabad)",
+  "location": "Hyderabad, Telangana",
+  "established": 2008,
+  "type": "University",
+  "rank": 8,
+  "city": "Hyderabad",
+  "affiliated": "Autonomous Institute under Ministry of Education, Government of India",
+  "image": "https://www.edtechreview.in/wp-content/uploads/iiit-hyderabad-unveils-online-masters-programme.webp",
+
+  "about": {
+    "introduction": "IIT Hyderabad is one of the second-generation IITs, rapidly gaining global recognition for academic excellence, innovation, and modern campus infrastructure.",
+    
+    "history": "Established in 2008 with support from the Government of Japan, IIT Hyderabad began its journey in a temporary campus before moving to its permanent facility in Kandi, Telangana. It has quickly grown in stature due to its research-oriented culture and international collaborations.",
+    
+    "accreditation_affiliation": "IIT Hyderabad is recognized by the UGC and AICTE. It maintains the academic rigor of IITs and is accredited with the highest national standards.",
+    
+    "campus_infrastructure": "Spread across 576 acres, the campus features unique, eco-friendly architecture with digitally-enabled classrooms, modern research labs, student hostels, cafeterias, libraries, and healthcare facilities.",
+    
+    "academic_excellence": "IIT Hyderabad is known for its strong programs in AI, IoT, Biomedical Engineering, and 3D Printing. It is ranked #8 in NIRF 2023 and fosters interdisciplinary research and startup incubation.",
+    
+    "excellence": "IIT Hyderabad has over 275 faculty and 3,000+ students. It is pioneering in integrating AI in teaching and has active MoUs with leading global universities and industries.",
+    
+    "student_life": "Student life is dynamic with active participation in cultural, technical, and sports events. Annual fests like Elan & ηVision draw national attention. The campus also supports wellness and recreation through clubs and societies.",
+    
+    "studentLife": "Students participate in a wide range of extracurriculars — from robotics and music to debate and coding hackathons. Hostels are equipped with modern amenities, and a student-run gymkhana organizes activities year-round.",
+    
+    "mission": "To be recognized as a world-class institution in science and technology through excellence in teaching, research, and innovation.",
+    
+    "vision": "To empower students and researchers to create cutting-edge solutions for global and societal challenges.",
+    
+    "alumni": "Although relatively new, IIT Hyderabad has produced successful entrepreneurs, academicians, and tech leaders working in top global firms and research organizations.",
+    
+    "location": "Located in Kandi, Sangareddy district, about 25 km from Hyderabad city. The serene campus promotes a focused learning atmosphere, connected by road and rail.",
+    
+    "website": "https://www.iith.ac.in"
+  },
+
+  "courses": {
+    "undergraduate": [
+      "B.Tech in Artificial Intelligence",
+      "B.Tech in Computer Science & Engineering",
+      "B.Tech in Mechanical Engineering",
+      "B.Tech in Civil Engineering",
+      "B.Tech in Biomedical Engineering"
+    ],
+    "dualDegree": [
+      "B.Tech + M.Tech in Electrical Engineering",
+      "B.Tech + M.Tech in Chemical Engineering"
+    ],
+    "postgraduate": [
+      "M.Tech Programs",
+      "M.Des (Design)",
+      "M.Sc & Ph.D Programs"
+    ]
+  },
+
+  "admissions": {
+    "process": "UG: JEE Advanced rank + JoSAA counseling. PG: GATE/CAT/IIT JAM + interview.",
+    "dates": "UG: April-May (JEE Advanced), June-July (JoSAA). PG: Dec-Jan (Applications), Mar-Apr (Interviews)."
+  },
+
+  "rankings": {
+    "nirf": 8,
+    "qs": 581,
+    "excellence_areas": [
+      "Artificial Intelligence",
+      "3D Printing",
+      "Biomedical Engineering"
+    ],
+    "description": "Ranked 8th for Engineering by NIRF 2024",
+    "source": "NIRF 2024",
+    "position": "8"
+  },
+
+  "placement": {
+    "highest_package": "65 LPA",
+    "average_package": "20 LPA",
+    "top_recruiters": ["Amazon", "Microsoft", "Oracle", "Flipkart", "TCS Research"]
+  },
+
+  "facilities": [
+    "📘Library",
+    "🛏️Hostels",
+    "⚽Sports Complex",
+    "🔬Labs",
+    "📶Wi-Fi Campus",
+    "🏥Medical Center",
+    "🎨Innovation Labs"
+  ],
+
+  "faqs": [
+    {
+      "question": "Does IIT Hyderabad offer AI and 3D Printing courses?",
+      "answer": "Yes, IIT Hyderabad is known for its specialized programs in AI, 3D Printing, and Biomedical Engineering."
+    },
+    {
+      "question": "Is IIT Hyderabad well connected to the city?",
+      "answer": "Yes, it’s about 25 km from Hyderabad and is accessible via bus, cab, and rail."
+    }
+  ],
+
+  "gallery": ["hyd1", "hyd2", "hyd3", "hyd4", "hyd5", "hyd6", "hyd7", "hyd8", "hyd9"],
+
+  "contact": {
+    "email": "info@iith.ac.in",
+    "phone": "+91 40 2301 6033",
+    "website": "https://www.iith.ac.in",
+    "address": "IIT Hyderabad, Kandi, Sangareddy, Telangana 502285"
+  }
+},
+
+
+{
+  "id": "ace-engg-college1",
+  "slug": "ace-engineering-college",
+  "name": "ACE Engineering College",
+  "location": "Ghatkesar, Hyderabad, Telangana",
+  "established": 2007,
+  "type": "Private Engineering College",
+  "rank": 130,
+  "city": "Hyderabad",
+  "affiliated": "Affiliated to JNTU Hyderabad",
+  "image": "https://www.aceec.ac.in/wp-content/uploads/2023/01/college_front.jpg",
+
+  "about": {
+    "introduction": "ACE Engineering College, Hyderabad is a reputed private engineering college known for its quality education, skilled faculty, and career-oriented programs. It emphasizes innovation, discipline, and industry-readiness.",
+    
+    "history": "Established in 2007 by the ACE Engineering Academy, the college has grown into a respected institution offering undergraduate engineering programs affiliated to JNTUH.",
+    
+    "accreditation_affiliation": "Affiliated to Jawaharlal Nehru Technological University, Hyderabad (JNTUH) and approved by AICTE. It is accredited by NAAC with an 'A' grade and NBA for select programs.",
+    
+    "campus_infrastructure": "The campus spans over 10 acres with modern infrastructure, smart classrooms, well-equipped labs, a library, hostels, sports facilities, and a central auditorium.",
+    
+    "academic_excellence": "The college focuses on academic rigor and practical skills, with special training for GATE, placement, and public sector jobs. It also promotes research and hands-on learning.",
+    
+    "excellence": "Known for GATE coaching integration, campus discipline, and top university results, ACE has earned a strong reputation in South India.",
+    
+    "student_life": "ACE supports holistic development through clubs like robotics, coding, arts, and cultural committees. Annual events like AAROHAN and technical fests are held regularly.",
+    
+    "studentLife": "Students engage in co-curriculars, coding competitions, sports meets, NSS activities, and professional society chapters (IEEE, ISTE, etc.).",
+    
+    "mission": "To provide high-quality technical education with emphasis on skill development, innovation, and value-based learning.",
+    
+    "vision": "To emerge as a premier engineering institution producing globally competent professionals with social responsibility.",
+    
+    "alumni": "Alumni work in reputed companies, public sector units, and higher education institutions. Some pursue M.Tech and MS in IITs, NITs, and foreign universities.",
+    
+    "location": "ACE Engineering College is located in Ankushapur, Ghatkesar Mandal, Hyderabad, with easy access via Outer Ring Road.",
+    
+    "website": "https://www.aceec.ac.in"
+  },
+
+  "courses": {
+    "undergraduate": [
+      "B.Tech in Computer Science & Engineering",
+      "B.Tech in Artificial Intelligence & Data Science",
+      "B.Tech in Electronics & Communication Engineering",
+      "B.Tech in Electrical & Electronics Engineering",
+      "B.Tech in Civil Engineering"
+    ],
+    "postgraduate": [
+      "M.Tech in Embedded Systems",
+      "M.Tech in Structural Engineering",
+      "M.Tech in Power Systems"
+    ]
+  },
+
+  "admissions": {
+    "process": "UG: Through TS EAMCET counselling. PG: Through GATE/PGECET followed by JNTUH admissions.",
+    "dates": "UG: May-July (EAMCET Counseling). PG: June-Aug (GATE/PGECET Admissions)."
+  },
+
+  "rankings": {
+    "nirf": null,
+    "qs": null,
+    "excellence_areas": [
+      "GATE Training",
+      "Industry-Oriented Curriculum",
+      "Technical Skill Development"
+    ],
+    "description": "Well-ranked in Telangana for academics and placements among private colleges.",
+    "source": "ACE College Records",
+    "position": "Top 10 among JNTUH-affiliated private colleges (regionally)"
+  },
+
+  "placement": {
+    "highest_package": "12 LPA",
+    "average_package": "4.5 LPA",
+    "top_recruiters": ["TCS", "Infosys", "Wipro", "Cognizant", "Capgemini", "Virtusa"]
+  },
+
+  "facilities": [
+    "📘Library",
+    "🛏Separate Hostels",
+    "⚽Sports Ground",
+    "🔬Modern Labs",
+    "📶Wi-Fi Campus",
+    "🏥Medical Room",
+    "🍽Cafeteria",
+    "🚌Transport Facility"
+  ],
+
+  "faqs": [
+    {
+      "question": "Is ACE Engineering College good for placements?",
+      "answer": "Yes, ACE has a good placement record with regular recruitment drives by top IT and core companies."
+    },
+    {
+      "question": "Does the college provide GATE coaching?",
+      "answer": "Yes, integrated GATE coaching is a key highlight of ACE Engineering College."
+    }
+  ],
+
+  "gallery": ["ace1", "ace2", "ace3", "ace4", "ace5"],
+
+  "contact": {
+    "email": "info@aceec.ac.in",
+    "phone": "+91 98480 80020",
+    "website": "https://www.aceec.ac.in",
+    "address": "Ankushapur, Ghatkesar Mandal, Medchal-Malkajgiri District, Hyderabad, Telangana – 501301"
+  }
+}
+
+]
+
+

@@ -1,0 +1,41 @@
+[
+  {
+    "id": "lib-001",
+    "type": "formula",
+    "title": "Physics Formula Sheet",
+    "author": "Physics Galaxy",
+    "subject": "Physics",
+    "views": 2104,
+    "rating": 4.8,
+    "saved": true,
+    "thumbnail": "https://via.placeholder.com/72x90.png?text=Formula",
+    "lastAccessed": "2025-07-30",
+    "meta": "12 pages"
+  },
+  {
+    "id": "lib-002",
+    "type": "note",
+    "title": "Chemistry Notes - Class 12",
+    "author": "NCERT",
+    "subject": "Chemistry",
+    "views": 1580,
+    "rating": 4.6,
+    "saved": false,
+    "thumbnail": "https://via.placeholder.com/72x90.png?text=Notes",
+    "lastAccessed": "2025-07-28",
+    "meta": "18 pages"
+  },
+  {
+    "id": "lib-003",
+    "type": "video",
+    "title": "Gravitation Full Chapter",
+    "author": "Physics Wallah",
+    "subject": "Physics",
+    "views": 10200,
+    "rating": 4.9,
+    "saved": false,
+    "thumbnail": "https://via.placeholder.com/72x90.png?text=Video",
+    "lastAccessed": "2025-07-26",
+    "meta": "45 min"
+  }
+]
