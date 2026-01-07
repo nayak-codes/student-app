@@ -999,6 +999,17 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,
     },
+    emptyPostsState: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+    },
+    emptyTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1E293B',
+        marginTop: 12,
+    },
     iconButtonTransparent: {
         width: 40,
         height: 40,
@@ -1083,7 +1094,7 @@ const styles = StyleSheet.create({
         color: '#64748B',
         fontWeight: '500',
     },
-    statDivider: {
+    statDividerVertical: {
         width: 1,
         height: 32,
         backgroundColor: '#E2E8F0',
