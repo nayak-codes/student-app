@@ -1,7 +1,7 @@
-// Ultra-Clean Student Profile Screen
+// app/user/[id].tsx
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -21,18 +21,16 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AddEducationModal from '../src/components/AddEducationModal';
-import DocumentViewer from '../src/components/DocumentViewer';
-import EditProfileModal from '../src/components/EditProfileModal';
-import { useAuth } from '../src/contexts/AuthContext';
-import { Education, logout } from '../src/services/authService';
-import { getUserResources, LibraryResource } from '../src/services/libraryService';
-import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
-import { updatePostImpressions } from '../src/services/profileStatsService';
+import DocumentViewer from '../../src/components/DocumentViewer';
+import { auth } from '../../src/config/firebase';
+import { UserProfile } from '../../src/services/authService';
+import { deleteResource, getUserResources, LibraryResource } from '../../src/services/libraryService';
+import { deletePost, getPostsByUserId, Post, updatePost } from '../../src/services/postsService';
+import { getProfileViews, getUserProfile } from '../../src/services/profileService';
 
 type TabType = 'posts' | 'reels' | 'pdfs' | 'videos' | 'shared';
 
-// Edit Post Modal
+// Detail Modal
 const EditPostModal: React.FC<{
     visible: boolean;
     post: Post | null;
@@ -108,18 +106,20 @@ const EditPostModal: React.FC<{
     );
 };
 
-// Post Card Component
+// Reuse PostCard adapted for read-only
 const PostCard: React.FC<{
     post: Post;
+    isOwner?: boolean;
     onImagePress: (uri: string) => void;
     onVideoPress: (link: string) => void;
-    onPress?: (post: Post) => void;
+    onPress: (post: Post) => void;
     onDelete?: (post: Post) => void;
     onEdit?: (post: Post) => void;
-}> = ({ post, onImagePress, onVideoPress, onPress, onDelete, onEdit }) => {
+}> = ({ post, isOwner, onImagePress, onVideoPress, onPress, onDelete, onEdit }) => {
     const [imageError, setImageError] = React.useState(false);
 
     const handleOptionsPress = () => {
+        if (!isOwner) return;
         Alert.alert(
             "Post Options",
             "Choose an action",
@@ -139,90 +139,83 @@ const PostCard: React.FC<{
         );
     };
 
-    const Content = (
-        <View style={styles.postCard}>
-            <View style={[styles.postHeader, { padding: 0, borderBottomWidth: 0, paddingBottom: 8 }]}>
-                <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{post.userName}</Text>
-                    <Text style={styles.postType}>{post.type}</Text>
+    return (
+        <TouchableOpacity activeOpacity={0.95} onPress={() => onPress(post)}>
+            <View style={styles.postCard}>
+                <View style={[styles.postHeader, { padding: 0, borderBottomWidth: 0, paddingBottom: 8 }]}>
+                    <View style={styles.userInfo}>
+                        <Text style={styles.userName}>{post.userName}</Text>
+                        <Text style={styles.postType}>{post.type}</Text>
+                    </View>
+                    {isOwner && (
+                        <TouchableOpacity onPress={handleOptionsPress} style={{ padding: 8 }}>
+                            <Ionicons name="ellipsis-vertical" size={20} color="#64748B" />
+                        </TouchableOpacity>
+                    )}
                 </View>
-                <TouchableOpacity
-                    onPress={handleOptionsPress}
-                    style={{ padding: 8 }}
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                >
-                    <Ionicons name="ellipsis-vertical" size={20} color="#64748B" />
-                </TouchableOpacity>
-            </View>
 
-            {post.imageUrl && (
-                <TouchableOpacity activeOpacity={0.9} onPress={() => { onImagePress(post.imageUrl!); }}>
-                    {!imageError ? (
-                        <Image
-                            source={{ uri: post.imageUrl }}
-                            style={styles.postImage}
-                            onError={() => setImageError(true)}
-                        />
-                    ) : (
-                        <View style={[styles.postImage, styles.imageFallback]}>
-                            <Ionicons name="image-outline" size={36} color="#CBD5E1" />
-                            <Text style={{ color: '#94A3B8', marginTop: 8 }}>Image unavailable</Text>
+                {post.imageUrl && (
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => { onImagePress(post.imageUrl!); }}>
+                        {!imageError ? (
+                            <Image
+                                source={{ uri: post.imageUrl }}
+                                style={styles.postImage}
+                                onError={() => setImageError(true)}
+                                resizeMode="cover"
+                            />
+                        ) : (
+                            <View style={[styles.postImage, styles.imageFallback]}>
+                                <Ionicons name="image-outline" size={36} color="#CBD5E1" />
+                                <Text style={{ color: '#94A3B8', marginTop: 8 }}>Image unavailable</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                )}
+
+                {post.videoLink && (
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!)}>
+                        <View style={styles.videoContainer}>
+                            <Ionicons name="play-circle" size={48} color="#6D28D9" />
+                            <Text style={styles.videoText}>Video Post</Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
+
+
+                <View style={styles.postContent}>
+                    <Text style={styles.postText} numberOfLines={3}>{post.content}</Text>
+                    {post.tags && post.tags.length > 0 && (
+                        <View style={styles.tagsContainer}>
+                            {post.tags.slice(0, 3).map((tag, index) => (
+                                <View key={index} style={styles.tag}>
+                                    <Text style={styles.tagText}>#{tag}</Text>
+                                </View>
+                            ))}
                         </View>
                     )}
-                </TouchableOpacity>
-            )}
-
-            {post.videoLink && (
-                <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!)}>
-                    <View style={styles.videoContainer}>
-                        <Ionicons name="play-circle" size={48} color="#6D28D9" />
-                        <Text style={styles.videoText}>Video Post</Text>
-                    </View>
-                </TouchableOpacity>
-            )}
-
-            <View style={styles.postContent}>
-                <Text style={styles.postText} numberOfLines={3}>{post.content}</Text>
-
-                {post.tags && post.tags.length > 0 && (
-                    <View style={styles.tagsContainer}>
-                        {post.tags.slice(0, 3).map((tag, index) => (
-                            <View key={index} style={styles.tag}>
-                                <Text style={styles.tagText}>#{tag}</Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
-            </View>
-
-            <View style={styles.postFooter}>
-                <View style={styles.footerItem}>
-                    <Ionicons name="heart" size={18} color="#EF4444" />
-                    <Text style={styles.footerText}>{post.likes}</Text>
                 </View>
-                <View style={styles.footerItem}>
-                    <Ionicons name="chatbubble" size={18} color="#64748B" />
-                    <Text style={styles.footerText}>{post.comments}</Text>
+
+                <View style={styles.postFooter}>
+                    <View style={styles.footerItem}>
+                        <Ionicons name="heart" size={18} color="#EF4444" />
+                        <Text style={styles.footerText}>{post.likes}</Text>
+                    </View>
+                    <View style={styles.footerItem}>
+                        <Ionicons name="chatbubble" size={18} color="#64748B" />
+                        <Text style={styles.footerText}>{post.comments}</Text>
+                    </View>
                 </View>
             </View>
-        </View>
+        </TouchableOpacity>
     );
-
-    if (onPress) {
-        return (
-            <TouchableOpacity activeOpacity={0.95} onPress={() => { console.log('Post tapped:', post.id); onPress(post); }}>
-                {Content}
-            </TouchableOpacity>
-        );
-    }
-    return Content;
 };
 
-
-// ... (existing imports)
-
-// Resource Grid Item Component
-const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource: LibraryResource) => void }> = ({ resource, onPress }) => {
+const ResourceGridItem: React.FC<{
+    resource: LibraryResource;
+    onPress: (resource: LibraryResource) => void;
+    isOwner?: boolean;
+    onDelete?: (resource: LibraryResource) => void;
+}> = ({ resource, onPress, isOwner, onDelete }) => {
     return (
         <Pressable
             style={({ pressed }) => [
@@ -230,6 +223,18 @@ const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource
                 { opacity: pressed ? 0.9 : 1, backgroundColor: '#F8FAFC' }
             ]}
             onPress={() => onPress(resource)}
+            onLongPress={() => {
+                if (isOwner && onDelete) {
+                    Alert.alert(
+                        "Delete Resource",
+                        "Are you sure you want to delete this file?",
+                        [
+                            { text: "Cancel", style: "cancel" },
+                            { text: "Delete", style: "destructive", onPress: () => onDelete(resource) }
+                        ]
+                    );
+                }
+            }}
         >
             <View style={[styles.gridImage, styles.gridPlaceholder]}>
                 <Ionicons name="document-text" size={32} color="#EF4444" />
@@ -238,12 +243,16 @@ const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource
                     <Ionicons name="eye-outline" size={10} color="#64748B" />
                     <Text style={styles.gridStatText}>{resource.views}</Text>
                 </View>
+                {isOwner && (
+                    <View style={{ position: 'absolute', top: 4, right: 4 }}>
+                        <Ionicons name="ellipsis-vertical" size={12} color="#94A3B8" />
+                    </View>
+                )}
             </View>
         </Pressable>
     );
 };
 
-// ... (existing components)
 const PostGridItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({ post, onPress }) => {
     return (
         <Pressable
@@ -279,16 +288,18 @@ const PostGridItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({
     );
 };
 
-// Detail Modal Component
+// Detail Modal
+// Detail Modal
 const PostDetailModal: React.FC<{
     visible: boolean;
     post: Post | null;
     onClose: () => void;
     onImagePress: (uri: string) => void;
     onVideoPress: (link: string) => void;
-    onDelete: (post: Post) => void;
-    onEdit: (post: Post) => void;
-}> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit }) => {
+    isOwner?: boolean;
+    onDelete?: (post: Post) => void;
+    onEdit?: (post: Post) => void;
+}> = ({ visible, post, onClose, onImagePress, onVideoPress, isOwner, onDelete, onEdit }) => {
     if (!post) return null;
 
     return (
@@ -304,8 +315,10 @@ const PostDetailModal: React.FC<{
                 <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
                     <PostCard
                         post={post}
+                        isOwner={isOwner}
                         onImagePress={onImagePress}
                         onVideoPress={onVideoPress}
+                        onPress={() => { }}
                         onDelete={onDelete}
                         onEdit={onEdit}
                     />
@@ -315,51 +328,139 @@ const PostDetailModal: React.FC<{
     );
 };
 
-const ProfileScreen = () => {
-    const { user, userProfile, refreshProfile } = useAuth();
+const UserProfileScreen = () => {
+    const { id } = useLocalSearchParams();
     const router = useRouter();
+    const userId = Array.isArray(id) ? id[0] : id;
+
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('posts');
     const [userPosts, setUserPosts] = useState<Post[]>([]);
-    const [likedPosts, setLikedPosts] = useState<Post[]>([]);
-    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [userDocs, setUserDocs] = useState<LibraryResource[]>([]);
+
+    // Stats
     const [stats, setStats] = useState({
         posts: 0,
-        likes: 0,
         followers: 0,
-        streak: 5,
     });
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [showEducationModal, setShowEducationModal] = useState(false);
-    const [editingEducation, setEditingEducation] = useState<Education | undefined>(undefined);
 
-    const [isBioExpanded, setIsBioExpanded] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Interactive State
     const [selectedPost, setSelectedPost] = useState<Post | null>(null);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
     const [viewerVisible, setViewerVisible] = useState(false);
     const [viewerUri, setViewerUri] = useState<string>('');
-
-    // Edit Post State
-    const [editPostModalVisible, setEditPostModalVisible] = useState(false);
-    const [editingPost, setEditingPost] = useState<Post | null>(null);
-
     // PDF State
-    const [userDocs, setUserDocs] = useState<LibraryResource[]>([]);
     const [docViewerVisible, setDocViewerVisible] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<LibraryResource | null>(null);
 
+    // Edit State
+    const [editModalVisible, setEditModalVisible] = useState(false);
+    const [editingPost, setEditingPost] = useState<Post | null>(null);
+
+    const loadUserData = async () => {
+        if (!userId) return;
+        setLoading(true);
+        try {
+            const profile = await getUserProfile(userId);
+            setUserProfile(profile);
+
+            // Fetch Posts
+            const posts = await getPostsByUserId(userId);
+            setUserPosts(posts);
+
+            // Fetch Docs
+            const docs = await getUserResources(userId);
+            setUserDocs(docs);
+
+            // Fetch Views (optional)
+            const views = await getProfileViews(userId);
+
+            const totalLikes = posts.reduce((sum, post) => sum + post.likes, 0) +
+                docs.reduce((sum, doc) => sum + (doc.likes || 0), 0);
+
+            const totalHelpful = docs.reduce((sum, doc) => sum + (doc.downloads || 0), 0);
+
+            setStats({
+                posts: posts.length + docs.length,
+                followers: Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2), // Mock follower logic
+            });
+
+        } catch (error) {
+            console.error("Error loading user data:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadUserData();
+    }, [userId]);
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await loadUserData();
+        setIsRefreshing(false);
+    };
+
+    const getDisplayPosts = () => {
+        switch (activeTab) {
+            case 'posts':
+                return userPosts;
+            case 'pdfs':
+                return userDocs;
+            default:
+                return [];
+        }
+    };
 
     // Interaction Handlers
     const openPostModal = (post: Post) => {
-        console.log('Opening post modal for:', post.id);
         setSelectedPost(post);
         setDetailModalVisible(true);
     };
 
+    const closePostModal = () => {
+        setDetailModalVisible(false);
+        setSelectedPost(null);
+    };
+
+    const openImageViewer = (uri: string) => {
+        if (!uri) return;
+        setViewerUri(uri);
+        setViewerVisible(true);
+    };
+
+    const closeImageViewer = () => {
+        setViewerVisible(false);
+        setViewerUri('');
+    };
+
+    const openVideo = (link: string) => {
+        if (link) {
+            Linking.openURL(link).catch(err => console.error("Couldn't load page", err));
+        }
+    };
+
     const handleEditPost = (post: Post) => {
         setEditingPost(post);
-        setEditPostModalVisible(true);
+        setEditModalVisible(true);
+    };
+
+    const savePostEdit = async (postId: string, newContent: string) => {
+        try {
+            await updatePost(postId, { content: newContent });
+            // Close detail modal if open
+            if (detailModalVisible && selectedPost?.id === postId) {
+                // Update selected post efficiently
+                setSelectedPost({ ...selectedPost, content: newContent });
+            }
+            await handleRefresh();
+        } catch (error) {
+            Alert.alert("Error", "Failed to update post");
+        }
     };
 
     const handleDeletePost = async (post: Post) => {
@@ -379,123 +480,28 @@ const ProfileScreen = () => {
         );
     };
 
-    const savePostEdit = async (postId: string, newContent: string) => {
-        try {
-            await updatePost(postId, { content: newContent });
-            handleRefresh();
-        } catch (error) {
-            Alert.alert("Error", "Failed to update post");
-        }
-    };
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <ActivityIndicator size="large" color="#4F46E5" style={{ marginTop: 50 }} />
+            </SafeAreaView>
+        );
+    }
 
-    const closePostModal = () => {
-        setDetailModalVisible(false);
-        setSelectedPost(null);
-    };
-
-    const openImageViewer = (uri: string) => {
-        console.log('Opening image viewer for:', uri);
-        if (!uri) return;
-        setViewerUri(uri);
-        setViewerVisible(true);
-    };
-
-    const closeImageViewer = () => {
-        setViewerVisible(false);
-        setViewerUri('');
-    };
-
-    const openVideo = (link: string) => {
-        if (link) {
-            Linking.openURL(link).catch(err => console.error("Couldn't load page", err));
-        }
-    };
-
-
-
-    // ... existing imports
-
-    const loadProfileData = async () => {
-        if (!user) return;
-
-        try {
-            // Load Posts
-            const allPosts = await getAllPosts();
-            const myPosts = allPosts.filter((post) => post.userId === user.uid);
-            setUserPosts(myPosts);
-
-            const liked = allPosts.filter((post) => post.likedBy.includes(user.uid));
-            setLikedPosts(liked);
-
-            // Load Documents
-            const myDocs = await getUserResources(user.uid);
-            setUserDocs(myDocs);
-
-            const totalLikes = myPosts.reduce((sum, post) => sum + post.likes, 0) +
-                myDocs.reduce((sum, doc) => sum + (doc.likes || 0), 0);
-
-            const totalHelpful = myDocs.reduce((sum, doc) => sum + (doc.downloads || 0), 0); // Using downloads as proxy for helpfulness
-
-            setStats({
-                posts: myPosts.length + myDocs.length,
-                likes: totalLikes,
-                followers: Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2),
-                streak: 5,
-            });
-
-            // Update post impressions in profile stats
-            await updatePostImpressions(user.uid, myPosts);
-        } catch (error) {
-            console.error('Error loading profile data:', error);
-        }
-    };
-
-    useEffect(() => {
-        loadProfileData();
-    }, [user]);
-
-    const handleRefresh = async () => {
-        setIsRefreshing(true);
-        await Promise.all([
-            loadProfileData(),
-            refreshProfile()
-        ]);
-        setIsRefreshing(false);
-    };
-
-    // ...
-
-    const getDisplayPosts = () => {
-        switch (activeTab) {
-            case 'posts':
-                return userPosts;
-            case 'pdfs':
-                return userDocs; // Return docs for PDF tab
-            case 'reels':
-            case 'videos':
-            case 'shared':
-            default:
-                return [];
-        }
-    };
-
-    const handleLogout = () => {
-        Alert.alert('Logout', 'Are you sure you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Logout',
-                style: 'destructive',
-                onPress: async () => {
-                    await logout();
-                    router.replace('/');
-                },
-            },
-        ]);
-    };
-
-
-
-
+    if (!userProfile) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.headerContainer}>
+                    <TouchableOpacity onPress={() => router.back()} style={{ padding: 16 }}>
+                        <Ionicons name="arrow-back" size={24} color="#000" />
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.emptyPostsState}>
+                    <Text style={styles.emptyTitle}>User not found</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -508,7 +514,7 @@ const ProfileScreen = () => {
                 <View style={styles.headerContainer}>
                     {/* Channel Banner */}
                     <View style={styles.channelBanner}>
-                        {userProfile?.coverPhoto || userProfile?.bannerUrl ? (
+                        {userProfile.coverPhoto || userProfile.bannerUrl ? (
                             <Image source={{ uri: userProfile.coverPhoto || userProfile.bannerUrl }} style={styles.bannerImage} resizeMode="cover" />
                         ) : (
                             <LinearGradient
@@ -524,12 +530,7 @@ const ProfileScreen = () => {
                                 <Ionicons name="arrow-back" size={20} color="#FFF" />
                             </TouchableOpacity>
                             <View style={{ flex: 1 }} />
-                            <TouchableOpacity style={styles.iconButtonBlur}>
-                                <Ionicons name="search" size={20} color="#FFF" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.iconButtonBlur, { marginLeft: 8 }]}>
-                                <Ionicons name="ellipsis-vertical" size={20} color="#FFF" />
-                            </TouchableOpacity>
+                            {/* Removed Search/Ellipsis for public view simple */}
                         </View>
                     </View>
 
@@ -537,12 +538,12 @@ const ProfileScreen = () => {
                     <View style={styles.profileInfoContainer}>
                         {/* Avatar */}
                         <View style={styles.ytAvatarContainer}>
-                            {userProfile?.photoURL ? (
+                            {userProfile.photoURL ? (
                                 <Image source={{ uri: userProfile.photoURL }} style={styles.ytAvatar} />
                             ) : (
                                 <View style={[styles.ytAvatar, { backgroundColor: '#6366f1', justifyContent: 'center', alignItems: 'center' }]}>
                                     <Text style={{ color: '#FFF', fontSize: 24, fontWeight: 'bold' }}>
-                                        {userProfile?.name?.charAt(0).toUpperCase() || 'S'}
+                                        {userProfile.name?.charAt(0).toUpperCase() || 'S'}
                                     </Text>
                                 </View>
                             )}
@@ -550,14 +551,14 @@ const ProfileScreen = () => {
 
                         {/* Name & Handle */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                            <Text style={styles.ytName}>{userProfile?.name || 'Student Name'}</Text>
+                            <Text style={styles.ytName}>{userProfile.name || 'Student Name'}</Text>
                             <View style={styles.roleBadge}>
                                 <Text style={styles.roleBadgeText}>Student</Text>
                             </View>
                         </View>
-                        <Text style={styles.ytHandle}>@{userProfile?.username || userProfile?.name?.toLowerCase().replace(/\s/g, '') || 'student'} </Text>
+                        <Text style={styles.ytHandle}>@{userProfile.username || userProfile.name?.toLowerCase().replace(/\s/g, '') || 'student'} </Text>
 
-                        {/* New Stats Row */}
+                        {/* Stats Row */}
                         <View style={styles.statsRow}>
                             <View style={styles.statChip}>
                                 <Ionicons name="people" size={16} color="#4F46E5" />
@@ -575,13 +576,12 @@ const ProfileScreen = () => {
                         </View>
 
                         {/* Description / Bio */}
-                        {userProfile?.about && (
+                        {userProfile.about && (
                             <View style={styles.ytBioContainer}>
                                 <Text style={styles.ytBioText} numberOfLines={2}>
                                     {userProfile.about}
-                                    <Text style={{ color: '#64748B' }}> more</Text>
                                 </Text>
-                                {(userProfile?.institution || userProfile?.education?.[0]?.institution) && (
+                                {(userProfile.institution || userProfile.education?.[0]?.institution) && (
                                     <Text style={styles.ytLinkText}>
                                         {userProfile.institution || userProfile.education?.[0]?.institution}
                                     </Text>
@@ -589,18 +589,16 @@ const ProfileScreen = () => {
                             </View>
                         )}
 
-                        {/* Action Buttons */}
+                        {/* Public Actions */}
                         <View style={styles.ytActionsRow}>
-                            <TouchableOpacity style={styles.ytPrimaryButton} onPress={() => setShowEditModal(true)}>
-                                <Text style={styles.ytPrimaryButtonText}>Edit Profile</Text>
+                            <TouchableOpacity style={styles.ytPrimaryButton}>
+                                <Text style={styles.ytPrimaryButtonText}>Connect</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.ytSecondaryButton}>
-                                <Ionicons name="stats-chart" size={16} color="#0F172A" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.ytSecondaryButton}>
-                                <Ionicons name="pencil" size={16} color="#0F172A" />
+                                <Ionicons name="chatbubble-ellipses-outline" size={20} color="#0F172A" />
                             </TouchableOpacity>
                         </View>
+
                     </View>
                 </View>
 
@@ -621,26 +619,7 @@ const ProfileScreen = () => {
                             <Text style={[styles.ytTabText, activeTab === 'pdfs' && styles.ytTabTextActive]}>Notes</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('videos')}
-                        >
-                            <Text style={[styles.ytTabText, activeTab === 'videos' && styles.ytTabTextActive]}>Videos</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'reels' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('reels')}
-                        >
-                            <Text style={[styles.ytTabText, activeTab === 'reels' && styles.ytTabTextActive]}>Clips</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'shared' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('shared')}
-                        >
-                            <Text style={[styles.ytTabText, activeTab === 'shared' && styles.ytTabTextActive]}>Community</Text>
-                        </TouchableOpacity>
+                        {/* Other tabs can be added later as features come online for public view */}
                     </ScrollView>
                 </View>
 
@@ -650,8 +629,8 @@ const ProfileScreen = () => {
                         {getDisplayPosts().length === 0 ? (
                             <View style={styles.emptyPostsState}>
                                 <Ionicons name="school-outline" size={48} color="#CBD5E1" />
-                                <Text style={styles.emptyTitle}>Share your knowledge</Text>
-                                <Text style={{ color: '#94A3B8', marginTop: 4, fontSize: 13 }}>Upload notes or videos to inspire others.</Text>
+                                <Text style={styles.emptyTitle}>No posts yet</Text>
+                                <Text style={{ color: '#94A3B8', marginTop: 4, fontSize: 13 }}>User hasn't shared anything yet.</Text>
                             </View>
                         ) : (
                             <View style={styles.gridContainer}>
@@ -660,6 +639,22 @@ const ProfileScreen = () => {
                                         <ResourceGridItem
                                             key={item.id}
                                             resource={item}
+                                            isOwner={auth.currentUser?.uid === userId}
+                                            onDelete={(resource) => {
+                                                Alert.alert(
+                                                    "Delete Resource",
+                                                    "Are you sure you want to delete this file?",
+                                                    [
+                                                        { text: "Cancel", style: "cancel" },
+                                                        {
+                                                            text: "Delete", style: "destructive", onPress: async () => {
+                                                                await deleteResource(resource.id, userId as string);
+                                                                handleRefresh();
+                                                            }
+                                                        }
+                                                    ]
+                                                );
+                                            }}
                                             onPress={(doc) => {
                                                 setSelectedDoc(doc);
                                                 setDocViewerVisible(true);
@@ -678,71 +673,7 @@ const ProfileScreen = () => {
                     </View>
                 </View>
 
-                {/* Quick Actions */}
-                <View style={styles.actionsSection}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-                    <View style={styles.actionsGrid}>
-                        <TouchableOpacity style={styles.actionCard}>
-                            <View style={[styles.actionIconBg, { backgroundColor: '#EEF2FF' }]}>
-                                <Ionicons name="settings-outline" size={28} color="#4F46E5" />
-                            </View>
-                            <Text style={styles.actionTitle}>Settings</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.actionCard}>
-                            <View style={[styles.actionIconBg, { backgroundColor: '#FFF7ED' }]}>
-                                <Ionicons name="trophy-outline" size={28} color="#F59E0B" />
-                            </View>
-                            <Text style={styles.actionTitle}>Achievements</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.actionCard}>
-                            <View style={[styles.actionIconBg, { backgroundColor: '#F0FDF4' }]}>
-                                <Ionicons name="bookmark-outline" size={28} color="#10B981" />
-                            </View>
-                            <Text style={styles.actionTitle}>Saved Colleges</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionCard}
-                            onPress={() => router.push('/document-vault')}
-                        >
-                            <View style={[styles.actionIconBg, { backgroundColor: '#FEF2F2' }]}>
-                                <Ionicons name="document-text" size={28} color="#EF4444" />
-                            </View>
-                            <Text style={styles.actionTitle}>My Documents</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
             </ScrollView>
-
-            {/* Edit Profile Modal */}
-            <EditProfileModal
-                visible={showEditModal}
-                onClose={() => setShowEditModal(false)}
-                onSaved={handleRefresh}
-            />
-
-            {/* Add/Edit Education Modal */}
-            <AddEducationModal
-                visible={showEducationModal}
-                onClose={() => {
-                    setShowEducationModal(false);
-                    setEditingEducation(undefined);
-                }}
-                onSaved={handleRefresh}
-                userId={user?.uid || ''}
-                editingEducation={editingEducation}
-            />
-
-            {/* Edit Post Modal */}
-            <EditPostModal
-                visible={editPostModalVisible}
-                post={editingPost}
-                onClose={() => setEditPostModalVisible(false)}
-                onSave={savePostEdit}
-            />
 
             {/* Post Detail Modal */}
             <PostDetailModal
@@ -751,8 +682,17 @@ const ProfileScreen = () => {
                 onClose={closePostModal}
                 onImagePress={openImageViewer}
                 onVideoPress={openVideo}
+                isOwner={auth.currentUser?.uid === userId}
                 onDelete={handleDeletePost}
                 onEdit={handleEditPost}
+            />
+
+            {/* Edit Post Modal */}
+            <EditPostModal
+                visible={editModalVisible}
+                post={editingPost}
+                onClose={() => setEditModalVisible(false)}
+                onSave={savePostEdit}
             />
 
             {/* Full Screen Image Viewer Modal */}
@@ -788,7 +728,7 @@ const ProfileScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFF', // YouTubes white background
+        backgroundColor: '#FFF',
     },
     // YouTube Header Styles
     headerContainer: {
@@ -840,18 +780,13 @@ const styles = StyleSheet.create({
         borderRadius: 36,
         borderWidth: 3,
         borderColor: '#FFF',
-        backgroundColor: '#FFF', // Ensure non-transparent for shadow
+        backgroundColor: '#FFF',
     },
     ytName: {
         fontSize: 24,
-        fontWeight: '800', // Bold/Heavy font
+        fontWeight: '800',
         color: '#0F172A',
         marginBottom: 2,
-    },
-    ytHandleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexWrap: 'wrap',
     },
     ytHandle: {
         fontSize: 14,
@@ -936,11 +871,10 @@ const styles = StyleSheet.create({
     },
 
     // YouTube Tabs
-    // Pill Tabs
     ytTabsContainer: {
         marginBottom: 0,
         paddingVertical: 12,
-        borderBottomWidth: 0, // Remove bottom border for cleaner look
+        borderBottomWidth: 0,
         backgroundColor: '#FFF',
     },
     ytTabsContent: {
@@ -953,14 +887,14 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         marginRight: 8,
         borderWidth: 1,
-        borderColor: '#F1F5F9', // Default border for inactive
+        borderColor: '#F1F5F9',
         backgroundColor: '#FFF',
     },
     ytTabActive: {
-        backgroundColor: '#EEF2FF', // Active Fill
+        backgroundColor: '#EEF2FF',
         borderColor: '#EEF2FF',
-        borderBottomWidth: 1, // Reset override
-        borderBottomColor: '#EEF2FF', // Reset override
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEF2FF',
     },
     ytTabText: {
         fontSize: 14,
@@ -968,11 +902,11 @@ const styles = StyleSheet.create({
         color: '#64748B',
     },
     ytTabTextActive: {
-        color: '#4F46E5', // Active Text Color
+        color: '#4F46E5',
     },
     contentSection: {
         flex: 1,
-        minHeight: 400, // Ensure scrolling works well
+        minHeight: 400,
     },
     postsGrid: {
         flex: 1,
@@ -993,8 +927,7 @@ const styles = StyleSheet.create({
     },
     /* Grid Styles */
     gridItem: {
-        flex: 1,
-        maxWidth: '33.33%',
+        width: '33.33%',
         aspectRatio: 1,
         marginBottom: 1,
         position: 'relative',
@@ -1154,14 +1087,6 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: '#64748B',
     },
-
-    // New Professional Styles
-    headerBackground: {
-        paddingTop: Platform.OS === 'android' ? 40 : 20,
-        paddingBottom: 80, // Increased for more overlap
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
-    },
     emptyPostsState: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -1173,164 +1098,6 @@ const styles = StyleSheet.create({
         color: '#1E293B',
         marginTop: 12,
     },
-    iconButtonTransparent: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.2)',
-    },
-    profileHeaderContent: {
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    profileBody: {
-        marginTop: -40,
-        paddingHorizontal: 20,
-    },
-    centerInfo: {
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    metaRowCentered: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 16,
-        marginTop: 8,
-    },
-    bioContainer: {
-        backgroundColor: '#FFF',
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 20,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    moreLink: {
-        color: '#4F46E5',
-        fontWeight: '600',
-        marginTop: 4,
-        fontSize: 14,
-    },
-    statsCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        backgroundColor: '#FFF',
-        borderRadius: 20,
-        paddingVertical: 20,
-        paddingHorizontal: 12,
-        marginBottom: 24,
-        shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 4,
-        borderWidth: 1,
-        borderColor: '#EEF2FF',
-    },
-    primaryGradientButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        borderRadius: 12,
-        gap: 8,
-    },
-    statItem: {
-        alignItems: 'center',
-        gap: 4,
-    },
-    statNumber: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1E293B',
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#64748B',
-        fontWeight: '500',
-    },
-    statDividerVertical: {
-        width: 1,
-        height: 32,
-        backgroundColor: '#E2E8F0',
-    },
-    progressBarContainer: {
-        height: 6,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    progressBarFill: {
-        height: '100%',
-        backgroundColor: '#10B981',
-        borderRadius: 3,
-    },
-    // Quick Actions Styles
-    actionsSection: {
-        padding: 20,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1E293B',
-        marginBottom: 16,
-    },
-    actionsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 16,
-    },
-    actionCard: {
-        width: '47%',
-        backgroundColor: '#FFF',
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        alignItems: 'center',
-        gap: 12,
-    },
-    actionIconBg: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    actionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1E293B',
-        textAlign: 'center',
-    },
-    completenessSection: {
-        marginHorizontal: 20,
-        marginBottom: 20,
-        padding: 16,
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    completenessHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    completenessText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1E293B',
-    },
 });
 
-export default ProfileScreen;
+export default UserProfileScreen;

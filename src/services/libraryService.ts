@@ -392,3 +392,20 @@ export const deleteResource = async (resourceId: string, userId: string): Promis
         throw error;
     }
 };
+
+/**
+ * Update a resource
+ */
+export const updateResource = async (resourceId: string, updates: Partial<LibraryResource>): Promise<void> => {
+    try {
+        const resourceRef = doc(db, LIBRARY_COLLECTION, resourceId);
+        await updateDoc(resourceRef, {
+            ...updates,
+            updatedAt: Timestamp.now(),
+        });
+        console.log('Resource updated');
+    } catch (error) {
+        console.error('Error updating resource:', error);
+        throw error;
+    }
+};

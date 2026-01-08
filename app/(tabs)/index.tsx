@@ -26,7 +26,7 @@ export default function HomeScreen() {
       {/* Standard App Header */}
       <View style={styles.header}>
         <View style={styles.brandContainer}>
-          <Text style={styles.brandText}>StudentVerse</Text>
+          <Text style={styles.brandText}>Vidhyarthi</Text>
         </View>
 
         <View style={styles.headerActions}>
