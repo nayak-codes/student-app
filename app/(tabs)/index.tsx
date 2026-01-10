@@ -32,7 +32,7 @@ export default function HomeScreen() {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => router.push('/(tabs)/search')}
+            onPress={() => router.push('/screens/universal-search')}
           >
             <Ionicons name="search-outline" size={26} color="#0F172A" />
           </TouchableOpacity>
