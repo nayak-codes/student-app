@@ -4,8 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Image,
+    KeyboardAvoidingView,
     Linking,
     Modal,
     Platform,
@@ -14,6 +16,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -24,104 +27,236 @@ import EditProfileModal from '../src/components/EditProfileModal';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Education, logout } from '../src/services/authService';
 import { getUserResources, LibraryResource } from '../src/services/libraryService';
-import { getAllPosts, Post } from '../src/services/postsService';
+import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type TabType = 'posts' | 'reels' | 'pdfs' | 'videos' | 'shared';
+type TabType = 'videos' | 'reels';
+
+// Edit Post Modal
+const EditPostModal: React.FC<{
+    visible: boolean;
+    post: Post | null;
+    onClose: () => void;
+    onSave: (postId: string, newContent: string) => Promise<void>;
+}> = ({ visible, post, onClose, onSave }) => {
+    const [content, setContent] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (post) {
+            setContent(post.content);
+        }
+    }, [post]);
+
+    const handleSave = async () => {
+        if (!post) return;
+        setSaving(true);
+        await onSave(post.id, content);
+        setSaving(false);
+        onClose();
+    };
+
+    return (
+        <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={onClose}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+                <View style={[styles.modalContainer, { margin: 20, borderRadius: 16, maxHeight: 400 }]}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Edit Post</Text>
+                        <TouchableOpacity onPress={onClose}>
+                            <Ionicons name="close" size={24} color="#64748B" />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={{ padding: 16 }}>
+                        <TextInput
+                            style={{
+                                borderWidth: 1,
+                                borderColor: '#E2E8F0',
+                                borderRadius: 12,
+                                padding: 12,
+                                height: 150,
+                                textAlignVertical: 'top',
+                                fontSize: 16,
+                                color: '#1E293B'
+                            }}
+                            multiline
+                            value={content}
+                            onChangeText={setContent}
+                            placeholder="What's on your mind?"
+                        />
+                        <TouchableOpacity
+                            style={{
+                                backgroundColor: '#4F46E5',
+                                paddingVertical: 12,
+                                borderRadius: 12,
+                                marginTop: 16,
+                                alignItems: 'center',
+                                opacity: saving ? 0.7 : 1
+                            }}
+                            onPress={handleSave}
+                            disabled={saving}
+                        >
+                            {saving ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={{ color: '#FFF', fontWeight: '600', fontSize: 16 }}>Save Changes</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </KeyboardAvoidingView>
+        </Modal>
+    );
+};
 
 // Post Card Component
 const PostCard: React.FC<{
     post: Post;
     onImagePress: (uri: string) => void;
     onVideoPress: (link: string) => void;
-    onPress: (post: Post) => void;
-}> = ({ post, onImagePress, onVideoPress, onPress }) => {
+    onPress?: (post: Post) => void;
+    onDelete?: (post: Post) => void;
+    onEdit?: (post: Post) => void;
+}> = ({ post, onImagePress, onVideoPress, onPress, onDelete, onEdit }) => {
     const [imageError, setImageError] = React.useState(false);
-    return (
-        <TouchableOpacity activeOpacity={0.95} onPress={() => { console.log('Post tapped:', post.id); onPress(post); }}>
-            <View style={styles.postCard}>
-                <View style={[styles.postHeader, { padding: 0, borderBottomWidth: 0, paddingBottom: 8 }]}>
-                    <View style={styles.userInfo}>
-                        <Text style={styles.userName}>{post.userName}</Text>
-                        <Text style={styles.postType}>{post.type}</Text>
-                    </View>
+
+    const handleOptionsPress = () => {
+        Alert.alert(
+            "Post Options",
+            "Choose an action",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Edit", onPress: () => {
+                        if (onEdit) onEdit(post);
+                    }
+                },
+                {
+                    text: "Delete", style: "destructive", onPress: () => {
+                        if (onDelete) onDelete(post);
+                    }
+                }
+            ]
+        );
+    };
+
+    const Content = (
+        <View style={styles.postCard}>
+            <View style={[styles.postHeader, { padding: 0, borderBottomWidth: 0, paddingBottom: 8 }]}>
+                <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{post.userName}</Text>
+                    <Text style={styles.postType}>{post.type}</Text>
                 </View>
+                <TouchableOpacity
+                    onPress={handleOptionsPress}
+                    style={{ padding: 8 }}
+                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                >
+                    <Ionicons name="ellipsis-vertical" size={20} color="#64748B" />
+                </TouchableOpacity>
+            </View>
 
-                {post.imageUrl && (
-                    <TouchableOpacity activeOpacity={0.9} onPress={() => { onImagePress(post.imageUrl!); }}>
-                        {!imageError ? (
-                            <Image
-                                source={{ uri: post.imageUrl }}
-                                style={styles.postImage}
-                                onError={() => setImageError(true)}
-                            />
-                        ) : (
-                            <View style={[styles.postImage, styles.imageFallback]}>
-                                <Ionicons name="image-outline" size={36} color="#CBD5E1" />
-                                <Text style={{ color: '#94A3B8', marginTop: 8 }}>Image unavailable</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                )}
-
-                {post.videoLink && (
-                    <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!)}>
-                        <View style={styles.videoContainer}>
-                            <Ionicons name="play-circle" size={48} color="#6D28D9" />
-                            <Text style={styles.videoText}>Video Post</Text>
-                        </View>
-                    </TouchableOpacity>
-                )}
-
-                <View style={styles.postContent}>
-                    <Text style={styles.postText} numberOfLines={3}>{post.content}</Text>
-
-                    {post.tags && post.tags.length > 0 && (
-                        <View style={styles.tagsContainer}>
-                            {post.tags.slice(0, 3).map((tag, index) => (
-                                <View key={index} style={styles.tag}>
-                                    <Text style={styles.tagText}>#{tag}</Text>
-                                </View>
-                            ))}
+            {post.imageUrl && (
+                <TouchableOpacity activeOpacity={0.9} onPress={() => { onImagePress(post.imageUrl!); }}>
+                    {!imageError ? (
+                        <Image
+                            source={{ uri: post.imageUrl }}
+                            style={styles.postImage}
+                            onError={() => setImageError(true)}
+                        />
+                    ) : (
+                        <View style={[styles.postImage, styles.imageFallback]}>
+                            <Ionicons name="image-outline" size={36} color="#CBD5E1" />
+                            <Text style={{ color: '#94A3B8', marginTop: 8 }}>Image unavailable</Text>
                         </View>
                     )}
-                </View>
+                </TouchableOpacity>
+            )}
 
-                <View style={styles.postFooter}>
-                    <View style={styles.footerItem}>
-                        <Ionicons name="heart" size={18} color="#EF4444" />
-                        <Text style={styles.footerText}>{post.likes}</Text>
+            {post.videoLink && (
+                <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!)}>
+                    <View style={styles.videoContainer}>
+                        <Ionicons name="play-circle" size={48} color="#6D28D9" />
+                        <Text style={styles.videoText}>Video Post</Text>
                     </View>
-                    <View style={styles.footerItem}>
-                        <Ionicons name="chatbubble" size={18} color="#64748B" />
-                        <Text style={styles.footerText}>{post.comments}</Text>
+                </TouchableOpacity>
+            )}
+
+            <View style={styles.postContent}>
+                <Text style={styles.postText} numberOfLines={3}>{post.content}</Text>
+
+                {post.tags && post.tags.length > 0 && (
+                    <View style={styles.tagsContainer}>
+                        {post.tags.slice(0, 3).map((tag, index) => (
+                            <View key={index} style={styles.tag}>
+                                <Text style={styles.tagText}>#{tag}</Text>
+                            </View>
+                        ))}
                     </View>
+                )}
+            </View>
+
+            <View style={styles.postFooter}>
+                <View style={styles.footerItem}>
+                    <Ionicons name="heart" size={18} color="#EF4444" />
+                    <Text style={styles.footerText}>{post.likes}</Text>
+                </View>
+                <View style={styles.footerItem}>
+                    <Ionicons name="chatbubble" size={18} color="#64748B" />
+                    <Text style={styles.footerText}>{post.comments}</Text>
                 </View>
             </View>
-        </TouchableOpacity>
+        </View>
     );
 
+    if (onPress) {
+        return (
+            <TouchableOpacity activeOpacity={0.95} onPress={() => { console.log('Post tapped:', post.id); onPress(post); }}>
+                {Content}
+            </TouchableOpacity>
+        );
+    }
+    return Content;
 };
 
 
 // ... (existing imports)
 
 // Resource Grid Item Component
+// Resource Grid Item Component - Professional Card Style
 const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource: LibraryResource) => void }> = ({ resource, onPress }) => {
     return (
         <Pressable
             style={({ pressed }) => [
-                styles.gridItem,
-                { opacity: pressed ? 0.9 : 1, backgroundColor: '#F8FAFC' }
+                styles.pdfCard,
+                { opacity: pressed ? 0.95 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }
             ]}
             onPress={() => onPress(resource)}
         >
-            <View style={[styles.gridImage, styles.gridPlaceholder]}>
-                <Ionicons name="document-text" size={32} color="#EF4444" />
-                <Text style={styles.gridTextPreview} numberOfLines={2}>{resource.title}</Text>
-                <View style={styles.gridStatsRow}>
-                    <Ionicons name="eye-outline" size={10} color="#64748B" />
-                    <Text style={styles.gridStatText}>{resource.views}</Text>
+            <View style={styles.pdfIconContainer}>
+                <Ionicons name="document-text" size={40} color="#EF4444" />
+                <View style={styles.pdfBadge}>
+                    <Text style={styles.pdfBadgeText}>PDF</Text>
+                </View>
+            </View>
+
+            <View style={styles.pdfInfoContainer}>
+                <Text style={styles.pdfTitle} numberOfLines={2}>
+                    {resource.title}
+                </Text>
+
+                <View style={styles.pdfMetaRow}>
+                    <View style={styles.pdfMetaItem}>
+                        <Ionicons name="eye-outline" size={12} color="#64748B" />
+                        <Text style={styles.pdfMetaText}>{resource.views || 0}</Text>
+                    </View>
+                    <View style={styles.pdfDividerSmall} />
+                    <View style={styles.pdfMetaItem}>
+                        <Ionicons name="download-outline" size={12} color="#64748B" />
+                        <Text style={styles.pdfMetaText}>{resource.downloads || 0}</Text>
+                    </View>
+                    {/* Mock file size if not available */}
+                    <View style={styles.pdfDividerSmall} />
+                    <Text style={styles.pdfMetaText}>2.4 MB</Text>
                 </View>
             </View>
         </Pressable>
@@ -171,7 +306,9 @@ const PostDetailModal: React.FC<{
     onClose: () => void;
     onImagePress: (uri: string) => void;
     onVideoPress: (link: string) => void;
-}> = ({ visible, post, onClose, onImagePress, onVideoPress }) => {
+    onDelete: (post: Post) => void;
+    onEdit: (post: Post) => void;
+}> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit }) => {
     if (!post) return null;
 
     return (
@@ -189,7 +326,8 @@ const PostDetailModal: React.FC<{
                         post={post}
                         onImagePress={onImagePress}
                         onVideoPress={onVideoPress}
-                        onPress={() => { }} // No-op for card press in modal
+                        onDelete={onDelete}
+                        onEdit={onEdit}
                     />
                 </ScrollView>
             </SafeAreaView>
@@ -200,7 +338,7 @@ const PostDetailModal: React.FC<{
 const ProfileScreen = () => {
     const { user, userProfile, refreshProfile } = useAuth();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<TabType>('posts');
+    const [activeTab, setActiveTab] = useState<TabType>('videos');
     const [userPosts, setUserPosts] = useState<Post[]>([]);
     const [likedPosts, setLikedPosts] = useState<Post[]>([]);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -222,6 +360,10 @@ const ProfileScreen = () => {
     const [viewerVisible, setViewerVisible] = useState(false);
     const [viewerUri, setViewerUri] = useState<string>('');
 
+    // Edit Post State
+    const [editPostModalVisible, setEditPostModalVisible] = useState(false);
+    const [editingPost, setEditingPost] = useState<Post | null>(null);
+
     // PDF State
     const [userDocs, setUserDocs] = useState<LibraryResource[]>([]);
     const [docViewerVisible, setDocViewerVisible] = useState(false);
@@ -233,6 +375,37 @@ const ProfileScreen = () => {
         console.log('Opening post modal for:', post.id);
         setSelectedPost(post);
         setDetailModalVisible(true);
+    };
+
+    const handleEditPost = (post: Post) => {
+        setEditingPost(post);
+        setEditPostModalVisible(true);
+    };
+
+    const handleDeletePost = async (post: Post) => {
+        Alert.alert(
+            "Delete Post",
+            "Are you sure you want to delete this post?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete", style: "destructive", onPress: async () => {
+                        await deletePost(post.id);
+                        if (detailModalVisible) closePostModal();
+                        handleRefresh();
+                    }
+                }
+            ]
+        );
+    };
+
+    const savePostEdit = async (postId: string, newContent: string) => {
+        try {
+            await updatePost(postId, { content: newContent });
+            handleRefresh();
+        } catch (error) {
+            Alert.alert("Error", "Failed to update post");
+        }
     };
 
     const closePostModal = () => {
@@ -314,13 +487,10 @@ const ProfileScreen = () => {
 
     const getDisplayPosts = () => {
         switch (activeTab) {
-            case 'posts':
-                return userPosts;
-            case 'pdfs':
-                return userDocs; // Return docs for PDF tab
-            case 'reels':
             case 'videos':
-            case 'shared':
+                return userPosts.filter(p => p.type === 'video' || !!p.videoLink);
+            case 'reels':
+                return userPosts.filter(p => p.type === 'video' || !!p.videoLink); // Currently same as videos
             default:
                 return [];
         }
@@ -399,53 +569,53 @@ const ProfileScreen = () => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                             <Text style={styles.ytName}>{userProfile?.name || 'Student Name'}</Text>
                             <View style={styles.roleBadge}>
-                                <Text style={styles.roleBadgeText}>Student</Text>
+                                <Text style={styles.roleBadgeText}>{userProfile?.role || 'Student'}</Text>
                             </View>
                         </View>
                         <Text style={styles.ytHandle}>@{userProfile?.username || userProfile?.name?.toLowerCase().replace(/\s/g, '') || 'student'} </Text>
 
-                        {/* New Stats Row */}
+                        {/* New Stats Row - Centered & Professional */}
                         <View style={styles.statsRow}>
-                            <View style={styles.statChip}>
-                                <Ionicons name="people" size={16} color="#4F46E5" />
-                                <Text style={styles.statChipText}>
-                                    <Text style={{ fontWeight: '700', color: '#1E293B' }}>{stats.followers}</Text> Connections
-                                </Text>
+                            <View style={styles.statItem}>
+                                <Text style={styles.statNumber}>{stats.followers}</Text>
+                                <Text style={styles.statLabel}>Connections</Text>
                             </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statChip}>
-                                <Ionicons name="cloud-upload" size={16} color="#EC4899" />
-                                <Text style={styles.statChipText}>
-                                    <Text style={{ fontWeight: '700', color: '#1E293B' }}>{stats.posts}</Text> Uploads
-                                </Text>
+                            <View style={styles.statDividerVertical} />
+                            <View style={styles.statItem}>
+                                <Text style={styles.statNumber}>{stats.posts}</Text>
+                                <Text style={styles.statLabel}>Uploads</Text>
+                            </View>
+                            <View style={styles.statDividerVertical} />
+                            <View style={styles.statItem}>
+                                <Text style={styles.statNumber}>{stats.streak}🔥</Text>
+                                <Text style={styles.statLabel}>Streak</Text>
                             </View>
                         </View>
 
                         {/* Description / Bio */}
                         {userProfile?.about && (
                             <View style={styles.ytBioContainer}>
-                                <Text style={styles.ytBioText} numberOfLines={2}>
+                                <Text style={styles.ytBioText} numberOfLines={3}>
                                     {userProfile.about}
-                                    <Text style={{ color: '#64748B' }}> more</Text>
                                 </Text>
                                 {(userProfile?.institution || userProfile?.education?.[0]?.institution) && (
-                                    <Text style={styles.ytLinkText}>
-                                        {userProfile.institution || userProfile.education?.[0]?.institution}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, opacity: 0.8 }}>
+                                        <Ionicons name="school-outline" size={14} color="#475569" />
+                                        <Text style={[styles.ytLinkText, { marginLeft: 4, marginTop: 0 }]}>
+                                            {userProfile.institution || userProfile.education?.[0]?.institution}
+                                        </Text>
+                                    </View>
                                 )}
                             </View>
                         )}
 
-                        {/* Action Buttons */}
+                        {/* Action Buttons - Professional */}
                         <View style={styles.ytActionsRow}>
                             <TouchableOpacity style={styles.ytPrimaryButton} onPress={() => setShowEditModal(true)}>
                                 <Text style={styles.ytPrimaryButtonText}>Edit Profile</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.ytSecondaryButton}>
-                                <Ionicons name="stats-chart" size={16} color="#0F172A" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.ytSecondaryButton}>
-                                <Ionicons name="pencil" size={16} color="#0F172A" />
+                            <TouchableOpacity style={styles.ytSecondaryButton} onPress={() => { }}>
+                                <Text style={styles.ytSecondaryButtonText}>Share Profile</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -454,20 +624,6 @@ const ProfileScreen = () => {
                 {/* Tabs - Material Design Style */}
                 <View style={styles.ytTabsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ytTabsContent}>
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'posts' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('posts')}
-                        >
-                            <Text style={[styles.ytTabText, activeTab === 'posts' && styles.ytTabTextActive]}>Home</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'pdfs' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('pdfs')}
-                        >
-                            <Text style={[styles.ytTabText, activeTab === 'pdfs' && styles.ytTabTextActive]}>Notes</Text>
-                        </TouchableOpacity>
-
                         <TouchableOpacity
                             style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive]}
                             onPress={() => setActiveTab('videos')}
@@ -479,14 +635,7 @@ const ProfileScreen = () => {
                             style={[styles.ytTab, activeTab === 'reels' && styles.ytTabActive]}
                             onPress={() => setActiveTab('reels')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'reels' && styles.ytTabTextActive]}>Clips</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'shared' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('shared')}
-                        >
-                            <Text style={[styles.ytTabText, activeTab === 'shared' && styles.ytTabTextActive]}>Community</Text>
+                            <Text style={[styles.ytTabText, activeTab === 'reels' && styles.ytTabTextActive]}>Clips (Shots)</Text>
                         </TouchableOpacity>
                     </ScrollView>
                 </View>
@@ -503,64 +652,48 @@ const ProfileScreen = () => {
                         ) : (
                             <View style={styles.gridContainer}>
                                 {getDisplayPosts().map((item: any) => (
-                                    activeTab === 'pdfs' ? (
-                                        <ResourceGridItem
-                                            key={item.id}
-                                            resource={item}
-                                            onPress={(doc) => {
-                                                setSelectedDoc(doc);
-                                                setDocViewerVisible(true);
-                                            }}
-                                        />
-                                    ) : (
-                                        <PostGridItem
-                                            key={item.id}
-                                            post={item}
-                                            onPress={openPostModal}
-                                        />
-                                    )
+                                    <PostGridItem
+                                        key={item.id}
+                                        post={item}
+                                        onPress={openPostModal}
+                                    />
                                 ))}
                             </View>
                         )}
                     </View>
                 </View>
 
-                {/* Quick Actions */}
-                <View style={styles.actionsSection}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-                    <View style={styles.actionsGrid}>
-                        <TouchableOpacity style={styles.actionCard}>
-                            <View style={[styles.actionIconBg, { backgroundColor: '#EEF2FF' }]}>
-                                <Ionicons name="settings-outline" size={28} color="#4F46E5" />
+                {/* Highlights / Shortcuts - Premium Row */}
+                <View style={styles.highlightsContainer}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}>
+                        <TouchableOpacity style={styles.highlightItem}>
+                            <View style={[styles.highlightIconCircle, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5' }]}>
+                                <Ionicons name="trophy" size={20} color="#F59E0B" />
                             </View>
-                            <Text style={styles.actionTitle}>Settings</Text>
+                            <Text style={styles.highlightLabel}>Awards</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionCard}>
-                            <View style={[styles.actionIconBg, { backgroundColor: '#FFF7ED' }]}>
-                                <Ionicons name="trophy-outline" size={28} color="#F59E0B" />
+                        <TouchableOpacity style={styles.highlightItem}>
+                            <View style={[styles.highlightIconCircle, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}>
+                                <Ionicons name="bookmark" size={20} color="#10B981" />
                             </View>
-                            <Text style={styles.actionTitle}>Achievements</Text>
+                            <Text style={styles.highlightLabel}>Saved</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionCard}>
-                            <View style={[styles.actionIconBg, { backgroundColor: '#F0FDF4' }]}>
-                                <Ionicons name="bookmark-outline" size={28} color="#10B981" />
+                        <TouchableOpacity style={styles.highlightItem} onPress={() => router.push('/document-vault')}>
+                            <View style={[styles.highlightIconCircle, { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' }]}>
+                                <Ionicons name="document-text" size={20} color="#EF4444" />
                             </View>
-                            <Text style={styles.actionTitle}>Saved Colleges</Text>
+                            <Text style={styles.highlightLabel}>Vault</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={styles.actionCard}
-                            onPress={() => router.push('/document-vault')}
-                        >
-                            <View style={[styles.actionIconBg, { backgroundColor: '#FEF2F2' }]}>
-                                <Ionicons name="document-text" size={28} color="#EF4444" />
+                        <TouchableOpacity style={styles.highlightItem}>
+                            <View style={[styles.highlightIconCircle, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}>
+                                <Ionicons name="settings" size={20} color="#64748B" />
                             </View>
-                            <Text style={styles.actionTitle}>My Documents</Text>
+                            <Text style={styles.highlightLabel}>Settings</Text>
                         </TouchableOpacity>
-                    </View>
+                    </ScrollView>
                 </View>
             </ScrollView>
 
@@ -583,6 +716,14 @@ const ProfileScreen = () => {
                 editingEducation={editingEducation}
             />
 
+            {/* Edit Post Modal */}
+            <EditPostModal
+                visible={editPostModalVisible}
+                post={editingPost}
+                onClose={() => setEditPostModalVisible(false)}
+                onSave={savePostEdit}
+            />
+
             {/* Post Detail Modal */}
             <PostDetailModal
                 visible={detailModalVisible}
@@ -590,6 +731,8 @@ const ProfileScreen = () => {
                 onClose={closePostModal}
                 onImagePress={openImageViewer}
                 onVideoPress={openVideo}
+                onDelete={handleDeletePost}
+                onEdit={handleEditPost}
             />
 
             {/* Full Screen Image Viewer Modal */}
@@ -713,91 +856,110 @@ const styles = StyleSheet.create({
     statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        marginBottom: 4,
+        justifyContent: 'space-around',
+        paddingVertical: 16,
+        paddingHorizontal: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        marginVertical: 12,
     },
-    statChip: {
-        flexDirection: 'row',
+    statItem: {
         alignItems: 'center',
-        gap: 6,
     },
-    statChipText: {
-        fontSize: 13,
+    statNumber: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#0F172A',
+        marginBottom: 2,
+    },
+    statLabel: {
+        fontSize: 12,
         color: '#64748B',
+        fontWeight: '500',
     },
-    statDivider: {
+    statDividerVertical: {
         width: 1,
-        height: 16,
+        height: 24,
         backgroundColor: '#E2E8F0',
     },
     ytBioContainer: {
-        marginTop: 8,
+        marginTop: 4,
+        paddingHorizontal: 4,
     },
     ytBioText: {
         fontSize: 14,
-        color: '#64748B',
-        lineHeight: 20,
+        color: '#334155',
+        lineHeight: 22,
     },
     ytLinkText: {
-        color: '#0F172A',
-        fontWeight: '600',
-        fontSize: 14,
-        marginTop: 4,
+        color: '#334155',
+        fontWeight: '500',
+        fontSize: 13,
     },
     ytActionsRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
+        gap: 12,
         marginTop: 16,
+        marginBottom: 8,
     },
     ytPrimaryButton: {
-        backgroundColor: '#EEF2FF', // Soft Indigo
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        borderRadius: 20,
+        backgroundColor: '#4F46E5', // Solid Indigo
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 8,
         flex: 1,
         alignItems: 'center',
+        shadowColor: '#4F46E5',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
     },
     ytPrimaryButtonText: {
-        color: '#4F46E5', // Indigo Text
+        color: '#FFF',
         fontSize: 14,
         fontWeight: '600',
     },
     ytSecondaryButton: {
-        backgroundColor: '#F1F5F9',
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
+        backgroundColor: '#FFF',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        flex: 1,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
-
+    ytSecondaryButtonText: {
+        color: '#334155',
+        fontSize: 14,
+        fontWeight: '600',
+    },
     // YouTube Tabs
     // Pill Tabs
     ytTabsContainer: {
         marginBottom: 0,
-        paddingVertical: 12,
-        borderBottomWidth: 0, // Remove bottom border for cleaner look
+        paddingVertical: 0,
+        borderBottomWidth: 0,
         backgroundColor: '#FFF',
     },
     ytTabsContent: {
         paddingHorizontal: 16,
-        paddingBottom: 4,
+        paddingVertical: 12,
     },
     ytTab: {
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        borderRadius: 20,
+        paddingVertical: 6,
+        paddingHorizontal: 14,
+        borderRadius: 8,
         marginRight: 8,
-        borderWidth: 1,
-        borderColor: '#F1F5F9', // Default border for inactive
-        backgroundColor: '#FFF',
+        backgroundColor: '#F8FAFC',
     },
     ytTabActive: {
-        backgroundColor: '#EEF2FF', // Active Fill
-        borderColor: '#EEF2FF',
-        borderBottomWidth: 1, // Reset override
-        borderBottomColor: '#EEF2FF', // Reset override
+        backgroundColor: '#0F172A', // Active Pill Color
+        borderRadius: 20,
+        borderWidth: 0,
     },
     ytTabText: {
         fontSize: 14,
@@ -805,11 +967,12 @@ const styles = StyleSheet.create({
         color: '#64748B',
     },
     ytTabTextActive: {
-        color: '#4F46E5', // Active Text Color
+        color: '#FFF',
     },
     contentSection: {
         flex: 1,
-        minHeight: 400, // Ensure scrolling works well
+        // minHeight removed to prevent whitespace
+        marginTop: 0,
     },
     postsGrid: {
         flex: 1,
@@ -830,8 +993,7 @@ const styles = StyleSheet.create({
     },
     /* Grid Styles */
     gridItem: {
-        flex: 1,
-        maxWidth: '33.33%',
+        width: '33.33%',
         aspectRatio: 1,
         marginBottom: 1,
         position: 'relative',
@@ -1080,25 +1242,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         gap: 8,
     },
-    statItem: {
-        alignItems: 'center',
-        gap: 4,
-    },
-    statNumber: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1E293B',
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#64748B',
-        fontWeight: '500',
-    },
-    statDividerVertical: {
-        width: 1,
-        height: 32,
-        backgroundColor: '#E2E8F0',
-    },
+
     progressBarContainer: {
         height: 6,
         backgroundColor: '#F1F5F9',
@@ -1167,6 +1311,99 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: '#1E293B',
+    },
+    // PDF Card Styles
+    pdfCard: {
+        width: '48%', // 2 Columns
+        backgroundColor: '#FFF',
+        borderRadius: 16,
+        padding: 12,
+        marginBottom: 16,
+        marginHorizontal: '1%',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+        alignItems: 'center',
+    },
+    pdfIconContainer: {
+        width: 64,
+        height: 80,
+        backgroundColor: '#FEF2F2',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+        position: 'relative',
+    },
+    pdfBadge: {
+        position: 'absolute',
+        bottom: -6,
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    pdfBadgeText: {
+        color: '#FFF',
+        fontSize: 8,
+        fontWeight: '700',
+    },
+    pdfInfoContainer: {
+        width: '100%',
+    },
+    pdfTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1E293B',
+        textAlign: 'center',
+        marginBottom: 8,
+        height: 40, // Fixed height for 2 lines
+    },
+    pdfMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    pdfMetaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    pdfMetaText: {
+        fontSize: 10,
+        color: '#64748B',
+        fontWeight: '500',
+    },
+    pdfDividerSmall: {
+        width: 1,
+        height: 10,
+        backgroundColor: '#E2E8F0',
+    },
+    // Highlights / Shortcuts Styles
+    highlightsContainer: {
+        marginVertical: 16,
+    },
+    highlightItem: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    highlightIconCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+    },
+    highlightLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#475569',
     },
 });
 

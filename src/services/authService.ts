@@ -20,6 +20,7 @@ export interface UserProfile {
     rank?: number;
     percentile?: number;
     isVerified?: boolean;
+    role?: 'student' | 'teacher' | 'creator';
 
     // Progress (existing)
     progress: {

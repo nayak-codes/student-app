@@ -451,3 +451,19 @@ export const updateProfileCompleteness = async (userId: string): Promise<void> =
         throw new Error(error.message);
     }
 };
+/**
+ * Get user profile by ID
+ */
+export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
+    try {
+        const userRef = doc(db, 'users', userId);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+            return userDoc.data() as UserProfile;
+        }
+        return null;
+    } catch (error: any) {
+        console.error('❌ Get user profile error:', error);
+        return null;
+    }
+};

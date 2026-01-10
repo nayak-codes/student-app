@@ -26,13 +26,13 @@ export default function HomeScreen() {
       {/* Standard App Header */}
       <View style={styles.header}>
         <View style={styles.brandContainer}>
-          <Text style={styles.brandText}>StudentVerse</Text>
+          <Text style={styles.brandText}>Vidhyarthi</Text>
         </View>
 
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => router.push('/(tabs)/search')}
+            onPress={() => router.push('/screens/universal-search')}
           >
             <Ionicons name="search-outline" size={26} color="#0F172A" />
           </TouchableOpacity>
