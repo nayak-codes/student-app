@@ -1,6 +1,6 @@
-import { FontAwesome, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 
 
@@ -35,13 +35,13 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Search Tab */}
+      {/* Events Tab */}
       <Tabs.Screen
-        name="search"
+        name="events"
         options={{
-          title: 'Search',
+          title: 'Events',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search" size={size} color={color} />
+            <MaterialIcons name="event" size={size} color={color} />
           ),
         }}
       />
@@ -68,15 +68,13 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Anju Chatbot Tab - Guaranteed to work */}
+      {/* Profile Tab */}
       <Tabs.Screen
-        name="anju"
+        name="profile"
         options={{
-          title: 'Anju',
+          title: 'You',
           tabBarIcon: ({ color, size }) => (
-            <View style={styles.chatbotIcon}>
-              <FontAwesome name="comment" size={size - 2} color={color} />
-            </View>
+            <Ionicons name="person" size={size} color={color} />
           ),
         }}
       />

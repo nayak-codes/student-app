@@ -204,6 +204,23 @@ export const deletePost = async (postId: string): Promise<void> => {
 };
 
 /**
+ * Update a post
+ */
+export const updatePost = async (postId: string, updates: Partial<Post>): Promise<void> => {
+    try {
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        await updateDoc(postRef, {
+            ...updates,
+            // updatedAt: Timestamp.now(), // If we had this field
+        });
+        console.log('Post updated');
+    } catch (error) {
+        console.error('Error updating post:', error);
+        throw error;
+    }
+};
+
+/**
  * Get posts by user ID
  */
 

@@ -1,6 +1,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Post } from '../../services/postsService';
@@ -14,6 +15,7 @@ interface FeedPostProps {
 }
 
 const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, currentUserLiked }) => {
+    const router = useRouter(); // Initialize router
     const [aspectRatio, setAspectRatio] = useState(1);
     const [liked, setLiked] = useState(currentUserLiked);
     const [likeCount, setLikeCount] = useState(post.likes);
@@ -35,11 +37,15 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, c
         onLike(post.id);
     };
 
+    const handleProfilePress = () => {
+        router.push(`/user/${post.userId}`);
+    };
+
     return (
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <View style={styles.userInfo}>
+                <TouchableOpacity style={styles.userInfo} onPress={handleProfilePress}>
                     {/* Placeholder Avatar - in real app, use user profile image */}
                     <View style={styles.avatar}>
                         <Text style={styles.avatarText}>{post.userName.charAt(0).toUpperCase()}</Text>
@@ -48,7 +54,7 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, c
                         <Text style={styles.userName}>{post.userName}</Text>
                         <Text style={styles.userExam}>{post.userExam}</Text>
                     </View>
-                </View>
+                </TouchableOpacity>
                 <TouchableOpacity>
                     <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
                 </TouchableOpacity>
