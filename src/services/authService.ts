@@ -22,6 +22,10 @@ export interface UserProfile {
     isVerified?: boolean;
     role?: 'student' | 'teacher' | 'creator';
 
+    // Education Details
+    educationLevel?: '10th' | 'Intermediate' | 'Undergraduate' | 'Graduate';
+    course?: string; // e.g., MPC, BiPC, CSE, etc.
+
     // Progress (existing)
     progress: {
         topicsCovered: number;
@@ -175,7 +179,9 @@ export const signUp = async (
     email: string,
     password: string,
     name: string,
-    exam: 'JEE' | 'NEET' | 'EAPCET' | 'SRMJEE'
+    exam: 'JEE' | 'NEET' | 'EAPCET' | 'SRMJEE',
+    educationLevel?: '10th' | 'Intermediate' | 'Undergraduate' | 'Graduate',
+    course?: string
 ): Promise<User> => {
     try {
         // Create authentication user
@@ -188,6 +194,8 @@ export const signUp = async (
             email: user.email || email,
             name,
             exam,
+            educationLevel,
+            course,
             progress: {
                 topicsCovered: 0,
                 mockTestsTaken: 0,
