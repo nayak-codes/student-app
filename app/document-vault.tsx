@@ -31,6 +31,7 @@ import {
     getUserDocuments,
     getUserStorageUsage,
 } from '../src/services/documentStorageService';
+import { addToHistory } from '../src/services/historyService';
 import { hasVaultPassword } from '../src/services/vaultSecurityService';
 
 const DocumentVault = () => {
@@ -161,7 +162,22 @@ const DocumentVault = () => {
         );
     };
 
-    const handleViewDocument = (doc: Document) => {
+    const handleViewDocument = async (doc: Document) => {
+        try {
+            // Track in History
+            await addToHistory({
+                id: doc.id,
+                type: 'pdf',
+                title: doc.name,
+                subtitle: doc.category,
+                image: doc.fileType.includes('image') ? doc.downloadUrl : undefined,
+                url: doc.downloadUrl
+            });
+            console.log('Added to history:', doc.name);
+        } catch (err) {
+            console.error('Failed to add to history:', err);
+        }
+
         setSelectedDocument(doc);
         setViewerVisible(true);
     };

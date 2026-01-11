@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
+import { addToHistory } from '../../src/services/historyService';
 
 import {
   Alert,
@@ -254,6 +255,16 @@ const ExploreScreen: React.FC = () => {
               style={styles.videoContainer}
               onPress={() => {
                 if (videoId) {
+                  // Track in History
+                  addToHistory({
+                    id: item.id,
+                    type: activeTab === 'clip' ? 'clip' : 'video',
+                    title: item.title,
+                    subtitle: item.author,
+                    image: thumbnailUrl,
+                    url: item.videoLink
+                  });
+
                   setPlayingVideoId(videoId);
                   setPlayingVideoTitle(item.title);
                   setShowVideoPlayer(true);

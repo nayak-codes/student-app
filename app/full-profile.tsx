@@ -1,7 +1,7 @@
 // Ultra-Clean Student Profile Screen
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -25,7 +25,7 @@ import AddEducationModal from '../src/components/AddEducationModal';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
 import { useAuth } from '../src/contexts/AuthContext';
-import { Education, logout } from '../src/services/authService';
+import { Education } from '../src/services/authService';
 import { getUserResources, LibraryResource } from '../src/services/libraryService';
 import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
@@ -306,8 +306,8 @@ const PostDetailModal: React.FC<{
     onClose: () => void;
     onImagePress: (uri: string) => void;
     onVideoPress: (link: string) => void;
-    onDelete: (post: Post) => void;
-    onEdit: (post: Post) => void;
+    onDelete?: (post: Post) => void | Promise<void>;
+    onEdit?: (post: Post) => void | Promise<void>;
 }> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit }) => {
     if (!post) return null;
 
@@ -336,45 +336,140 @@ const PostDetailModal: React.FC<{
 };
 
 const ProfileScreen = () => {
-    const { user, userProfile, refreshProfile } = useAuth();
+    // 1. Navigation & Route Params
     const router = useRouter();
+    const { userId } = useLocalSearchParams<{ userId: string }>();
+
+    // 2. Auth Context (Current User)
+    const { user: authUser, userProfile: authUserProfile, refreshProfile } = useAuth();
+
+    // 3. Derived State (Who are we viewing?)
+    const isOwnProfile = !userId || (authUser && userId === authUser.uid);
+    const targetUserId = isOwnProfile ? authUser?.uid : userId;
+
+    // 4. Component State
+    // Profile Data (either own or fetched)
+    const [publicUserProfile, setPublicUserProfile] = useState<any | null>(null); // Using any for now to match UserProfile/User mix
+    const [loadingProfile, setLoadingProfile] = useState(false);
+
+    // UI State
     const [activeTab, setActiveTab] = useState<TabType>('videos');
-    const [userPosts, setUserPosts] = useState<Post[]>([]);
-    const [likedPosts, setLikedPosts] = useState<Post[]>([]);
+    const [scrollY, setScrollY] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // Data State
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [resources, setResources] = useState<LibraryResource[]>([]);
+
+    // Stats State
     const [stats, setStats] = useState({
         posts: 0,
         likes: 0,
         followers: 0,
         streak: 5,
     });
+
+    // Modals State
     const [showEditModal, setShowEditModal] = useState(false);
     const [showEducationModal, setShowEducationModal] = useState(false);
     const [editingEducation, setEditingEducation] = useState<Education | undefined>(undefined);
 
-    const [isBioExpanded, setIsBioExpanded] = useState(false);
-
-    // Interactive State
-    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-    const [detailModalVisible, setDetailModalVisible] = useState(false);
-    const [viewerVisible, setViewerVisible] = useState(false);
-    const [viewerUri, setViewerUri] = useState<string>('');
-
-    // Edit Post State
     const [editPostModalVisible, setEditPostModalVisible] = useState(false);
     const [editingPost, setEditingPost] = useState<Post | null>(null);
 
-    // PDF State
-    const [userDocs, setUserDocs] = useState<LibraryResource[]>([]);
+    const [detailModalVisible, setDetailModalVisible] = useState(false);
+    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+
+    const [viewerVisible, setViewerVisible] = useState(false);
+    const [viewerUri, setViewerUri] = useState<string>('');
     const [docViewerVisible, setDocViewerVisible] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<LibraryResource | null>(null);
 
+    // 5. Computed Display Values
+    // If it's own profile, priority is authUserProfile (Firestore) > authUser (Auth)
+    // If public, priority is publicUserProfile
+    const displayProfile = isOwnProfile ? (authUserProfile || authUser) : publicUserProfile;
 
-    // Interaction Handlers
+    const displayName = (displayProfile as any)?.name || (displayProfile as any)?.displayName || 'Student';
+    const photoURL = (displayProfile as any)?.profilePhoto || (displayProfile as any)?.photoURL || (displayProfile as any)?.bannerUrl; // bannerUrl fallback is specific to the messy types, maybe remove
+    const coverPhoto = (displayProfile as any)?.coverPhoto || (displayProfile as any)?.bannerUrl;
+    const role = (displayProfile as any)?.role || 'Student';
+    const username = (displayProfile as any)?.username || displayName.toLowerCase().replace(/\s/g, '');
+    const about = (displayProfile as any)?.about;
+    const institution = (displayProfile as any)?.institution || (displayProfile as any)?.education?.[0]?.institution;
+
+
+    // 6. Data Fetching
+    const loadData = async () => {
+        if (!targetUserId) return;
+
+        try {
+            // A. Fetch Profile if not own
+            if (!isOwnProfile) {
+                setLoadingProfile(true);
+                const fetchedProfile = await import('../src/services/authService').then(m => m.getUserProfile(targetUserId));
+                setPublicUserProfile(fetchedProfile);
+            }
+
+            // B. Fetch Posts & Resources
+            const [allPosts, userResources] = await Promise.all([
+                getAllPosts(),
+                getUserResources(targetUserId)
+            ]);
+
+            // Filter posts for this user
+            const userPosts = allPosts.filter(p => p.userId === targetUserId);
+            setPosts(userPosts);
+            setResources(userResources);
+
+            // C. Calculate Stats
+            const totalLikes = userPosts.reduce((sum, post) => sum + post.likes, 0) +
+                userResources.reduce((sum, doc) => sum + (doc.likes || 0), 0);
+            const totalHelpful = userResources.reduce((sum, doc) => sum + (doc.downloads || 0), 0);
+
+            setStats({
+                posts: userPosts.length + userResources.length,
+                likes: totalLikes,
+                followers: (displayProfile as any)?.connections?.length || Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2),
+                streak: (displayProfile as any)?.progress?.studyStreak || 5,
+            });
+
+            if (isOwnProfile) {
+                await updatePostImpressions(targetUserId, userPosts);
+            }
+
+        } catch (error) {
+            console.error('Error loading profile data:', error);
+            if (!isOwnProfile && !publicUserProfile) {
+                Alert.alert("Error", "Failed to load user profile");
+                router.back();
+            }
+        } finally {
+            setLoadingProfile(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, [targetUserId]);
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        if (isOwnProfile && refreshProfile) await refreshProfile();
+        await loadData();
+        setIsRefreshing(false);
+    };
+
+
+    // 7. Event Handlers
     const openPostModal = (post: Post) => {
-        console.log('Opening post modal for:', post.id);
         setSelectedPost(post);
         setDetailModalVisible(true);
+    };
+
+    const closePostModal = () => {
+        setDetailModalVisible(false);
+        setSelectedPost(null);
     };
 
     const handleEditPost = (post: Post) => {
@@ -408,13 +503,7 @@ const ProfileScreen = () => {
         }
     };
 
-    const closePostModal = () => {
-        setDetailModalVisible(false);
-        setSelectedPost(null);
-    };
-
     const openImageViewer = (uri: string) => {
-        console.log('Opening image viewer for:', uri);
         if (!uri) return;
         setViewerUri(uri);
         setViewerVisible(true);
@@ -431,88 +520,38 @@ const ProfileScreen = () => {
         }
     };
 
-
-
-    // ... existing imports
-
-    const loadProfileData = async () => {
-        if (!user) return;
-
-        try {
-            // Load Posts
-            const allPosts = await getAllPosts();
-            const myPosts = allPosts.filter((post) => post.userId === user.uid);
-            setUserPosts(myPosts);
-
-            const liked = allPosts.filter((post) => post.likedBy.includes(user.uid));
-            setLikedPosts(liked);
-
-            // Load Documents
-            const myDocs = await getUserResources(user.uid);
-            setUserDocs(myDocs);
-
-            const totalLikes = myPosts.reduce((sum, post) => sum + post.likes, 0) +
-                myDocs.reduce((sum, doc) => sum + (doc.likes || 0), 0);
-
-            const totalHelpful = myDocs.reduce((sum, doc) => sum + (doc.downloads || 0), 0); // Using downloads as proxy for helpfulness
-
-            setStats({
-                posts: myPosts.length + myDocs.length,
-                likes: totalLikes,
-                followers: Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2),
-                streak: 5,
-            });
-
-            // Update post impressions in profile stats
-            await updatePostImpressions(user.uid, myPosts);
-        } catch (error) {
-            console.error('Error loading profile data:', error);
+    const openResource = (resource: LibraryResource) => {
+        if (resource.type === 'pdf') {
+            setSelectedDoc(resource);
+            setDocViewerVisible(true);
+        } else {
+            // For now just show PDF viewer or do nothing
+            Alert.alert("Info", "Only PDF viewing supported currently.");
         }
     };
 
-    useEffect(() => {
-        loadProfileData();
-    }, [user]);
-
-    const handleRefresh = async () => {
-        setIsRefreshing(true);
-        await Promise.all([
-            loadProfileData(),
-            refreshProfile()
-        ]);
-        setIsRefreshing(false);
-    };
-
-    // ...
-
+    // Filter Logic
     const getDisplayPosts = () => {
         switch (activeTab) {
             case 'videos':
-                return userPosts.filter(p => p.type === 'video' || !!p.videoLink);
+                return posts.filter(p => p.type === 'video' || !!p.videoLink);
             case 'reels':
-                return userPosts.filter(p => p.type === 'video' || !!p.videoLink); // Currently same as videos
+                // For demo, reusing videos or maybe short videos
+                return posts.filter(p => p.type === 'video' || !!p.videoLink);
             default:
                 return [];
         }
     };
 
-    const handleLogout = () => {
-        Alert.alert('Logout', 'Are you sure you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Logout',
-                style: 'destructive',
-                onPress: async () => {
-                    await logout();
-                    router.replace('/');
-                },
-            },
-        ]);
-    };
-
-
-
-
+    if (loadingProfile && !displayProfile) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#4F46E5" />
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -521,12 +560,11 @@ const ProfileScreen = () => {
                     <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
                 }
             >
-                {/* YouTube-Style Banner & Header */}
+                {/* Banner & Header */}
                 <View style={styles.headerContainer}>
-                    {/* Channel Banner */}
                     <View style={styles.channelBanner}>
-                        {userProfile?.coverPhoto || userProfile?.bannerUrl ? (
-                            <Image source={{ uri: userProfile.coverPhoto || userProfile.bannerUrl }} style={styles.bannerImage} resizeMode="cover" />
+                        {coverPhoto ? (
+                            <Image source={{ uri: coverPhoto }} style={styles.bannerImage} resizeMode="cover" />
                         ) : (
                             <LinearGradient
                                 colors={['#6366f1', '#8b5cf6', '#d946ef']}
@@ -535,46 +573,42 @@ const ProfileScreen = () => {
                                 style={styles.bannerPlaceholder}
                             />
                         )}
-                        {/* Top Bar Actions Overlaid on Banner */}
                         <View style={styles.topBarOverlay}>
                             <TouchableOpacity onPress={() => router.back()} style={styles.iconButtonBlur}>
                                 <Ionicons name="arrow-back" size={20} color="#FFF" />
                             </TouchableOpacity>
                             <View style={{ flex: 1 }} />
-                            <TouchableOpacity style={styles.iconButtonBlur}>
-                                <Ionicons name="search" size={20} color="#FFF" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.iconButtonBlur, { marginLeft: 8 }]}>
-                                <Ionicons name="ellipsis-vertical" size={20} color="#FFF" />
-                            </TouchableOpacity>
+                            {isOwnProfile && (
+                                <TouchableOpacity style={[styles.iconButtonBlur, { marginLeft: 8 }]}>
+                                    <Ionicons name="settings-outline" size={20} color="#FFF" />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
 
-                    {/* Profile Info Section */}
+                    {/* Profile Info */}
                     <View style={styles.profileInfoContainer}>
-                        {/* Avatar */}
                         <View style={styles.ytAvatarContainer}>
-                            {userProfile?.photoURL ? (
-                                <Image source={{ uri: userProfile.photoURL }} style={styles.ytAvatar} />
+                            {photoURL ? (
+                                <Image source={{ uri: photoURL }} style={styles.ytAvatar} />
                             ) : (
                                 <View style={[styles.ytAvatar, { backgroundColor: '#6366f1', justifyContent: 'center', alignItems: 'center' }]}>
                                     <Text style={{ color: '#FFF', fontSize: 24, fontWeight: 'bold' }}>
-                                        {userProfile?.name?.charAt(0).toUpperCase() || 'S'}
+                                        {displayName.charAt(0).toUpperCase()}
                                     </Text>
                                 </View>
                             )}
                         </View>
 
-                        {/* Name & Handle */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                            <Text style={styles.ytName}>{userProfile?.name || 'Student Name'}</Text>
+                            <Text style={styles.ytName}>{displayName}</Text>
                             <View style={styles.roleBadge}>
-                                <Text style={styles.roleBadgeText}>{userProfile?.role || 'Student'}</Text>
+                                <Text style={styles.roleBadgeText}>{role}</Text>
                             </View>
                         </View>
-                        <Text style={styles.ytHandle}>@{userProfile?.username || userProfile?.name?.toLowerCase().replace(/\s/g, '') || 'student'} </Text>
+                        <Text style={styles.ytHandle}>@{username}</Text>
 
-                        {/* New Stats Row - Centered & Professional */}
+                        {/* Stats Row */}
                         <View style={styles.statsRow}>
                             <View style={styles.statItem}>
                                 <Text style={styles.statNumber}>{stats.followers}</Text>
@@ -592,36 +626,45 @@ const ProfileScreen = () => {
                             </View>
                         </View>
 
-                        {/* Description / Bio */}
-                        {userProfile?.about && (
+                        {/* Bio */}
+                        {about && (
                             <View style={styles.ytBioContainer}>
-                                <Text style={styles.ytBioText} numberOfLines={3}>
-                                    {userProfile.about}
-                                </Text>
-                                {(userProfile?.institution || userProfile?.education?.[0]?.institution) && (
+                                <Text style={styles.ytBioText} numberOfLines={3}>{about}</Text>
+                                {institution && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, opacity: 0.8 }}>
                                         <Ionicons name="school-outline" size={14} color="#475569" />
-                                        <Text style={[styles.ytLinkText, { marginLeft: 4, marginTop: 0 }]}>
-                                            {userProfile.institution || userProfile.education?.[0]?.institution}
-                                        </Text>
+                                        <Text style={[styles.ytLinkText, { marginLeft: 4, marginTop: 0 }]}>{institution}</Text>
                                     </View>
                                 )}
                             </View>
                         )}
 
-                        {/* Action Buttons - Professional */}
+                        {/* Actions */}
                         <View style={styles.ytActionsRow}>
-                            <TouchableOpacity style={styles.ytPrimaryButton} onPress={() => setShowEditModal(true)}>
-                                <Text style={styles.ytPrimaryButtonText}>Edit Profile</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.ytSecondaryButton} onPress={() => { }}>
-                                <Text style={styles.ytSecondaryButtonText}>Share Profile</Text>
-                            </TouchableOpacity>
+                            {isOwnProfile ? (
+                                <>
+                                    <TouchableOpacity style={styles.ytPrimaryButton} onPress={() => setShowEditModal(true)}>
+                                        <Text style={styles.ytPrimaryButtonText}>Edit Profile</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.ytSecondaryButton} onPress={() => { }}>
+                                        <Text style={styles.ytSecondaryButtonText}>Share Profile</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <TouchableOpacity style={styles.ytPrimaryButton} onPress={() => Alert.alert('Connected', 'Request sent!')}>
+                                        <Text style={styles.ytPrimaryButtonText}>Connect</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.ytSecondaryButton} onPress={() => Alert.alert('Message', 'Chat coming soon')}>
+                                        <Text style={styles.ytSecondaryButtonText}>Message</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </View>
                     </View>
                 </View>
 
-                {/* Tabs - Material Design Style */}
+                {/* Tabs */}
                 <View style={styles.ytTabsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ytTabsContent}>
                         <TouchableOpacity
@@ -635,7 +678,7 @@ const ProfileScreen = () => {
                             style={[styles.ytTab, activeTab === 'reels' && styles.ytTabActive]}
                             onPress={() => setActiveTab('reels')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'reels' && styles.ytTabTextActive]}>Clips (Shots)</Text>
+                            <Text style={[styles.ytTabText, activeTab === 'reels' && styles.ytTabTextActive]}>Clips</Text>
                         </TouchableOpacity>
                     </ScrollView>
                 </View>
@@ -646,8 +689,8 @@ const ProfileScreen = () => {
                         {getDisplayPosts().length === 0 ? (
                             <View style={styles.emptyPostsState}>
                                 <Ionicons name="school-outline" size={48} color="#CBD5E1" />
-                                <Text style={styles.emptyTitle}>Share your knowledge</Text>
-                                <Text style={{ color: '#94A3B8', marginTop: 4, fontSize: 13 }}>Upload notes or videos to inspire others.</Text>
+                                <Text style={styles.emptyTitle}>{isOwnProfile ? 'Share your knowledge' : 'No posts yet'}</Text>
+                                {isOwnProfile && <Text style={{ color: '#94A3B8', marginTop: 4, fontSize: 13 }}>Upload notes or videos to inspire others.</Text>}
                             </View>
                         ) : (
                             <View style={styles.gridContainer}>
@@ -663,48 +706,41 @@ const ProfileScreen = () => {
                     </View>
                 </View>
 
-                {/* Highlights / Shortcuts - Premium Row */}
-                <View style={styles.highlightsContainer}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}>
-                        <TouchableOpacity style={styles.highlightItem}>
-                            <View style={[styles.highlightIconCircle, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5' }]}>
-                                <Ionicons name="trophy" size={20} color="#F59E0B" />
-                            </View>
-                            <Text style={styles.highlightLabel}>Awards</Text>
-                        </TouchableOpacity>
+                {/* Highlights (Only for Own Profile for now, or maybe simplified for public) */}
+                {isOwnProfile && (
+                    <View style={styles.highlightsContainer}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}>
+                            <TouchableOpacity style={styles.highlightItem}>
+                                <View style={[styles.highlightIconCircle, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5' }]}>
+                                    <Ionicons name="trophy" size={20} color="#F59E0B" />
+                                </View>
+                                <Text style={styles.highlightLabel}>Awards</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.highlightItem}>
-                            <View style={[styles.highlightIconCircle, { backgroundColor: '#F0FDF4', borderColor: '#DCFCE7' }]}>
-                                <Ionicons name="bookmark" size={20} color="#10B981" />
-                            </View>
-                            <Text style={styles.highlightLabel}>Saved</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.highlightItem} onPress={() => router.push('/document-vault')}>
+                                <View style={[styles.highlightIconCircle, { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' }]}>
+                                    <Ionicons name="document-text" size={20} color="#EF4444" />
+                                </View>
+                                <Text style={styles.highlightLabel}>Vault</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.highlightItem} onPress={() => router.push('/document-vault')}>
-                            <View style={[styles.highlightIconCircle, { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' }]}>
-                                <Ionicons name="document-text" size={20} color="#EF4444" />
-                            </View>
-                            <Text style={styles.highlightLabel}>Vault</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.highlightItem}>
-                            <View style={[styles.highlightIconCircle, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}>
-                                <Ionicons name="settings" size={20} color="#64748B" />
-                            </View>
-                            <Text style={styles.highlightLabel}>Settings</Text>
-                        </TouchableOpacity>
-                    </ScrollView>
-                </View>
+                            <TouchableOpacity style={styles.highlightItem}>
+                                <View style={[styles.highlightIconCircle, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}>
+                                    <Ionicons name="settings" size={20} color="#64748B" />
+                                </View>
+                                <Text style={styles.highlightLabel}>Settings</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                )}
             </ScrollView>
 
-            {/* Edit Profile Modal */}
             <EditProfileModal
                 visible={showEditModal}
                 onClose={() => setShowEditModal(false)}
                 onSaved={handleRefresh}
             />
 
-            {/* Add/Edit Education Modal */}
             <AddEducationModal
                 visible={showEducationModal}
                 onClose={() => {
@@ -712,11 +748,10 @@ const ProfileScreen = () => {
                     setEditingEducation(undefined);
                 }}
                 onSaved={handleRefresh}
-                userId={user?.uid || ''}
+                userId={authUser?.uid || ''}
                 editingEducation={editingEducation}
             />
 
-            {/* Edit Post Modal */}
             <EditPostModal
                 visible={editPostModalVisible}
                 post={editingPost}
@@ -724,18 +759,16 @@ const ProfileScreen = () => {
                 onSave={savePostEdit}
             />
 
-            {/* Post Detail Modal */}
             <PostDetailModal
                 visible={detailModalVisible}
                 post={selectedPost}
                 onClose={closePostModal}
                 onImagePress={openImageViewer}
                 onVideoPress={openVideo}
-                onDelete={handleDeletePost}
-                onEdit={handleEditPost}
+                onDelete={isOwnProfile ? handleDeletePost : undefined}
+                onEdit={isOwnProfile ? handleEditPost : undefined}
             />
 
-            {/* Full Screen Image Viewer Modal */}
             <Modal visible={viewerVisible} transparent={true} onRequestClose={closeImageViewer}>
                 <View style={styles.modalOverlay}>
                     <TouchableOpacity style={styles.closeButton} onPress={closeImageViewer}>
@@ -749,7 +782,6 @@ const ProfileScreen = () => {
                 </View>
             </Modal>
 
-            {/* Document Viewer */}
             <DocumentViewer
                 visible={docViewerVisible}
                 onClose={() => {
@@ -760,7 +792,6 @@ const ProfileScreen = () => {
                 documentName={selectedDoc?.title || 'Document'}
                 documentType={selectedDoc?.type || 'pdf'}
             />
-
         </SafeAreaView>
     );
 };
