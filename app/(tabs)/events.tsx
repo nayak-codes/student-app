@@ -53,6 +53,30 @@ const CATEGORY_GROUPS = [
     }
 ];
 
+interface FilterOption { label: string; value: string; }
+interface FilterGroup { title: string; type: string; options: FilterOption[]; }
+
+const CATEGORY_FILTERS: Record<string, FilterGroup[]> = {
+    'Hackathons': [
+        { title: 'Location', type: 'location', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }, { label: 'Hybrid', value: 'hybrid' }] },
+        { title: 'Prize Pool', type: 'prizePool', options: [{ label: 'Free', value: 'free' }, { label: 'Under ₹10k', value: '<10k' }, { label: '₹10k-₹50k', value: '10k-50k' }, { label: 'Above ₹50k', value: '>50k' }] }
+    ],
+    'JEE': [{ title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] }],
+    'NEET': [{ title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] }],
+    'EAMCET': [{ title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] }],
+    'Internships': [
+        { title: 'Work Mode', type: 'workMode', options: [{ label: 'Remote', value: 'remote' }, { label: 'On-site', value: 'on-site' }, { label: 'Hybrid', value: 'hybrid' }] },
+        { title: 'Stipend', type: 'stipend', options: [{ label: 'Unpaid', value: 'unpaid' }, { label: 'Under ₹10k', value: '<10k' }, { label: '₹10k-₹25k', value: '10k-25k' }, { label: 'Above ₹25k', value: '>25k' }] }
+    ],
+    'Jobs': [{ title: 'Work Mode', type: 'workMode', options: [{ label: 'Remote', value: 'remote' }, { label: 'On-site', value: 'on-site' }, { label: 'Hybrid', value: 'hybrid' }] }],
+    'Workshops': [
+        { title: 'Location', type: 'location', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] },
+        { title: 'Certificate', type: 'certificate', options: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }] }
+    ],
+    'Scholarships': [{ title: 'Award Amount', type: 'awardAmount', options: [{ label: 'Under ₹25k', value: '<25k' }, { label: '₹25k-₹50k', value: '25k-50k' }, { label: 'Above ₹50k', value: '>50k' }] }],
+    'College Events': [{ title: 'Event Type', type: 'eventType', options: [{ label: 'Cultural', value: 'cultural' }, { label: 'Technical', value: 'technical' }, { label: 'Sports', value: 'sports' }] }],
+};
+
 const EventsScreen = () => {
     const router = useRouter();
 
@@ -76,6 +100,10 @@ const EventsScreen = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [showRecommendations, setShowRecommendations] = useState(true);
 
+    // Advanced Filter State
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
+
     useEffect(() => {
         loadInitialData();
     }, []);
@@ -96,6 +124,50 @@ const EventsScreen = () => {
                 e.organization.toLowerCase().includes(query) ||
                 e.category.toLowerCase().includes(query)
             );
+        }
+
+        // Apply advanced filters
+        if (Object.keys(activeFilters).length > 0) {
+            filtered = filtered.filter(event => {
+                return Object.entries(activeFilters).every(([filterType, selectedValues]) => {
+                    if (selectedValues.length === 0) return true;
+
+                    // Location filter (checks both isOnline and location fields)
+                    if (filterType === 'location') {
+                        return selectedValues.some(value => {
+                            if (value === 'online') return event.isOnline === true;
+                            if (value === 'offline') return event.isOnline === false;
+                            if (value === 'hybrid') return event.location?.toLowerCase().includes('hybrid');
+                            return false;
+                        });
+                    }
+
+                    // Dynamic field filters
+                    if (event.dynamicFields) {
+                        const fieldValue = event.dynamicFields[filterType];
+                        if (!fieldValue) return false;
+
+                        return selectedValues.some(value => {
+                            const fieldStr = String(fieldValue).toLowerCase();
+
+                            // Handle range filters
+                            if (value.includes('-') || value.startsWith('<') || value.startsWith('>')) {
+                                // Check if field contains the range indicator
+                                return fieldStr.includes(value.replace('k', ''));
+                            }
+
+                            // Handle toggle fields (certificate, etc.)
+                            if (value === 'yes') return fieldValue === true || fieldStr === 'yes';
+                            if (value === 'no') return fieldValue === false || fieldStr === 'no';
+
+                            // Default: check if value is in field
+                            return fieldStr.includes(value.toLowerCase());
+                        });
+                    }
+
+                    return false;
+                });
+            });
         }
 
         setFilteredEvents(filtered);
@@ -203,6 +275,23 @@ const EventsScreen = () => {
             setLoading(false);
         }
     };
+
+    const toggleFilter = (filterType: string, value: string) => {
+        setActiveFilters(prev => {
+            const current = prev[filterType] || [];
+            const isSelected = current.includes(value);
+            return { ...prev, [filterType]: isSelected ? current.filter(v => v !== value) : [...current, value] };
+        });
+    };
+
+    const clearAllFilters = () => setActiveFilters({});
+
+    const getCurrentFilters = (): FilterGroup[] => {
+        if (activeSubFilter === 'All') return [];
+        return CATEGORY_FILTERS[activeSubFilter] || [];
+    };
+
+    const getActiveFilterCount = () => Object.values(activeFilters).reduce((sum, vals) => sum + vals.length, 0);
 
 
 
@@ -334,11 +423,24 @@ const EventsScreen = () => {
                 </View>
             )}
 
-            {/* Main Feed Title */}
+            {/* Main Feed Title with Filter Button */}
             <View style={styles.feedHeader}>
                 <Text style={styles.feedTitle}>
                     {activeSubFilter !== 'All' ? activeSubFilter : 'Your Feed'}
                 </Text>
+                {activeSubFilter !== 'All' && getCurrentFilters().length > 0 && (
+                    <TouchableOpacity
+                        style={styles.feedFilterButton}
+                        onPress={() => setShowFilterModal(true)}
+                    >
+                        <Ionicons name="filter" size={18} color="#4F46E5" />
+                        {getActiveFilterCount() > 0 && (
+                            <View style={styles.filterBadge}>
+                                <Text style={styles.filterBadgeText}>{getActiveFilterCount()}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                )}
             </View>
         </View>
     );
@@ -479,6 +581,88 @@ const EventsScreen = () => {
                                 onPress={savePreferences}
                             >
                                 <Text style={styles.saveButtonText}>Save Changes</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Filter Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={showFilterModal}
+                onRequestClose={() => setShowFilterModal(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>
+                                Filter {activeSubFilter}
+                            </Text>
+                            <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView contentContainerStyle={styles.modalScrollContent}>
+                            {getCurrentFilters().map((filterGroup, index) => (
+                                <View key={index} style={styles.filterGroupContainer}>
+                                    <Text style={styles.filterGroupTitle}>{filterGroup.title}</Text>
+                                    <View style={styles.filterOptionsContainer}>
+                                        {filterGroup.options.map((option) => {
+                                            const isSelected = (activeFilters[filterGroup.type] || []).includes(option.value);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={option.value}
+                                                    style={[
+                                                        styles.filterOption,
+                                                        isSelected && styles.filterOptionSelected
+                                                    ]}
+                                                    onPress={() => toggleFilter(filterGroup.type, option.value)}
+                                                >
+                                                    <Text style={[
+                                                        styles.filterOptionText,
+                                                        isSelected && styles.filterOptionTextSelected
+                                                    ]}>
+                                                        {option.label}
+                                                    </Text>
+                                                    {isSelected && (
+                                                        <Ionicons name="checkmark-circle" size={18} color="#4F46E5" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                            ))}
+
+                            {getCurrentFilters().length === 0 && (
+                                <View style={styles.noFiltersContainer}>
+                                    <Ionicons name="options-outline" size={48} color="#CBD5E1" />
+                                    <Text style={styles.noFiltersText}>No filters available for this category</Text>
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        <View style={styles.modalFooter}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={clearAllFilters}
+                                disabled={getActiveFilterCount() === 0}
+                            >
+                                <Text style={[
+                                    styles.cancelButtonText,
+                                    getActiveFilterCount() === 0 && styles.disabledButtonText
+                                ]}>
+                                    Clear All
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.saveButton]}
+                                onPress={() => setShowFilterModal(false)}
+                            >
+                                <Text style={styles.saveButtonText}>Apply Filters</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -731,12 +915,45 @@ const styles = StyleSheet.create({
     },
 
     feedHeader: {
-        marginBottom: 12
+        marginBottom: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
     feedTitle: {
         fontSize: 18,
         fontWeight: '700',
         color: '#1E293B'
+    },
+    feedFilterButton: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        backgroundColor: '#EEF2FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#C7D2FE',
+        position: 'relative',
+    },
+    filterBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 2,
+        borderColor: '#FFF',
+    },
+    filterBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FFF',
     },
 
 
@@ -1016,6 +1233,61 @@ const styles = StyleSheet.create({
     },
     toggleThumbActive: {
         transform: [{ translateX: 24 }],
+    },
+
+    // Filter Modal Specific Styles
+    filterGroupContainer: {
+        marginBottom: 24,
+    },
+    filterGroupTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#1E293B',
+        marginBottom: 12,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    filterOptionsContainer: {
+        gap: 10,
+    },
+    filterOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    filterOptionSelected: {
+        backgroundColor: '#EEF2FF',
+        borderColor: '#4F46E5',
+    },
+    filterOptionText: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: '#64748B',
+        flex: 1,
+    },
+    filterOptionTextSelected: {
+        color: '#4F46E5',
+        fontWeight: '600',
+    },
+    noFiltersContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 60,
+    },
+    noFiltersText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: '#64748B',
+        textAlign: 'center',
+    },
+    disabledButtonText: {
+        opacity: 0.4,
     },
 });
 
