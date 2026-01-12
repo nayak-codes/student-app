@@ -22,7 +22,6 @@ import {
     EventCategory,
     EventItem,
     getAllEvents,
-    getEvents,
     getRecommendedEvents,
     getUserEventPreferences,
     updateUserEventPreferences
@@ -97,8 +96,8 @@ const EventsScreen = () => {
             setUserPreferences(prefs);
 
             // Fetch Recommended
-            if (userProfile) {
-                const recs = await getRecommendedEvents(userProfile);
+            if (userProfile && prefs.length > 0) {
+                const recs = await getRecommendedEvents(prefs);
                 setRecommendedEvents(recs);
             }
 
@@ -111,7 +110,7 @@ const EventsScreen = () => {
                 setViewMode('explore');
             } else {
                 setViewMode('my_feed');
-                const myEvents = await getEvents(prefs);
+                const myEvents = await getRecommendedEvents(prefs);
                 setEvents(myEvents);
                 setFilteredEvents(myEvents);
             }
@@ -128,16 +127,18 @@ const EventsScreen = () => {
             const user = auth.currentUser;
             const userProfile = user ? await getUserProfile(user.uid) : null;
 
-            if (userProfile) {
-                const recs = await getRecommendedEvents(userProfile);
+            if (userProfile && userPreferences.length > 0) {
+                const recs = await getRecommendedEvents(userPreferences);
                 setRecommendedEvents(recs);
             }
 
             if (viewMode === 'my_feed') {
                 const prefs = await getUserEventPreferences();
                 setUserPreferences(prefs);
-                const myEvents = await getEvents(prefs);
-                setEvents(myEvents);
+                if (prefs.length > 0) {
+                    const myEvents = await getRecommendedEvents(prefs);
+                    setEvents(myEvents);
+                }
             } else {
                 const allEvents = await getAllEvents();
                 setEvents(allEvents);
@@ -168,8 +169,10 @@ const EventsScreen = () => {
 
             setViewMode('my_feed');
             setActiveSubFilter('All');
-            const myEvents = await getEvents(tempPreferences);
-            setEvents(myEvents);
+            if (tempPreferences.length > 0) {
+                const myEvents = await getRecommendedEvents(tempPreferences);
+                setEvents(myEvents);
+            }
         } catch (error) {
             console.error("Failed to save prefs", error);
         } finally {
@@ -188,7 +191,7 @@ const EventsScreen = () => {
                     setShowOnboarding(true);
                     setTempPreferences([]);
                 } else {
-                    const data = await getEvents(userPreferences);
+                    const data = await getRecommendedEvents(userPreferences);
                     setEvents(data);
                 }
             } else {
@@ -293,7 +296,7 @@ const EventsScreen = () => {
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         data={['All', ...(viewMode === 'my_feed' ? userPreferences : CATEGORY_GROUPS.flatMap(g => g.data))].filter((v, i, a) => a.indexOf(v) === i)} // Unique
-                        keyExtractor={(item) => item}
+                        keyExtractor={(item) => String(item)}
                         contentContainerStyle={styles.subFilterList}
                         renderItem={({ item }) => (
                             <TouchableOpacity
@@ -383,7 +386,7 @@ const EventsScreen = () => {
                 <FlatList
                     data={filteredEvents}
                     renderItem={renderEventCard}
-                    keyExtractor={item => item.id}
+                    keyExtractor={(item) => item.id || `event-${Math.random()}`}
                     contentContainerStyle={styles.feed}
                     ListHeaderComponent={renderHeader}
                     showsVerticalScrollIndicator={false}
@@ -578,14 +581,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderRadius: 16,
         marginBottom: 16,
-        shadowColor: '#64748B',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 4,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
         flexDirection: 'column'
     },
     cardImage: {
@@ -594,7 +595,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#E2E8F0',
     },
     cardContent: {
-        padding: 16,
+        padding: 18,
     },
     cardTitle: {
         fontSize: 18,
@@ -920,19 +921,19 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        bottom: 90, // Adjusted to not overlap with tab bar height approx 50-60 + safe area
+        bottom: 90,
         right: 20,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         backgroundColor: '#4F46E5',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4.65,
-        elevation: 8,
+        shadowColor: '#4F46E5',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 12,
         zIndex: 999,
     },
 });
