@@ -1,5 +1,5 @@
 
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, orderBy, query, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
 export type EventCategory =
@@ -52,6 +52,8 @@ export interface EventItem {
     location: string;
     isOnline: boolean;
     link?: string;
+    createdAt?: number;
+    createdBy?: string;
 }
 
 // Mock Data
@@ -224,7 +226,7 @@ const MOCK_EVENTS: EventItem[] = [
         description: 'National Qualifier Test for freshers. Score card valid for 2 years.',
         location: 'Centers',
         isOnline: false,
-    }
+    },
 ];
 
 export const getUserEventPreferences = async (): Promise<EventCategory[]> => {
@@ -252,16 +254,50 @@ export const updateUserEventPreferences = async (categories: EventCategory[]) =>
     await setDoc(prefRef, { categories }, { merge: true });
 };
 
-export const getEvents = async (selectedCategories: EventCategory[]): Promise<EventItem[]> => {
-    // In a real app, this would query Firestore based on categories
-    // For now, we filter the mock data
+export const addEvent = async (eventData: Omit<EventItem, 'id' | 'createdAt' | 'createdBy'>) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not authenticated");
 
-    if (!selectedCategories || selectedCategories.length === 0) {
-        // Return a diverse mix if no prefs
+    try {
+        const docRef = await addDoc(collection(db, 'events'), {
+            ...eventData,
+            createdAt: Date.now(),
+            createdBy: user.uid
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error("Error adding event:", error);
+        throw error;
+    }
+};
+
+export const getAllEvents = async (): Promise<EventItem[]> => {
+    try {
+        const eventsRef = collection(db, 'events');
+        const q = query(eventsRef, orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+
+        const realEvents: EventItem[] = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as EventItem));
+
+        // Combine with mock data
+        return [...realEvents, ...MOCK_EVENTS];
+    } catch (error) {
+        console.error("Error fetching events:", error);
         return MOCK_EVENTS;
     }
+};
 
-    return MOCK_EVENTS.filter(event => selectedCategories.includes(event.category));
+export const getEvents = async (selectedCategories: EventCategory[]): Promise<EventItem[]> => {
+    const allEvents = await getAllEvents();
+
+    if (!selectedCategories || selectedCategories.length === 0) {
+        return allEvents;
+    }
+
+    return allEvents.filter(event => selectedCategories.includes(event.category));
 };
 
 export const getRecommendedEvents = async (userProfile: any): Promise<EventItem[]> => {
@@ -288,9 +324,6 @@ export const getRecommendedEvents = async (userProfile: any): Promise<EventItem[
     // Dedup
     recommendedCategories = Array.from(new Set(recommendedCategories));
 
-    return MOCK_EVENTS.filter(event => recommendedCategories.includes(event.category));
-};
-
-export const getAllEvents = async (): Promise<EventItem[]> => {
-    return MOCK_EVENTS;
+    const allEvents = await getAllEvents();
+    return allEvents.filter(event => recommendedCategories.includes(event.category));
 };
