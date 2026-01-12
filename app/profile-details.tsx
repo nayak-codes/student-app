@@ -1,8 +1,10 @@
 // Full Profile Details Page
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+    Alert,
+    Image,
     ScrollView,
     StyleSheet,
     Text,
@@ -15,20 +17,127 @@ import { Education } from '../src/services/authService';
 
 
 const ProfileDetailsScreen = () => {
-    const { userProfile } = useAuth();
+    const { user: authUser, userProfile } = useAuth();
     const router = useRouter();
+    const { userId, userName, userPhoto, userEmail } = useLocalSearchParams<{
+        userId: string;
+        userName?: string;
+        userPhoto?: string;
+        userEmail?: string;
+    }>();
+
+    const [profileData, setProfileData] = useState<any>(null);
+
+    // Fetch user profile data
+    useEffect(() => {
+        const fetchProfile = async () => {
+            if (userId && userId !== authUser?.uid) {
+                try {
+                    const { getUserProfile } = await import('../src/services/authService');
+                    const profile = await getUserProfile(userId);
+                    setProfileData(profile);
+                } catch (error) {
+                    console.error('Error fetching profile:', error);
+                }
+            } else {
+                setProfileData(userProfile);
+            }
+        };
+        fetchProfile();
+    }, [userId]);
+
+    const displayProfile = profileData || userProfile;
+    const displayName = displayProfile?.name || userName || 'User';
+    const displayPhoto = displayProfile?.photoURL || displayProfile?.profilePhoto || userPhoto || '';
+    const displayEmail = displayProfile?.email || userEmail || '';
+
+    const handleSendMessage = async () => {
+        if (!authUser || !userId) {
+            Alert.alert('Error', 'Please log in to send messages');
+            return;
+        }
+
+        if (userId === authUser.uid) {
+            Alert.alert('Error', 'You cannot message yourself');
+            return;
+        }
+
+        try {
+            const { getOrCreateConversation } = await import('../src/services/chatService');
+            const conversationId = await getOrCreateConversation(
+                authUser.uid,
+                userId,
+                {
+                    name: displayName,
+                    photoURL: displayPhoto,
+                    email: displayEmail,
+                }
+            );
+
+            router.push({
+                pathname: '/chat-screen',
+                params: {
+                    conversationId,
+                    otherUserId: userId,
+                    otherUserName: displayName,
+                    otherUserPhoto: displayPhoto,
+                },
+            });
+        } catch (error) {
+            console.error('Error starting conversation:', error);
+            Alert.alert('Error', 'Failed to start conversation');
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>
-
 
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#1E293B" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>About</Text>
+                <Text style={styles.headerTitle}>{displayName}</Text>
                 <View style={styles.placeholder} />
             </View>
+
+            {/* Profile Card with Avatar */}
+            {userId && userId !== authUser?.uid && (
+                <View style={styles.profileCard}>
+                    {displayPhoto ? (
+                        <Image source={{ uri: displayPhoto }} style={styles.avatar} />
+                    ) : (
+                        <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarInitials}>
+                                {displayName.charAt(0).toUpperCase()}
+                            </Text>
+                        </View>
+                    )}
+                    <View style={styles.profileInfo}>
+                        <Text style={styles.profileName}>{displayName}</Text>
+                        <Text style={styles.profileRole}>{displayProfile?.role || 'Student'}</Text>
+                    </View>
+                </View>
+            )}
+
+            {/* Action Buttons */}
+            {userId && userId !== authUser?.uid && (
+                <View style={styles.actionRow}>
+                    <TouchableOpacity
+                        style={styles.primaryButton}
+                        onPress={() => Alert.alert('Connect', 'Connection request sent!')}
+                    >
+                        <Ionicons name="person-add" size={18} color="#FFF" />
+                        <Text style={styles.primaryButtonText}>Connect</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.secondaryButton}
+                        onPress={handleSendMessage}
+                    >
+                        <Ionicons name="chatbubble" size={18} color="#4F46E5" />
+                        <Text style={styles.secondaryButtonText}>Message</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
 
@@ -274,20 +383,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: '#334155',
     },
-    /* New profile styles */
-    profileCard: {
-        backgroundColor: '#FFFFFF',
-        marginHorizontal: 16,
-        marginTop: 16,
-        borderRadius: 12,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
-    },
+    /* New profile styles - removed duplicate, using the one below */
     profileLeft: {
         marginRight: 12,
     },
@@ -372,17 +468,24 @@ const styles = StyleSheet.create({
     },
     primaryButton: {
         flex: 1,
-        backgroundColor: '#6D28D9',
+        backgroundColor: '#4F46E5',
         paddingVertical: 12,
         borderRadius: 10,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
+        gap: 8,
         marginRight: 8,
+        shadowColor: '#4F46E5',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 3,
     },
     primaryButtonText: {
         color: '#FFF',
         fontWeight: '700',
+        fontSize: 15,
     },
     ghostButton: {
         flex: 1,
@@ -398,6 +501,55 @@ const styles = StyleSheet.create({
     ghostButtonText: {
         color: '#64748B',
         fontWeight: '600',
+    },
+    secondaryButton: {
+        flex: 1,
+        backgroundColor: '#FFF',
+        paddingVertical: 12,
+        borderRadius: 10,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+        marginLeft: 8,
+        borderWidth: 1.5,
+        borderColor: '#4F46E5',
+    },
+    secondaryButtonText: {
+        color: '#4F46E5',
+        fontWeight: '700',
+        fontSize: 15,
+    },
+    profileCard: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 16,
+        marginTop: 12,
+        marginBottom: 8,
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    profileInfo: {
+        flex: 1,
+        marginLeft: 12,
+    },
+    profileName: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1E293B',
+        marginBottom: 4,
+    },
+    profileRole: {
+        fontSize: 14,
+        color: '#64748B',
+        fontWeight: '500',
     },
 
     // Docs Styles
