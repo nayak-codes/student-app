@@ -2,17 +2,15 @@
 import { useRouter } from 'expo-router';
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import FeedList from '../../src/components/feed/FeedList';
-import ProfileDrawer from '../../src/components/ProfileDrawer';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { testFirebaseConnection } from '../../src/utils/testFirebase';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user, userProfile, loading } = useAuth();
-  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
 
   // Test Firebase connection on mount
   useEffect(() => {
@@ -42,35 +40,20 @@ export default function HomeScreen() {
             <View style={styles.notificationDot} />
           </TouchableOpacity>
 
-          {/* Profile Icon for Drawer - Moved to right side or kept? 
-               User asked for "like framework web site header".
-               Usually profile is on the right in web, but in mobile apps (Instagram) it's often a tab.
-               Since we removed the profile tab, we must keep access.
-               Let's put the profile avatar on the far right.
-           */}
           <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => setShowProfileDrawer(true)}
+            style={styles.actionButton}
+            onPress={() => {
+              // TODO: Navigate to chat screen when implemented
+              console.log('Chat button pressed');
+            }}
           >
-            {userProfile?.photoURL ? (
-              <Image source={{ uri: userProfile.photoURL }} style={styles.smallAvatar} />
-            ) : (
-              <View style={styles.smallAvatarPlaceholder}>
-                <Text style={styles.avatarText}>{userProfile?.name?.charAt(0).toUpperCase() || 'S'}</Text>
-              </View>
-            )}
+            <Ionicons name="chatbubble-outline" size={26} color="#0F172A" />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Main Feed Content */}
       <FeedList />
-
-      {/* Profile Drawer */}
-      <ProfileDrawer
-        visible={showProfileDrawer}
-        onClose={() => setShowProfileDrawer(false)}
-      />
     </View>
   );
 }
@@ -84,10 +67,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F1F5F9',
     backgroundColor: '#fff',
   },
   brandContainer: {
@@ -118,28 +101,5 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#ef4444',
-  },
-  profileButton: {
-    marginLeft: 4,
-  },
-  smallAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  smallAvatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#3F51B5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

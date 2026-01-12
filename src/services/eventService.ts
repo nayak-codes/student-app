@@ -25,6 +25,7 @@ export interface EventItem {
     createdAt?: Date;
     userId?: string;
     isOnline?: boolean;
+    dynamicFields?: Record<string, any>; // Category-specific fields
 }
 
 // Helper function to safely convert Firestore Timestamp to Date

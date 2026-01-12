@@ -29,6 +29,107 @@ const CATEGORIES: EventCategory[] = [
     'Govt Jobs', 'Higher Studies', 'Results'
 ];
 
+// Field type definitions
+type FieldType = 'text' | 'number' | 'multiline' | 'toggle';
+
+interface DynamicField {
+    name: string;
+    label: string;
+    placeholder?: string;
+    type: FieldType;
+    required?: boolean;
+    icon?: string;
+}
+
+// Category-specific field configurations
+const CATEGORY_FIELDS: Record<string, DynamicField[]> = {
+    // Tech Events
+    'Hackathons': [
+        { name: 'teamSize', label: 'Team Size', placeholder: 'e.g., 2-4 members', type: 'text', required: true, icon: 'people-outline' },
+        { name: 'prizePool', label: 'Prize Pool', placeholder: 'e.g., ₹50,000', type: 'text', icon: 'trophy-outline' },
+        { name: 'themes', label: 'Themes/Tracks', placeholder: 'e.g., Web3, AI/ML, IoT', type: 'multiline', icon: 'bulb-outline' },
+        { name: 'deadline', label: 'Registration Deadline', placeholder: 'e.g., March 10, 2026', type: 'text', required: true, icon: 'timer-outline' },
+    ],
+    'Workshops': [
+        { name: 'prerequisites', label: 'Prerequisites', placeholder: 'e.g., Basic Python knowledge', type: 'text', icon: 'book-outline' },
+        { name: 'certificate', label: 'Certificate Provided', placeholder: '', type: 'toggle', icon: 'ribbon-outline' },
+        { name: 'instructor', label: 'Instructor Name', placeholder: 'e.g., Dr. John Doe', type: 'text', icon: 'person-outline' },
+        { name: 'duration', label: 'Duration', placeholder: 'e.g., 3 hours or 5 days', type: 'text', required: true, icon: 'time-outline' },
+    ],
+    'Internships': [
+        { name: 'stipend', label: 'Stipend', placeholder: 'e.g., ₹15,000/month', type: 'text', required: true, icon: 'cash-outline' },
+        { name: 'skills', label: 'Skills Required', placeholder: 'e.g., React Native, Firebase', type: 'multiline', icon: 'code-slash-outline' },
+        { name: 'workMode', label: 'Work Mode', placeholder: 'Remote/On-site/Hybrid', type: 'text', icon: 'location-outline' },
+        { name: 'duration', label: 'Duration', placeholder: 'e.g., 3 months', type: 'text', required: true, icon: 'calendar-outline' },
+        { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 20, 2026', type: 'text', required: true, icon: 'timer-outline' },
+    ],
+    'Jobs': [
+        { name: 'salary', label: 'Salary Range', placeholder: 'e.g., ₹4-6 LPA', type: 'text', required: true, icon: 'cash-outline' },
+        { name: 'skills', label: 'Skills Required', placeholder: 'e.g., Java, Spring Boot, MySQL', type: 'multiline', icon: 'code-slash-outline' },
+        { name: 'experience', label: 'Experience Required', placeholder: 'e.g., 0-2 years', type: 'text', icon: 'briefcase-outline' },
+        { name: 'workMode', label: 'Work Mode', placeholder: 'Remote/On-site/Hybrid', type: 'text', icon: 'location-outline' },
+        { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 20, 2026', type: 'text', required: true, icon: 'timer-outline' },
+    ],
+    // Exams
+    'JEE': [
+        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 90 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' },
+        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
+        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 75% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
+        { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' },
+        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,000', type: 'text', icon: 'cash-outline' },
+    ],
+    'NEET': [
+        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 180 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' },
+        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
+        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCB, 50% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
+        { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' },
+        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,500', type: 'text', icon: 'cash-outline' },
+    ],
+    'EAMCET': [
+        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 160 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' },
+        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
+        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 or equivalent', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
+        { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' },
+        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹500', type: 'text', icon: 'cash-outline' },
+    ],
+    'BITSAT': [
+        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 150 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' },
+        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
+        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 75% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
+        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹3,000', type: 'text', icon: 'cash-outline' },
+    ],
+    'VITEEE': [
+        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 125 questions, 2.5 hours', type: 'text', required: true, icon: 'document-text-outline' },
+        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
+        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 60% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
+        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,150', type: 'text', icon: 'cash-outline' },
+    ],
+    'Board Exams': [
+        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., Theory + Practical', type: 'text', required: true, icon: 'document-text-outline' },
+        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
+        { name: 'subjects', label: 'Subjects', placeholder: 'e.g., Math, Science, English', type: 'text', required: true, icon: 'book-outline' },
+    ],
+    // Scholarships
+    'Scholarships': [
+        { name: 'awardAmount', label: 'Award Amount', placeholder: 'e.g., ₹50,000/year', type: 'text', required: true, icon: 'cash-outline' },
+        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., Family income < ₹6 lakh', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
+        { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 31, 2026', type: 'text', required: true, icon: 'timer-outline' },
+        { name: 'documents', label: 'Required Documents', placeholder: 'e.g., Income certificate, Mark sheets', type: 'multiline', icon: 'document-outline' },
+    ],
+    // College Events
+    'College Events': [
+        { name: 'eventType', label: 'Event Type', placeholder: 'Cultural/Technical/Sports', type: 'text', required: true, icon: 'star-outline' },
+        { name: 'entryFee', label: 'Entry Fee', placeholder: 'e.g., ₹100 or Free', type: 'text', icon: 'cash-outline' },
+        { name: 'expectedParticipation', label: 'Expected Participation', placeholder: 'e.g., 500+ students', type: 'text', icon: 'people-outline' },
+    ],
+    // Counselling
+    'Counselling': [
+        { name: 'counsellingType', label: 'Counselling Type', placeholder: 'e.g., JOSAA, CSAB, State', type: 'text', required: true, icon: 'school-outline' },
+        { name: 'documents', label: 'Required Documents', placeholder: 'e.g., Rank card, Certificates', type: 'multiline', required: true, icon: 'document-outline' },
+        { name: 'importantDates', label: 'Important Dates', placeholder: 'e.g., Round 1: June 15-20', type: 'multiline', icon: 'calendar-outline' },
+    ],
+};
+
 export default function PostEventScreen() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
@@ -41,6 +142,7 @@ export default function PostEventScreen() {
     const [image, setImage] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<EventCategory | ''>('');
     const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, any>>({});
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -53,6 +155,27 @@ export default function PostEventScreen() {
         if (!result.canceled) {
             setImage(result.assets[0].uri);
         }
+    };
+
+    // Get fields for selected category
+    const getCategoryFields = (): DynamicField[] => {
+        if (!selectedCategory) return [];
+        return CATEGORY_FIELDS[selectedCategory] || [];
+    };
+
+    // Handle dynamic field change
+    const handleDynamicFieldChange = (fieldName: string, value: any) => {
+        setDynamicFieldValues(prev => ({
+            ...prev,
+            [fieldName]: value
+        }));
+    };
+
+    // Reset dynamic fields when category changes
+    const handleCategorySelect = (category: EventCategory) => {
+        setSelectedCategory(category);
+        setDynamicFieldValues({}); // Reset fields
+        setShowCategoryModal(false);
     };
 
     const uploadImage = async (uri: string) => {
@@ -183,6 +306,11 @@ export default function PostEventScreen() {
                 eventData.image = imageUrl;
             }
 
+            // Add dynamic fields if present
+            if (Object.keys(dynamicFieldValues).length > 0) {
+                eventData.dynamicFields = dynamicFieldValues;
+            }
+
             await addEvent(eventData);
 
 
@@ -298,6 +426,62 @@ export default function PostEventScreen() {
                             onChangeText={setLink}
                             autoCapitalize="none"
                         />
+
+                        {/* Dynamic Category-Specific Fields */}
+                        {selectedCategory && getCategoryFields().length > 0 && (
+                            <View style={styles.dynamicFieldsSection}>
+                                <Text style={styles.sectionTitle}>📋 {selectedCategory}-Specific Details</Text>
+                                {getCategoryFields().map((field) => (
+                                    <View key={field.name}>
+                                        <View style={styles.labelRow}>
+                                            <Text style={styles.label}>
+                                                {field.label}
+                                                {field.required && <Text style={styles.required}> *</Text>}
+                                            </Text>
+                                            {field.icon && (
+                                                <Ionicons name={field.icon as any} size={16} color="#6B7280" />
+                                            )}
+                                        </View>
+                                        {field.type === 'toggle' ? (
+                                            <TouchableOpacity
+                                                style={styles.toggleContainer}
+                                                onPress={() => handleDynamicFieldChange(
+                                                    field.name,
+                                                    !dynamicFieldValues[field.name]
+                                                )}
+                                            >
+                                                <Text style={styles.toggleLabel}>
+                                                    {dynamicFieldValues[field.name] ? 'Yes' : 'No'}
+                                                </Text>
+                                                <View style={[
+                                                    styles.toggleSwitch,
+                                                    dynamicFieldValues[field.name] && styles.toggleSwitchActive
+                                                ]}>
+                                                    <View style={[
+                                                        styles.toggleThumb,
+                                                        dynamicFieldValues[field.name] && styles.toggleThumbActive
+                                                    ]} />
+                                                </View>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <TextInput
+                                                style={[
+                                                    styles.input,
+                                                    field.type === 'multiline' && styles.textArea
+                                                ]}
+                                                placeholder={field.placeholder}
+                                                value={dynamicFieldValues[field.name] || ''}
+                                                onChangeText={(val) => handleDynamicFieldChange(field.name, val)}
+                                                multiline={field.type === 'multiline'}
+                                                numberOfLines={field.type === 'multiline' ? 3 : 1}
+                                                textAlignVertical={field.type === 'multiline' ? 'top' : 'center'}
+                                                keyboardType={field.type === 'number' ? 'numeric' : 'default'}
+                                            />
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
+                        )}
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -322,10 +506,7 @@ export default function PostEventScreen() {
                                 <TouchableOpacity
                                     key={cat}
                                     style={styles.modalItem}
-                                    onPress={() => {
-                                        setSelectedCategory(cat);
-                                        setShowCategoryModal(false);
-                                    }}
+                                    onPress={() => handleCategorySelect(cat)}
                                 >
                                     <Text style={[
                                         styles.modalItemText,
@@ -494,5 +675,68 @@ const styles = StyleSheet.create({
     selectedItemText: {
         color: '#4F46E5',
         fontWeight: '600',
+    },
+    // Dynamic Fields Section
+    dynamicFieldsSection: {
+        marginTop: 24,
+        paddingTop: 24,
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 16,
+    },
+    labelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: -8,
+    },
+    required: {
+        color: '#EF4444',
+    },
+    toggleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFF',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+    },
+    toggleLabel: {
+        fontSize: 16,
+        color: '#111827',
+        fontWeight: '500',
+    },
+    toggleSwitch: {
+        width: 52,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#CBD5E1',
+        padding: 2,
+        justifyContent: 'center',
+    },
+    toggleSwitchActive: {
+        backgroundColor: '#4F46E5',
+    },
+    toggleThumb: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#FFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    toggleThumbActive: {
+        transform: [{ translateX: 24 }],
     },
 });
