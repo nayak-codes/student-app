@@ -2,20 +2,37 @@
 import { useRouter } from 'expo-router';
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import FeedList from '../../src/components/feed/FeedList';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { getTotalUnreadCount } from '../../src/services/chatService';
 import { testFirebaseConnection } from '../../src/utils/testFirebase';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user, userProfile, loading } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Test Firebase connection on mount
   useEffect(() => {
     testFirebaseConnection();
   }, []);
+
+  // Load unread count
+  useEffect(() => {
+    if (user) {
+      const loadUnreadCount = async () => {
+        const count = await getTotalUnreadCount(user.uid);
+        setUnreadCount(count);
+      };
+      loadUnreadCount();
+
+      // Refresh unread count every 30 seconds
+      const interval = setInterval(loadUnreadCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   return (
     <View style={styles.container}>
@@ -42,12 +59,16 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => {
-              // TODO: Navigate to chat screen when implemented
-              console.log('Chat button pressed');
-            }}
+            onPress={() => router.push('/conversations')}
           >
             <Ionicons name="chatbubble-outline" size={26} color="#0F172A" />
+            {unreadCount > 0 && (
+              <View style={styles.chatBadge}>
+                <Text style={styles.chatBadgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -101,5 +122,24 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#ef4444',
+  },
+  chatBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  chatBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF',
   },
 });

@@ -347,6 +347,16 @@ const ProfileScreen = () => {
     const isOwnProfile = !userId || (authUser && userId === authUser.uid);
     const targetUserId = isOwnProfile ? authUser?.uid : userId;
 
+    // DEBUG: Log to help troubleshoot
+    useEffect(() => {
+        console.log('=== PROFILE SCREEN DEBUG ===');
+        console.log('userId from params:', userId);
+        console.log('authUser.uid:', authUser?.uid);
+        console.log('isOwnProfile:', isOwnProfile);
+        console.log('targetUserId:', targetUserId);
+        console.log('========================');
+    }, [userId, authUser?.uid, isOwnProfile]);
+
     // 4. Component State
     // Profile Data (either own or fetched)
     const [publicUserProfile, setPublicUserProfile] = useState<any | null>(null); // Using any for now to match UserProfile/User mix
@@ -655,7 +665,41 @@ const ProfileScreen = () => {
                                     <TouchableOpacity style={styles.ytPrimaryButton} onPress={() => Alert.alert('Connected', 'Request sent!')}>
                                         <Text style={styles.ytPrimaryButtonText}>Connect</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity style={styles.ytSecondaryButton} onPress={() => Alert.alert('Message', 'Chat coming soon')}>
+                                    <TouchableOpacity
+                                        style={styles.ytSecondaryButton}
+                                        onPress={async () => {
+                                            if (!targetUserId || !authUser) {
+                                                Alert.alert('Error', 'Please log in to send messages');
+                                                return;
+                                            }
+
+                                            try {
+                                                const { getOrCreateConversation } = await import('../src/services/chatService');
+                                                const conversationId = await getOrCreateConversation(
+                                                    authUser.uid,
+                                                    targetUserId,
+                                                    {
+                                                        name: displayName,
+                                                        photoURL: photoURL || '',
+                                                        email: (displayProfile as any)?.email || '',
+                                                    }
+                                                );
+
+                                                router.push({
+                                                    pathname: '/chat-screen',
+                                                    params: {
+                                                        conversationId,
+                                                        otherUserId: targetUserId,
+                                                        otherUserName: displayName,
+                                                        otherUserPhoto: photoURL || '',
+                                                    },
+                                                });
+                                            } catch (error) {
+                                                console.error('Error starting conversation:', error);
+                                                Alert.alert('Error', 'Failed to start conversation');
+                                            }
+                                        }}
+                                    >
                                         <Text style={styles.ytSecondaryButtonText}>Message</Text>
                                     </TouchableOpacity>
                                 </>
