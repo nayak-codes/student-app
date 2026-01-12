@@ -1,5 +1,8 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { addDoc, collection, getDocs, orderBy, query, Timestamp, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
+
+const USER_EVENT_PREFERENCES_KEY = '@user_event_preferences';
 
 export type EventCategory =
     | 'Hackathons' | 'College Events' | 'Internships' | 'Workshops' | 'Jobs' | 'Placements'
@@ -139,8 +142,12 @@ export const getEvents = getAllEvents;
 // Get user event preferences
 export const getUserEventPreferences = async (): Promise<EventCategory[]> => {
     try {
-        // This would typically fetch from user's profile in Firestore
-        // For now, return empty array - implement based on your user profile structure
+        const preferencesJson = await AsyncStorage.getItem(USER_EVENT_PREFERENCES_KEY);
+        if (preferencesJson) {
+            const preferences = JSON.parse(preferencesJson) as EventCategory[];
+            console.log('📚 Loaded event preferences from storage:', preferences);
+            return preferences;
+        }
         return [];
     } catch (error) {
         console.error('Error fetching user preferences:', error);
@@ -151,9 +158,8 @@ export const getUserEventPreferences = async (): Promise<EventCategory[]> => {
 // Update user event preferences
 export const updateUserEventPreferences = async (preferences: EventCategory[]): Promise<void> => {
     try {
-        // This would typically update user's profile in Firestore
-        // Implement based on your user profile structure
-        console.log('Updating preferences:', preferences);
+        await AsyncStorage.setItem(USER_EVENT_PREFERENCES_KEY, JSON.stringify(preferences));
+        console.log('💾 Saved event preferences to storage:', preferences);
     } catch (error) {
         console.error('Error updating user preferences:', error);
         throw error;

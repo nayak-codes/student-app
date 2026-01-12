@@ -13,6 +13,7 @@ import {
     StatusBar,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -69,20 +70,36 @@ const EventsScreen = () => {
     const [modalVisible, setModalVisible] = useState(false);
 
     // Filter State
-    const [viewMode, setViewMode] = useState<'my_feed' | 'explore'>('my_feed');
     const [activeSubFilter, setActiveSubFilter] = useState<EventCategory | 'All'>('All');
+
+    // Search State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showRecommendations, setShowRecommendations] = useState(true);
 
     useEffect(() => {
         loadInitialData();
     }, []);
 
     useEffect(() => {
-        if (activeSubFilter === 'All') {
-            setFilteredEvents(events);
-        } else {
-            setFilteredEvents(events.filter(e => e.category === activeSubFilter));
+        let filtered = events;
+
+        // Apply category filter
+        if (activeSubFilter !== 'All') {
+            filtered = filtered.filter(e => e.category === activeSubFilter);
         }
-    }, [activeSubFilter, events]);
+
+        // Apply search filter
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(e =>
+                e.title.toLowerCase().includes(query) ||
+                e.organization.toLowerCase().includes(query) ||
+                e.category.toLowerCase().includes(query)
+            );
+        }
+
+        setFilteredEvents(filtered);
+    }, [activeSubFilter, events, searchQuery]);
 
     const loadInitialData = async () => {
         setLoading(true);
@@ -95,24 +112,24 @@ const EventsScreen = () => {
 
             setUserPreferences(prefs);
 
-            // Fetch Recommended
-            if (userProfile && prefs.length > 0) {
-                const recs = await getRecommendedEvents(prefs);
-                setRecommendedEvents(recs);
-            }
+            // Fetch events based on preferences
+            if (prefs.length > 0) {
+                const myEvents = await getRecommendedEvents(prefs);
+                setEvents(myEvents);
+                setFilteredEvents(myEvents);
 
-            if (prefs.length === 0) {
+                // Fetch Recommended
+                if (userProfile) {
+                    const recs = await getRecommendedEvents(prefs);
+                    setRecommendedEvents(recs);
+                }
+            } else {
+                // No preferences yet - show all events
                 setTempPreferences([]);
                 setShowOnboarding(true);
                 const allEvents = await getAllEvents();
                 setEvents(allEvents);
                 setFilteredEvents(allEvents);
-                setViewMode('explore');
-            } else {
-                setViewMode('my_feed');
-                const myEvents = await getRecommendedEvents(prefs);
-                setEvents(myEvents);
-                setFilteredEvents(myEvents);
             }
         } catch (error) {
             console.error("Failed to load events/preferences", error);
@@ -125,19 +142,17 @@ const EventsScreen = () => {
         setRefreshing(true);
         try {
             const user = auth.currentUser;
-            const userProfile = user ? await getUserProfile(user.uid) : null;
+            const prefs = await getUserEventPreferences();
+            setUserPreferences(prefs);
 
-            if (userProfile && userPreferences.length > 0) {
-                const recs = await getRecommendedEvents(userPreferences);
-                setRecommendedEvents(recs);
-            }
+            if (prefs.length > 0) {
+                const myEvents = await getRecommendedEvents(prefs);
+                setEvents(myEvents);
 
-            if (viewMode === 'my_feed') {
-                const prefs = await getUserEventPreferences();
-                setUserPreferences(prefs);
-                if (prefs.length > 0) {
-                    const myEvents = await getRecommendedEvents(prefs);
-                    setEvents(myEvents);
+                const userProfile = user ? await getUserProfile(user.uid) : null;
+                if (userProfile) {
+                    const recs = await getRecommendedEvents(prefs);
+                    setRecommendedEvents(recs);
                 }
             } else {
                 const allEvents = await getAllEvents();
@@ -166,12 +181,21 @@ const EventsScreen = () => {
             await updateUserEventPreferences(tempPreferences);
             setUserPreferences(tempPreferences);
             setShowOnboarding(false);
+            setModalVisible(false);
 
-            setViewMode('my_feed');
             setActiveSubFilter('All');
             if (tempPreferences.length > 0) {
                 const myEvents = await getRecommendedEvents(tempPreferences);
                 setEvents(myEvents);
+                setFilteredEvents(myEvents);
+
+                // Reload recommendations
+                const recs = await getRecommendedEvents(tempPreferences);
+                setRecommendedEvents(recs);
+            } else {
+                const allEvents = await getAllEvents();
+                setEvents(allEvents);
+                setFilteredEvents(allEvents);
             }
         } catch (error) {
             console.error("Failed to save prefs", error);
@@ -180,33 +204,9 @@ const EventsScreen = () => {
         }
     };
 
-    const switchViewMode = async (mode: 'my_feed' | 'explore') => {
-        if (mode === viewMode) return;
-        setViewMode(mode);
-        setActiveSubFilter('All');
-        setLoading(true);
-        try {
-            if (mode === 'my_feed') {
-                if (userPreferences.length === 0) {
-                    setShowOnboarding(true);
-                    setTempPreferences([]);
-                } else {
-                    const data = await getRecommendedEvents(userPreferences);
-                    setEvents(data);
-                }
-            } else {
-                const data = await getAllEvents();
-                setEvents(data);
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    const openSettings = () => {
-        setTempPreferences(userPreferences);
-        setShowOnboarding(true);
-    };
+
+
 
     const getCategoryStyle = (category: EventCategory) => {
         const techCategories = ['Hackathons', 'Workshops', 'College Events'];
@@ -290,12 +290,12 @@ const EventsScreen = () => {
     const renderHeader = () => (
         <View>
             {/* Sub Filters */}
-            {viewMode === 'explore' || userPreferences.length > 0 ? (
+            {userPreferences.length > 0 ? (
                 <View style={styles.subFilterContainer}>
                     <FlatList
                         horizontal
                         showsHorizontalScrollIndicator={false}
-                        data={['All', ...(viewMode === 'my_feed' ? userPreferences : CATEGORY_GROUPS.flatMap(g => g.data))].filter((v, i, a) => a.indexOf(v) === i)} // Unique
+                        data={['All', ...userPreferences].filter((v, i, a) => a.indexOf(v) === i)} // Unique
                         keyExtractor={(item) => String(item)}
                         contentContainerStyle={styles.subFilterList}
                         renderItem={({ item }) => (
@@ -317,7 +317,7 @@ const EventsScreen = () => {
             ) : null}
 
             {/* Recommendations Section */}
-            {viewMode === 'my_feed' && recommendedEvents.length > 0 && activeSubFilter === 'All' && (
+            {recommendedEvents.length > 0 && activeSubFilter === 'All' && showRecommendations && (
                 <View style={styles.sectionContainer}>
                     <View style={styles.sectionHeader}>
                         <Ionicons name="sparkles" size={18} color="#F59E0B" />
@@ -337,7 +337,7 @@ const EventsScreen = () => {
             {/* Main Feed Title */}
             <View style={styles.feedHeader}>
                 <Text style={styles.feedTitle}>
-                    {activeSubFilter !== 'All' ? activeSubFilter : (viewMode === 'my_feed' ? 'Your Feed' : 'Explore Events')}
+                    {activeSubFilter !== 'All' ? activeSubFilter : 'Your Feed'}
                 </Text>
             </View>
         </View>
@@ -347,33 +347,34 @@ const EventsScreen = () => {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <View>
-                    <Text style={styles.headerTitle}>Events</Text>
-                    <Text style={styles.headerSubtitle}>Discover opportunities & updates</Text>
+            {/* Sticky Header with Tab */}
+            <View style={styles.stickyHeader}>
+                <View style={styles.tabContainer}>
+                    <View style={styles.activeTab}>
+                        <Text style={styles.tabText}>For You</Text>
+                    </View>
                 </View>
-                {viewMode === 'my_feed' && (
-                    <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.editPrefButton}>
-                        <Ionicons name="options-outline" size={16} color="#4F46E5" />
-                        <Text style={styles.editPrefText}>Edit Preferences</Text>
-                    </TouchableOpacity>
-                )}
             </View>
 
-            {/* View Toggles */}
-            <View style={styles.toggleContainer}>
-                <TouchableOpacity
-                    style={[styles.toggleButton, viewMode === 'my_feed' && styles.toggleButtonActive]}
-                    onPress={() => switchViewMode('my_feed')}
-                >
-                    <Text style={[styles.toggleText, viewMode === 'my_feed' && styles.toggleTextActive]}>For You</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.toggleButton, viewMode === 'explore' && styles.toggleButtonActive]}
-                    onPress={() => switchViewMode('explore')}
-                >
-                    <Text style={[styles.toggleText, viewMode === 'explore' && styles.toggleTextActive]}>Explore</Text>
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+                <View style={styles.searchInputWrapper}>
+                    <Ionicons name="search-outline" size={20} color="#94A3B8" style={styles.searchIcon} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search events..."
+                        placeholderTextColor="#94A3B8"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                            <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+                <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.filterButton}>
+                    <Ionicons name="options-outline" size={20} color="#4F46E5" />
                 </TouchableOpacity>
             </View>
 
@@ -400,9 +401,7 @@ const EventsScreen = () => {
                             <Text style={styles.emptySubtitle}>
                                 {activeSubFilter !== 'All'
                                     ? `No events found for ${activeSubFilter}`
-                                    : viewMode === 'my_feed'
-                                        ? "Try adjusting your preferences."
-                                        : "Check back later for updates."}
+                                    : "Try adjusting your preferences."}
                             </Text>
                         </View>
                     }
@@ -426,6 +425,22 @@ const EventsScreen = () => {
                         </View>
 
                         <ScrollView contentContainerStyle={styles.modalScrollContent}>
+                            {/* Recommendations Toggle */}
+                            <View style={styles.toggleSection}>
+                                <View style={styles.toggleRow}>
+                                    <View style={styles.toggleLabelContainer}>
+                                        <Text style={styles.toggleLabel}>Show Recommendations</Text>
+                                        <Text style={styles.toggleSubLabel}>Hide to reduce distractions</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => setShowRecommendations(!showRecommendations)}
+                                        style={[styles.toggleSwitch, showRecommendations && styles.toggleSwitchActive]}
+                                    >
+                                        <View style={[styles.toggleThumb, showRecommendations && styles.toggleThumbActive]} />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
                             {CATEGORY_GROUPS.map((group, index) => (
                                 <View key={index} style={styles.groupContainer}>
                                     <Text style={styles.modalSectionHeader}>{group.title}</Text>
@@ -486,53 +501,25 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8FAFC',
     },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        backgroundColor: '#FFF',
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: '800',
-        color: '#1E293B',
-    },
-    headerSubtitle: {
-        fontSize: 13,
-        color: '#64748B',
-        marginTop: 2,
-    },
-    settingsButton: {
-        padding: 8,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 12,
-    },
-    toggleContainer: {
-        flexDirection: 'row',
-        paddingHorizontal: 20,
-        paddingBottom: 0,
+    stickyHeader: {
         backgroundColor: '#FFF',
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
-        gap: 20
     },
-    toggleButton: {
+    tabContainer: {
+        paddingHorizontal: 20,
         paddingVertical: 12,
+    },
+    activeTab: {
+        paddingVertical: 8,
         paddingHorizontal: 4,
         borderBottomWidth: 2,
-        borderBottomColor: 'transparent',
-    },
-    toggleButtonActive: {
         borderBottomColor: '#4F46E5',
+        alignSelf: 'flex-start',
     },
-    toggleText: {
+    tabText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#64748B',
-    },
-    toggleTextActive: {
         color: '#4F46E5',
     },
     // Sub Filters
@@ -935,6 +922,100 @@ const styles = StyleSheet.create({
         shadowRadius: 16,
         elevation: 12,
         zIndex: 999,
+    },
+
+    // Search Styles
+    searchContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        backgroundColor: '#FFF',
+        gap: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    searchInputWrapper: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    searchIcon: {
+        marginRight: 8,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: '#1E293B',
+        paddingVertical: 10,
+    },
+    clearButton: {
+        padding: 4,
+    },
+    filterButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: '#EEF2FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#C7D2FE',
+    },
+
+    // Toggle Section in Modal
+    toggleSection: {
+        marginBottom: 24,
+        paddingBottom: 24,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    toggleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    toggleLabelContainer: {
+        flex: 1,
+    },
+    toggleLabel: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1E293B',
+        marginBottom: 4,
+    },
+    toggleSubLabel: {
+        fontSize: 13,
+        color: '#64748B',
+    },
+    toggleSwitch: {
+        width: 52,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#CBD5E1',
+        padding: 2,
+        justifyContent: 'center',
+    },
+    toggleSwitchActive: {
+        backgroundColor: '#4F46E5',
+    },
+    toggleThumb: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#FFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    toggleThumbActive: {
+        transform: [{ translateX: 24 }],
     },
 });
 
