@@ -99,21 +99,25 @@ const ChatScreen = () => {
         if (!currentUser) return null;
 
         const isOwnMessage = item.senderId === currentUser.uid;
-        const showTimestamp = index === 0 ||
+        const showDateDivider = index === 0 ||
             (messages[index - 1] &&
-                Math.abs(item.timestamp?.toMillis() - messages[index - 1].timestamp?.toMillis()) > 300000); // 5 minutes
+                Math.abs(item.timestamp?.toMillis() - messages[index - 1].timestamp?.toMillis()) > 3600000); // 1 hour
 
         return (
-            <View style={styles.messageWrapper}>
-                {showTimestamp && (
-                    <Text style={styles.timestampDivider}>
-                        {formatMessageTime(item.timestamp)}
-                    </Text>
+            <View>
+                {showDateDivider && (
+                    <View style={styles.dateDividerContainer}>
+                        <View style={styles.dateDividerLine} />
+                        <Text style={styles.dateDividerText}>
+                            {formatMessageTime(item.timestamp)}
+                        </Text>
+                        <View style={styles.dateDividerLine} />
+                    </View>
                 )}
                 <View
                     style={[
-                        styles.messageContainer,
-                        isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer,
+                        styles.messageRow,
+                        isOwnMessage ? styles.ownMessageRow : styles.otherMessageRow,
                     ]}
                 >
                     {!isOwnMessage && (
@@ -146,6 +150,12 @@ const ChatScreen = () => {
                         >
                             {item.text}
                         </Text>
+                        <Text style={[
+                            styles.messageTimeInline,
+                            isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline
+                        ]}>
+                            {formatMessageTime(item.timestamp)}
+                        </Text>
                     </View>
                 </View>
             </View>
@@ -163,29 +173,30 @@ const ChatScreen = () => {
                 </TouchableOpacity>
 
                 <View style={styles.headerCenter}>
-                    {otherUserPhoto && typeof otherUserPhoto === 'string' && otherUserPhoto.length > 0 ? (
-                        <Image
-                            source={{ uri: otherUserPhoto }}
-                            style={styles.headerAvatar}
-                        />
-                    ) : (
-                        <View style={[styles.headerAvatar, styles.avatarPlaceholder]}>
-                            <Text style={styles.headerAvatarText}>
-                                {typeof otherUserName === 'string' ? otherUserName.charAt(0).toUpperCase() : 'U'}
-                            </Text>
-                        </View>
-                    )}
-                    <Text style={styles.headerName} numberOfLines={1}>
-                        {otherUserName}
-                    </Text>
+                    <View style={styles.headerAvatarContainer}>
+                        {otherUserPhoto && typeof otherUserPhoto === 'string' && otherUserPhoto.length > 0 ? (
+                            <Image
+                                source={{ uri: otherUserPhoto }}
+                                style={styles.headerAvatar}
+                            />
+                        ) : (
+                            <View style={[styles.headerAvatar, styles.avatarPlaceholder]}>
+                                <Text style={styles.headerAvatarText}>
+                                    {typeof otherUserName === 'string' ? otherUserName.charAt(0).toUpperCase() : 'U'}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                    <View style={styles.headerInfo}>
+                        <Text style={styles.headerName} numberOfLines={1}>
+                            {otherUserName}
+                        </Text>
+                    </View>
                 </View>
 
                 <View style={styles.headerRight}>
                     <TouchableOpacity style={styles.headerButton}>
-                        <Ionicons name="call-outline" size={22} color="#4F46E5" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.headerButton}>
-                        <Ionicons name="videocam-outline" size={22} color="#4F46E5" />
+                        <Ionicons name="ellipsis-vertical" size={20} color="#64748B" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -193,8 +204,8 @@ const ChatScreen = () => {
             {/* Messages */}
             <KeyboardAvoidingView
                 style={styles.chatContainer}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
                 {loading ? (
                     <View style={styles.loadingContainer}>
@@ -281,14 +292,31 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    headerAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+    headerAvatarContainer: {
+        position: 'relative',
         marginRight: 10,
     },
+    headerAvatar: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+    },
+    onlineIndicator: {
+        position: 'absolute',
+        bottom: 1,
+        right: 1,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#10B981',
+        borderWidth: 2,
+        borderColor: '#FFF',
+    },
+    headerInfo: {
+        flex: 1,
+    },
     headerAvatarText: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
         color: '#FFF',
     },
@@ -298,10 +326,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerName: {
-        fontSize: 17,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
         color: '#1E293B',
-        flex: 1,
+    },
+    onlineStatus: {
+        fontSize: 12,
+        color: '#10B981',
+        marginTop: 1,
+        fontWeight: '500',
     },
     headerRight: {
         flexDirection: 'row',
@@ -327,24 +360,32 @@ const styles = StyleSheet.create({
         padding: 16,
         paddingBottom: 8,
     },
-    messageWrapper: {
-        marginBottom: 16,
-    },
-    timestampDivider: {
-        textAlign: 'center',
-        fontSize: 12,
-        color: '#94A3B8',
-        marginBottom: 12,
-        marginTop: 8,
-    },
-    messageContainer: {
+    dateDividerContainer: {
         flexDirection: 'row',
-        alignItems: 'flex-end',
+        alignItems: 'center',
+        marginVertical: 16,
     },
-    ownMessageContainer: {
+    dateDividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#E2E8F0',
+    },
+    dateDividerText: {
+        fontSize: 11,
+        color: '#64748B',
+        marginHorizontal: 12,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+    },
+    messageRow: {
+        flexDirection: 'row',
+        marginBottom: 8,
+        paddingHorizontal: 4,
+    },
+    ownMessageRow: {
         justifyContent: 'flex-end',
     },
-    otherMessageContainer: {
+    otherMessageRow: {
         justifyContent: 'flex-start',
     },
     messageAvatarContainer: {
@@ -362,29 +403,47 @@ const styles = StyleSheet.create({
     },
     messageBubble: {
         maxWidth: '75%',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 18,
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        paddingBottom: 6,
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
+        shadowOffset: { width: 0, height: 1 },
+        elevation: 2,
     },
     ownMessageBubble: {
         backgroundColor: '#4F46E5',
         borderBottomRightRadius: 4,
     },
     otherMessageBubble: {
-        backgroundColor: '#FFF',
+        backgroundColor: '#FFFFFF',
         borderBottomLeftRadius: 4,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
     },
     messageText: {
         fontSize: 15,
         lineHeight: 20,
+        marginBottom: 2,
     },
     ownMessageText: {
-        color: '#FFF',
+        color: '#FFFFFF',
     },
     otherMessageText: {
         color: '#1E293B',
+    },
+    messageTimeInline: {
+        fontSize: 10,
+        marginTop: 2,
+        fontWeight: '500',
+    },
+    ownMessageTimeInline: {
+        color: 'rgba(255, 255, 255, 0.7)',
+        textAlign: 'right',
+    },
+    otherMessageTimeInline: {
+        color: '#94A3B8',
+        textAlign: 'right',
     },
     inputContainer: {
         flexDirection: 'row',
@@ -410,9 +469,12 @@ const styles = StyleSheet.create({
         maxHeight: 100,
     },
     input: {
-        fontSize: 15,
+        fontSize: 16,
         color: '#1E293B',
         maxHeight: 80,
+        minHeight: 20,
+        paddingTop: 0,
+        paddingBottom: 0,
     },
     sendButton: {
         width: 40,

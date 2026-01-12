@@ -195,8 +195,7 @@ export const subscribeToConversations = (
     const conversationsRef = collection(db, 'conversations');
     const q = query(
         conversationsRef,
-        where('participants', 'array-contains', userId),
-        orderBy('updatedAt', 'desc')
+        where('participants', 'array-contains', userId)
     );
 
     return onSnapshot(q, (snapshot) => {
@@ -204,6 +203,14 @@ export const subscribeToConversations = (
             id: doc.id,
             ...doc.data(),
         })) as Conversation[];
+
+        // Sort by updatedAt on client side to avoid needing a Firestore index
+        conversations.sort((a, b) => {
+            const aTime = a.updatedAt?.toMillis?.() || 0;
+            const bTime = b.updatedAt?.toMillis?.() || 0;
+            return bTime - aTime; // Descending order (newest first)
+        });
+
         callback(conversations);
     });
 };
