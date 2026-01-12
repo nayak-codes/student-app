@@ -1,15 +1,21 @@
 [
     {
         "origin": [
-            "*"
+            "http://localhost:8081",
+            "http://localhost:19006",
+            "http://localhost:19000",
+            "https://*.exp.direct"
         ],
         "method": [
             "GET",
-            "PUT",
             "POST",
-            "DELETE",
-            "HEAD"
+            "PUT",
+            "DELETE"
         ],
-        "maxAgeSeconds": 3600
+        "maxAgeSeconds": 3600,
+        "responseHeader": [
+            "Content-Type",
+            "Authorization"
+        ]
     }
 ]

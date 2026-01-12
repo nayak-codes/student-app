@@ -67,6 +67,7 @@ const EventsScreen = () => {
     const [userPreferences, setUserPreferences] = useState<EventCategory[]>([]);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [tempPreferences, setTempPreferences] = useState<EventCategory[]>([]);
+    const [modalVisible, setModalVisible] = useState(false);
 
     // Filter State
     const [viewMode, setViewMode] = useState<'my_feed' | 'explore'>('my_feed');
@@ -204,33 +205,62 @@ const EventsScreen = () => {
         setShowOnboarding(true);
     };
 
+    const getCategoryStyle = (category: EventCategory) => {
+        const techCategories = ['Hackathons', 'Workshops', 'College Events'];
+        const examCategories = ['JEE', 'NEET', 'EAMCET', 'BITSAT', 'VITEEE', 'Board Exams'];
+        const resourceCategories = ['Model Papers', 'Syllabus', 'Counselling', 'Career Guidance', 'Scholarships', 'Study Tips'];
+
+        if (techCategories.includes(category)) {
+            return { badge: styles.badgeTech, text: styles.badgeTextTech };
+        }
+        if (examCategories.includes(category)) {
+            return { badge: styles.badgeExam, text: styles.badgeTextExam };
+        }
+        if (resourceCategories.includes(category)) {
+            return { badge: styles.badgeResources, text: styles.badgeTextResources };
+        }
+        return { badge: styles.badgeGeneral, text: styles.badgeTextGeneral };
+    };
+
     // Full Width Card for Single Column Feed
-    const renderEventCard = ({ item }: { item: EventItem }) => (
-        <TouchableOpacity style={styles.card}>
-            <Image
-                source={{ uri: item.image || 'https://via.placeholder.com/150' }}
-                style={styles.cardImage}
-                resizeMode="cover"
-            />
-            <View style={styles.cardContent}>
-                <View style={[styles.badgeContainer, { alignSelf: 'flex-start' }]}>
-                    <View style={[styles.badge, getBadgeStyle(item.category)]}>
-                        <Text style={styles.badgeText}>{item.category}</Text>
+    const renderEventCard = ({ item }: { item: EventItem }) => {
+        const categoryStyle = getCategoryStyle(item.category);
+
+        const handleCardPress = () => {
+            router.push({
+                pathname: '/event-detail',
+                params: { event: JSON.stringify(item) }
+            });
+        };
+
+        return (
+            <TouchableOpacity style={styles.card} onPress={handleCardPress} activeOpacity={0.7}>
+                {item.image && (
+                    <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
+                )}
+                <View style={styles.cardContent}>
+                    <View style={styles.badgeContainer}>
+                        <View style={[styles.badge, categoryStyle.badge]}>
+                            <Text style={[styles.badgeText, categoryStyle.text]}>{item.category}</Text>
+                        </View>
+                    </View>
+                    <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
+                    <View style={styles.metaRow}>
+                        <Ionicons name="business-outline" size={14} color="#6B7280" />
+                        <Text style={styles.metaText} numberOfLines={1}>{item.organization}</Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                        <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+                        <Text style={styles.metaText}>{item.date}</Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                        <Ionicons name={item.isOnline ? "globe-outline" : "location-outline"} size={14} color="#6B7280" />
+                        <Text style={styles.metaText} numberOfLines={1}>{item.location}</Text>
                     </View>
                 </View>
-
-                <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.organization} numberOfLines={1}>{item.organization}</Text>
-
-                <View style={styles.cardFooter}>
-                    <Text style={styles.date}>{item.date}</Text>
-                    <TouchableOpacity style={styles.iconButton}>
-                        <Ionicons name="arrow-forward-circle" size={24} color="#4F46E5" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+            </TouchableOpacity>
+        );
+    };
 
     // Horizontal Rec Card
     const renderRecommendedCard = ({ item }: { item: EventItem }) => (
@@ -320,9 +350,12 @@ const EventsScreen = () => {
                     <Text style={styles.headerTitle}>Events</Text>
                     <Text style={styles.headerSubtitle}>Discover opportunities & updates</Text>
                 </View>
-                <TouchableOpacity style={styles.settingsButton} onPress={openSettings}>
-                    <Ionicons name="options-outline" size={24} color="#1E293B" />
-                </TouchableOpacity>
+                {viewMode === 'my_feed' && (
+                    <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.editPrefButton}>
+                        <Ionicons name="options-outline" size={16} color="#4F46E5" />
+                        <Text style={styles.editPrefText}>Edit Preferences</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* View Toggles */}
@@ -373,58 +406,74 @@ const EventsScreen = () => {
                 />
             )}
 
-            {/* Preferences Modal (MANUAL SCROLLVIEW for Grid Layout) */}
-            <Modal visible={showOnboarding} animationType="slide" presentationStyle="pageSheet">
-                <SafeAreaView style={styles.modalContainer}>
-                    <View style={styles.modalHeader}>
-                        <TouchableOpacity onPress={() => setShowOnboarding(false)} style={styles.modalClose}>
-                            <Ionicons name="close" size={28} color="#1E293B" />
-                        </TouchableOpacity>
-                        <Text style={styles.modalTitle}>Personalize Your Feed</Text>
-                        <View style={{ width: 28 }} />
-                    </View>
+            {/* Preferences Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={modalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Customize Your Feed</Text>
+                            <TouchableOpacity onPress={() => setModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
 
-                    <Text style={styles.modalSubtitle}>Select your education level and interests to see relevant updates.</Text>
-
-                    <ScrollView contentContainerStyle={styles.modalScrollContent}>
-                        {CATEGORY_GROUPS.map((group, index) => (
-                            <View key={index} style={styles.groupContainer}>
-                                <Text style={styles.modalSectionHeader}>{group.title}</Text>
-                                <View style={styles.gridContainer}>
-                                    {group.data.map((item) => (
-                                        <TouchableOpacity
-                                            key={item}
-                                            style={[
-                                                styles.gridItem,
-                                                tempPreferences.includes(item) && styles.gridItemActive
-                                            ]}
-                                            onPress={() => togglePreference(item)}
-                                        >
-                                            <Text style={[
-                                                styles.gridItemText,
-                                                tempPreferences.includes(item) && styles.gridItemTextActive
-                                            ]}>{item}</Text>
-
-                                            {tempPreferences.includes(item) && (
-                                                <View style={styles.gridCheck}>
-                                                    <Ionicons name="checkmark-circle" size={16} color="#4F46E5" />
-                                                </View>
-                                            )}
-                                        </TouchableOpacity>
-                                    ))}
+                        <ScrollView contentContainerStyle={styles.modalScrollContent}>
+                            {CATEGORY_GROUPS.map((group, index) => (
+                                <View key={index} style={styles.groupContainer}>
+                                    <Text style={styles.modalSectionHeader}>{group.title}</Text>
+                                    <View style={styles.gridContainer}>
+                                        {group.data.map((item) => (
+                                            <TouchableOpacity
+                                                key={item}
+                                                style={[
+                                                    styles.gridItem,
+                                                    tempPreferences.includes(item) && styles.gridItemSelected
+                                                ]}
+                                                onPress={() => togglePreference(item)}
+                                            >
+                                                <Text style={[
+                                                    styles.gridItemText,
+                                                    tempPreferences.includes(item) && styles.gridItemTextSelected
+                                                ]}>
+                                                    {item}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
                                 </View>
-                            </View>
-                        ))}
-                    </ScrollView>
+                            ))}
+                        </ScrollView>
 
-                    <View style={styles.modalFooter}>
-                        <TouchableOpacity style={styles.saveButton} onPress={savePreferences}>
-                            <Text style={styles.saveButtonText}>Save Preferences</Text>
-                        </TouchableOpacity>
+                        <View style={styles.modalFooter}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.saveButton]}
+                                onPress={savePreferences}
+                            >
+                                <Text style={styles.saveButtonText}>Save Changes</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </SafeAreaView>
+                </View>
             </Modal>
 
+            {/* Create Event FAB */}
+            <TouchableOpacity
+                style={styles.fab}
+                onPress={() => router.push('/post-event')}
+            >
+                <Ionicons name="add" size={32} color="#FFF" />
+            </TouchableOpacity>
         </SafeAreaView>
     );
 };
@@ -541,11 +590,29 @@ const styles = StyleSheet.create({
     },
     cardImage: {
         width: '100%',
-        height: 160,
-        backgroundColor: '#F1F5F9'
+        aspectRatio: 16 / 9, // YouTube thumbnail style
+        backgroundColor: '#E2E8F0',
     },
     cardContent: {
         padding: 16,
+    },
+    cardTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#111827',
+        marginBottom: 8,
+        lineHeight: 24,
+    },
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 6,
+    },
+    metaText: {
+        fontSize: 14,
+        color: '#6B7280',
+        marginLeft: 6,
+        flex: 1,
     },
     badgeContainer: {
         marginBottom: 8
@@ -578,7 +645,18 @@ const styles = StyleSheet.create({
     badgeText: {
         fontSize: 11,
         fontWeight: '600',
-        color: '#1E293B',
+    },
+    badgeTextTech: {
+        color: '#4F46E5',
+    },
+    badgeTextExam: {
+        color: '#DC2626',
+    },
+    badgeTextResources: {
+        color: '#059669',
+    },
+    badgeTextGeneral: {
+        color: '#64748B',
     },
     title: {
         fontSize: 18,
@@ -677,7 +755,21 @@ const styles = StyleSheet.create({
     // Modal Styles
     modalContainer: {
         flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalContent: {
         backgroundColor: '#FFF',
+        width: '90%',
+        maxHeight: '80%',
+        borderRadius: 24,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -685,15 +777,15 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         padding: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        borderBottomColor: '#F3F4F6',
     },
     modalClose: {
         padding: 4,
     },
     modalTitle: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: '700',
-        color: '#1E293B',
+        color: '#111827',
     },
     modalSubtitle: {
         fontSize: 14,
@@ -703,47 +795,48 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
     },
     modalScrollContent: {
-        padding: 20,
+        padding: 24,
         paddingBottom: 100
     },
     groupContainer: {
-        marginBottom: 24
+        marginBottom: 24,
     },
     modalSectionHeader: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#94A3B8',
-        marginTop: 16,
-        marginBottom: 8,
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 12,
+        marginLeft: 4,
         textTransform: 'uppercase',
         letterSpacing: 0.5
     },
     gridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12
+        gap: 8,
     },
     gridItem: {
-        width: '48%', // 2 columns with gap
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        padding: 12,
-        backgroundColor: '#F8FAFC',
+        borderColor: '#E5E7EB',
+        backgroundColor: '#FFF',
         minHeight: 50,
         justifyContent: 'center'
     },
-    gridItemActive: {
+    gridItemSelected: { // Was gridItemActive
         backgroundColor: '#EEF2FF',
-        borderColor: '#4F46E5',
+        borderColor: '#6366F1',
     },
     gridItemText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#64748B',
+        fontSize: 14,
+        color: '#4B5563',
+        fontWeight: '500',
     },
-    gridItemTextActive: {
+    gridItemTextSelected: { // Was gridItemTextActive
         color: '#4F46E5',
+        fontWeight: '600',
     },
     gridCheck: {
         position: 'absolute',
@@ -752,25 +845,46 @@ const styles = StyleSheet.create({
     },
 
     modalFooter: {
+        flexDirection: 'row',
+        padding: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6',
+        backgroundColor: '#F9FAFB',
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        padding: 20,
+    },
+    modalButton: {
+        flex: 1,
+        paddingVertical: 14,
+        alignItems: 'center',
+        borderRadius: 12,
+        justifyContent: 'center',
+    },
+    cancelButton: {
         backgroundColor: '#FFF',
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
+        marginRight: 12,
+        borderWidth: 1,
+        borderColor: '#D1D5DB',
     },
     saveButton: {
-        backgroundColor: '#1E293B',
-        paddingVertical: 16,
-        borderRadius: 16,
-        alignItems: 'center',
+        backgroundColor: '#4F46E5',
+        shadowColor: '#4F46E5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    cancelButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#4B5563',
     },
     saveButtonText: {
-        color: '#FFF',
         fontSize: 16,
-        fontWeight: '700',
+        fontWeight: '600',
+        color: '#FFF',
     },
 
     emptyState: {
@@ -789,6 +903,37 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#64748B',
         textAlign: 'center',
+    },
+    editPrefButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EEF2FF',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+    },
+    editPrefText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#4F46E5',
+    },
+    fab: {
+        position: 'absolute',
+        bottom: 90, // Adjusted to not overlap with tab bar height approx 50-60 + safe area
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: '#4F46E5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4.65,
+        elevation: 8,
+        zIndex: 999,
     },
 });
 
