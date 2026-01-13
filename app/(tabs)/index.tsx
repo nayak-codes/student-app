@@ -9,10 +9,32 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { getTotalUnreadCount } from '../../src/services/chatService';
 import { testFirebaseConnection } from '../../src/utils/testFirebase';
 
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { NotificationsModal } from '../../src/components/NotificationsModal';
+import { useFriendRequests } from '../../src/hooks/useFriendRequests';
+
 export default function HomeScreen() {
   const router = useRouter();
   const { user, userProfile, loading } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Friend Requests Logic
+  const {
+    pendingRequests,
+    count: requestCount,
+    loadRequests,
+    handleAccept,
+    handleReject
+  } = useFriendRequests();
+
+  // Refresh requests when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadRequests();
+    }, [loadRequests])
+  );
 
   // Test Firebase connection on mount
   useEffect(() => {
@@ -52,9 +74,12 @@ export default function HomeScreen() {
             <Ionicons name="search-outline" size={26} color="#0F172A" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => setShowNotifications(true)}
+          >
             <Ionicons name="notifications-outline" size={26} color="#0F172A" />
-            <View style={styles.notificationDot} />
+            {requestCount > 0 && <View style={styles.notificationDot} />}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -75,6 +100,15 @@ export default function HomeScreen() {
 
       {/* Main Feed Content */}
       <FeedList />
+
+      {/* Notifications Modal */}
+      <NotificationsModal
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        pendingRequests={pendingRequests}
+        onAccept={handleAccept}
+        onReject={handleReject}
+      />
     </View>
   );
 }

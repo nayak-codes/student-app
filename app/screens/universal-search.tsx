@@ -1,10 +1,12 @@
 // Universal Search Screen - Search across everything
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
+    Image,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -13,21 +15,25 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { getAllUsers, UserProfile } from '../../src/services/authService';
 import { College, getAllColleges } from '../../src/services/collegeService';
 import { getAllResources, LibraryResource } from '../../src/services/libraryService';
 import { getAllPosts, Post } from '../../src/services/postsService';
 
-type SearchCategory = 'all' | 'colleges' | 'posts' | 'library';
+type SearchCategory = 'all' | 'colleges' | 'posts' | 'library' | 'users';
 
 interface SearchResult {
     id: string;
-    type: 'college' | 'post' | 'resource';
+    type: 'college' | 'post' | 'resource' | 'user';
     title: string;
     subtitle: string;
     description?: string;
     badge?: string;
-    data: College | Post | LibraryResource;
+    data: College | Post | LibraryResource | UserProfile;
+    image?: string;
 }
+
+const SEARCH_HISTORY_KEY = 'studentverse_search_history';
 
 const SearchScreen = () => {
     const router = useRouter();
@@ -38,17 +44,15 @@ const SearchScreen = () => {
         colleges: College[];
         posts: Post[];
         resources: LibraryResource[];
+        users: UserProfile[];
     }>({
         colleges: [],
         posts: [],
         resources: [],
+        users: [],
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [recentSearches, setRecentSearches] = useState<string[]>([
-        'IIT Bombay',
-        'Physics formulas',
-        'JEE preparation',
-    ]);
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
     const [trendingSearches] = useState([
         { term: 'NEET 2025', count: '1.2M' },
         { term: 'IIT cutoff', count: '950K' },
@@ -58,6 +62,7 @@ const SearchScreen = () => {
 
     useEffect(() => {
         loadAllData();
+        loadRecentSearches();
     }, []);
 
     useEffect(() => {
@@ -68,6 +73,38 @@ const SearchScreen = () => {
         }
     }, [searchQuery, activeCategory, allData]);
 
+    const loadRecentSearches = async () => {
+        try {
+            const history = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+            if (history) {
+                setRecentSearches(JSON.parse(history));
+            }
+        } catch (error) {
+            console.error('Error loading search history:', error);
+        }
+    };
+
+    const saveRecentSearch = async (term: string) => {
+        if (!term.trim()) return;
+        try {
+            const newHistory = [term, ...recentSearches.filter(t => t !== term)].slice(0, 5);
+            setRecentSearches(newHistory);
+            await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(newHistory));
+        } catch (error) {
+            console.error('Error saving search history:', error);
+        }
+    };
+
+    const removeRecentSearch = async (termToRemove: string) => {
+        try {
+            const newHistory = recentSearches.filter(term => term !== termToRemove);
+            setRecentSearches(newHistory);
+            await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(newHistory));
+        } catch (error) {
+            console.error('Error removing search history:', error);
+        }
+    };
+
     const loadAllData = async () => {
         try {
             setIsLoading(true);
@@ -75,37 +112,26 @@ const SearchScreen = () => {
             let colleges: College[] = [];
             let posts: Post[] = [];
             let resources: LibraryResource[] = [];
+            let users: UserProfile[] = [];
 
             try {
-                console.log('Loading colleges...');
-                colleges = await getAllColleges();
-                console.log(`Loaded ${colleges.length} colleges`);
+                const [collegesData, postsData, resourcesData, usersData] = await Promise.all([
+                    getAllColleges().catch(err => { console.error('Error loading colleges:', err); return []; }),
+                    getAllPosts().catch(err => { console.error('Error loading posts:', err); return []; }),
+                    getAllResources().catch(err => { console.error('Error loading resources:', err); return []; }),
+                    getAllUsers().catch(err => { console.error('Error loading users:', err); return []; })
+                ]);
+
+                colleges = collegesData;
+                posts = postsData;
+                resources = resourcesData;
+                users = usersData;
+
             } catch (error) {
-                console.error('Error loading colleges:', error);
+                console.error('Error loading data in parallel:', error);
             }
 
-            try {
-                console.log('Loading posts...');
-                posts = await getAllPosts();
-                console.log(`Loaded ${posts.length} posts`);
-            } catch (error) {
-                console.error('Error loading posts:', error);
-            }
-
-            try {
-                console.log('Loading resources...');
-                resources = await getAllResources();
-                console.log(`Loaded ${resources.length} resources`);
-            } catch (error) {
-                console.error('Error loading resources:', error);
-            }
-
-            setAllData({ colleges, posts, resources });
-            console.log('All data loaded:', {
-                colleges: colleges.length,
-                posts: posts.length,
-                resources: resources.length,
-            });
+            setAllData({ colleges, posts, resources, users });
         } catch (error) {
             console.error('Error in loadAllData:', error);
         } finally {
@@ -117,6 +143,7 @@ const SearchScreen = () => {
         const query = searchQuery.toLowerCase().trim();
         const searchResults: SearchResult[] = [];
 
+        // 1. Search Colleges
         if (activeCategory === 'all' || activeCategory === 'colleges') {
             allData.colleges.forEach((college) => {
                 if (
@@ -138,6 +165,33 @@ const SearchScreen = () => {
             });
         }
 
+        // 2. Search Users
+        if (activeCategory === 'all' || activeCategory === 'users') {
+            allData.users.forEach((user) => {
+                const userName = user.name?.toLowerCase() || '';
+                const userEmail = user.email?.toLowerCase() || '';
+                const userExam = user.exam?.toLowerCase() || '';
+
+                if (
+                    userName.includes(query) ||
+                    userEmail.includes(query) ||
+                    userExam.includes(query)
+                ) {
+                    searchResults.push({
+                        id: `user_${user.id}`,
+                        type: 'user',
+                        title: user.name || 'Unknown User',
+                        subtitle: `${user.exam || 'Student'} • ${user.educationLevel || 'General'}`,
+                        description: user.headline || 'Student at Vidhyardhi',
+                        badge: user.role === 'creator' ? 'CREATOR' : undefined,
+                        data: user,
+                        image: user.profilePhoto || user.photoURL
+                    });
+                }
+            });
+        }
+
+        // 3. Search Posts
         if (activeCategory === 'all' || activeCategory === 'posts') {
             allData.posts.forEach((post) => {
                 if (
@@ -158,6 +212,7 @@ const SearchScreen = () => {
             });
         }
 
+        // 4. Search Library
         if (activeCategory === 'all' || activeCategory === 'library') {
             allData.resources.forEach((resource) => {
                 if (
@@ -185,9 +240,7 @@ const SearchScreen = () => {
 
     const handleSearch = (term: string) => {
         setSearchQuery(term);
-        if (term && !recentSearches.includes(term)) {
-            setRecentSearches([term, ...recentSearches.slice(0, 4)]);
-        }
+        saveRecentSearch(term);
     };
 
     const clearSearch = () => {
@@ -196,15 +249,24 @@ const SearchScreen = () => {
     };
 
     const handleResultClick = (item: SearchResult) => {
+        // Save search query on click if it was typed
+        if (searchQuery.trim()) {
+            saveRecentSearch(searchQuery.trim());
+        }
+
         if (item.type === 'college') {
             const college = item.data as College;
-            console.log('Opening college:', college.id);
             router.push(`/college/${college.id}`);
+        } else if (item.type === 'user') {
+            const user = item.data as UserProfile;
+            router.push({
+                pathname: '/full-profile',
+                params: { userId: user.id }
+            });
         } else if (item.type === 'post') {
-            console.log('Post clicked:', item.data);
+            // Handle post view
         } else if (item.type === 'resource') {
-            const resource = item.data as LibraryResource;
-            console.log('Resource clicked:', resource.fileUrl);
+            // Handle resource view
         }
     };
 
@@ -214,20 +276,25 @@ const SearchScreen = () => {
             onPress={() => handleResultClick(item)}
         >
             <View style={styles.resultIcon}>
-                <Ionicons
-                    name={
-                        item.type === 'college' ? 'school' :
-                            item.type === 'post' ? 'chatbubble' :
-                                'document-text'
-                    }
-                    size={24}
-                    color="#4F46E5"
-                />
+                {item.type === 'user' && item.image ? (
+                    <Image source={{ uri: item.image }} style={{ width: 48, height: 48, borderRadius: 24 }} />
+                ) : (
+                    <Ionicons
+                        name={
+                            item.type === 'college' ? 'school' :
+                                item.type === 'post' ? 'chatbubble' :
+                                    item.type === 'user' ? 'person' :
+                                        'document-text'
+                        }
+                        size={24}
+                        color="#4F46E5"
+                    />
+                )}
             </View>
 
             <View style={styles.resultContent}>
                 <View style={styles.resultHeader}>
-                    <Text style={styles.resultTitle} numberOfLines={2}>
+                    <Text style={styles.resultTitle} numberOfLines={1}>
                         {item.title}
                     </Text>
                     {item.badge && (
@@ -236,6 +303,7 @@ const SearchScreen = () => {
                             item.type === 'college' && styles.badgeCollege,
                             item.type === 'post' && styles.badgePost,
                             item.type === 'resource' && styles.badgeResource,
+                            item.type === 'user' && styles.badgeUser,
                         ]}>
                             <Text style={styles.badgeText}>{item.badge}</Text>
                         </View>
@@ -271,37 +339,34 @@ const SearchScreen = () => {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            {/* Expanded Search Bar Container with integrated Back button */}
+            <View style={styles.topContainer}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#1E293B" />
                 </TouchableOpacity>
-                <View style={styles.headerTextContainer}>
-                    <Text style={styles.headerTitle}>Search</Text>
-                    <Text style={styles.headerSubtitle}>Discover everything</Text>
+
+                <View style={styles.searchContainer}>
+                    <Ionicons name="search-outline" size={20} color="#64748B" />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search students, colleges, posts..."
+                        placeholderTextColor="#94A3B8"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoFocus={true}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={clearSearch}>
+                            <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
 
-            <View style={styles.searchContainer}>
-                <Ionicons name="search-outline" size={20} color="#64748B" />
-                <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search colleges, posts, resources..."
-                    placeholderTextColor="#94A3B8"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoFocus={true}
-                />
-                {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={clearSearch}>
-                        <Ionicons name="close-circle" size={20} color="#94A3B8" />
-                    </TouchableOpacity>
-                )}
-            </View>
-
             <View style={styles.categoriesContainer}>
-                {(['all', 'colleges', 'posts', 'library'] as SearchCategory[]).map((category) => (
+                {(['all', 'users', 'colleges', 'posts', 'library'] as SearchCategory[]).map((category) => (
                     <TouchableOpacity
                         key={category}
                         style={[
@@ -346,21 +411,6 @@ const SearchScreen = () => {
                 </View>
             ) : (
                 <ScrollView showsVerticalScrollIndicator={false}>
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name="flame" size={20} color="#EF4444" />
-                            <Text style={styles.sectionTitle}>Trending Now</Text>
-                        </View>
-                        <FlatList
-                            data={trendingSearches}
-                            renderItem={renderTrending}
-                            keyExtractor={(item) => item.term}
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.trendingList}
-                        />
-                    </View>
-
                     {recentSearches.length > 0 && (
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
@@ -376,8 +426,9 @@ const SearchScreen = () => {
                                     <Ionicons name="search-outline" size={18} color="#64748B" />
                                     <Text style={styles.recentText}>{term}</Text>
                                     <TouchableOpacity
-                                        onPress={() => {
-                                            setRecentSearches(recentSearches.filter((_, i) => i !== index));
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            removeRecentSearch(term);
                                         }}
                                         style={styles.removeButton}
                                     >
@@ -387,6 +438,21 @@ const SearchScreen = () => {
                             ))}
                         </View>
                     )}
+
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <Ionicons name="flame" size={20} color="#EF4444" />
+                            <Text style={styles.sectionTitle}>Trending Now</Text>
+                        </View>
+                        <FlatList
+                            data={trendingSearches}
+                            renderItem={renderTrending}
+                            keyExtractor={(item) => item.term}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.trendingList}
+                        />
+                    </View>
 
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -447,64 +513,51 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8FAFC',
     },
-    header: {
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        backgroundColor: '#FFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
+    topContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingTop: 40, // Added padding for status bar if not handled by SafeAreaView correctly in layout
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 8,
+        backgroundColor: '#FFF',
     },
     backButton: {
-        marginRight: 16,
-    },
-    headerTextContainer: {
-        flex: 1,
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: '#1E293B',
-    },
-    headerSubtitle: {
-        fontSize: 13,
-        color: '#64748B',
-        marginTop: 2,
+        marginRight: 12,
+        padding: 4,
     },
     searchContainer: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF',
-        marginHorizontal: 16,
-        marginVertical: 12,
+        backgroundColor: '#F1F5F9', // Slightly grey background for input
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+        paddingVertical: 10, // Slightly reduced vertical padding
+        borderRadius: 24, // More rounded
     },
     searchInput: {
         flex: 1,
-        marginLeft: 12,
-        fontSize: 14,
+        marginLeft: 10,
+        fontSize: 15,
         color: '#1E293B',
     },
     categoriesContainer: {
         flexDirection: 'row',
         paddingHorizontal: 16,
         gap: 8,
-        marginBottom: 16,
+        marginBottom: 12,
+        marginTop: 8,
     },
     categoryChip: {
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
-        backgroundColor: '#F1F5F9',
+        backgroundColor: '#FFF',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
     categoryChipActive: {
         backgroundColor: '#4F46E5',
+        borderColor: '#4F46E5',
     },
     categoryText: {
         fontSize: 13,
@@ -546,6 +599,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
+        overflow: 'hidden',
     },
     resultContent: {
         flex: 1,
@@ -576,6 +630,9 @@ const styles = StyleSheet.create({
     badgeResource: {
         backgroundColor: '#D1FAE5',
     },
+    badgeUser: {
+        backgroundColor: '#E0E7FF',
+    },
     badgeText: {
         fontSize: 10,
         fontWeight: '600',
@@ -592,6 +649,7 @@ const styles = StyleSheet.create({
     },
     section: {
         padding: 20,
+        paddingBottom: 0,
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -606,6 +664,7 @@ const styles = StyleSheet.create({
     },
     trendingList: {
         gap: 12,
+        paddingBottom: 20,
     },
     trendingCard: {
         flexDirection: 'row',

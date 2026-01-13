@@ -5,7 +5,7 @@ import {
     signOut,
     User
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
 // Extended LinkedIn-Style User Profile
@@ -295,4 +295,25 @@ export const updateUserProfile = async (
  */
 export const onAuthChange = (callback: (user: User | null) => void) => {
     return onAuthStateChanged(auth, callback);
+};
+
+/**
+ * Get all users for search
+ */
+export const getAllUsers = async (limitCount = 100): Promise<UserProfile[]> => {
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, limit(limitCount));
+        const querySnapshot = await getDocs(q);
+
+        const users: UserProfile[] = [];
+        querySnapshot.forEach((doc) => {
+            users.push(doc.data() as UserProfile);
+        });
+
+        return users;
+    } catch (error: any) {
+        console.error('❌ Get all users error:', error.message);
+        return [];
+    }
 };
