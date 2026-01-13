@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     Image,
     KeyboardAvoidingView,
@@ -16,6 +15,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import PostDetailModal from '../src/components/PostDetailModal';
 import { auth } from '../src/config/firebase';
 import {
     markMessagesAsRead,
@@ -33,6 +33,8 @@ const ChatScreen = () => {
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const [postModalVisible, setPostModalVisible] = useState(false);
+    const [selectedPost, setSelectedPost] = useState<any>(null);
     const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
@@ -148,11 +150,9 @@ const ChatScreen = () => {
                                 isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard
                             ]}
                             onPress={() => {
-                                if (item.messageType === 'sharedPost') {
-                                    // Navigate to post (you could create a post detail screen)
-                                    console.log('Open post:', item.sharedContent?.contentId);
-                                    // For now, just show an alert
-                                    Alert.alert('Shared Post', 'Post viewing coming soon!');
+                                if (item.messageType === 'sharedPost' && item.sharedContent?.contentData) {
+                                    setSelectedPost(item.sharedContent.contentData);
+                                    setPostModalVisible(true);
                                 }
                             }}
                             activeOpacity={0.7}
@@ -338,6 +338,16 @@ const ChatScreen = () => {
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
+
+            {/* Post Detail Modal */}
+            <PostDetailModal
+                visible={postModalVisible}
+                onClose={() => {
+                    setPostModalVisible(false);
+                    setSelectedPost(null);
+                }}
+                postData={selectedPost}
+            />
         </SafeAreaView>
     );
 };
