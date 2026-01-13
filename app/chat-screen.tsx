@@ -103,6 +103,8 @@ const ChatScreen = () => {
             (messages[index - 1] &&
                 Math.abs(item.timestamp?.toMillis() - messages[index - 1].timestamp?.toMillis()) > 3600000); // 1 hour
 
+        const isSharedContent = item.messageType === 'sharedPost' || item.messageType === 'sharedPDF';
+
         return (
             <View>
                 {showDateDivider && (
@@ -136,27 +138,75 @@ const ChatScreen = () => {
                             )}
                         </View>
                     )}
-                    <View
-                        style={[
-                            styles.messageBubble,
-                            isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
-                        ]}
-                    >
-                        <Text
+
+                    {/* Render shared content or normal message */}
+                    {isSharedContent && item.sharedContent ? (
+                        <View style={[
+                            styles.sharedContentCard,
+                            isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard
+                        ]}>
+                            <View style={styles.sharedContentHeader}>
+                                <Ionicons
+                                    name={item.messageType === 'sharedPost' ? 'document-text' : 'document'}
+                                    size={20}
+                                    color="#4F46E5"
+                                />
+                                <Text style={styles.sharedContentLabel}>
+                                    {item.messageType === 'sharedPost' ? 'Shared Post' : 'Shared Document'}
+                                </Text>
+                            </View>
+
+                            {item.messageType === 'sharedPost' && item.sharedContent.contentData ? (
+                                <View style={styles.sharedPostContent}>
+                                    <Text style={styles.sharedPostAuthor}>
+                                        @{item.sharedContent.contentData.userName}
+                                    </Text>
+                                    <Text style={styles.sharedPostText} numberOfLines={3}>
+                                        {item.sharedContent.contentData.content}
+                                    </Text>
+                                    {item.sharedContent.contentData.imageUrl && (
+                                        <View style={styles.sharedPostImageContainer}>
+                                            <Ionicons name="image" size={16} color="#64748B" />
+                                            <Text style={styles.sharedPostImageText}>Image attached</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            ) : item.messageType === 'sharedPDF' && item.sharedContent.contentData ? (
+                                <View style={styles.sharedPDFContent}>
+                                    <Ionicons name="document" size={32} color="#4F46E5" />
+                                    <Text style={styles.sharedPDFTitle}>
+                                        {item.sharedContent.contentData.title || 'Untitled Document'}
+                                    </Text>
+                                </View>
+                            ) : null}
+
+                            <Text style={styles.sharedContentTime}>
+                                {formatMessageTime(item.timestamp)}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View
                             style={[
-                                styles.messageText,
-                                isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                                styles.messageBubble,
+                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
                             ]}
                         >
-                            {item.text}
-                        </Text>
-                        <Text style={[
-                            styles.messageTimeInline,
-                            isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline
-                        ]}>
-                            {formatMessageTime(item.timestamp)}
-                        </Text>
-                    </View>
+                            <Text
+                                style={[
+                                    styles.messageText,
+                                    isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                                ]}
+                            >
+                                {item.text}
+                            </Text>
+                            <Text style={[
+                                styles.messageTimeInline,
+                                isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline
+                            ]}>
+                                {formatMessageTime(item.timestamp)}
+                            </Text>
+                        </View>
+                    )}
                 </View>
             </View>
         );
@@ -443,6 +493,86 @@ const styles = StyleSheet.create({
     },
     otherMessageTimeInline: {
         color: '#94A3B8',
+        textAlign: 'right',
+    },
+    // Shared Content Card Styles
+    sharedContentCard: {
+        maxWidth: '80%',
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        padding: 12,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    ownSharedCard: {
+        borderColor: '#A78BFA',
+    },
+    otherSharedCard: {
+        borderColor: '#E2E8F0',
+    },
+    sharedContentHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    sharedContentLabel: {
+        marginLeft: 8,
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#4F46E5',
+        textTransform: 'uppercase',
+    },
+    sharedPostContent: {
+        paddingVertical: 8,
+    },
+    sharedPostAuthor: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#4F46E5',
+        marginBottom: 4,
+    },
+    sharedPostText: {
+        fontSize: 14,
+        lineHeight: 20,
+        color: '#334155',
+    },
+    sharedPostImageContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+    },
+    sharedPostImageText: {
+        marginLeft: 6,
+        fontSize: 12,
+        color: '#64748B',
+    },
+    sharedPDFContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+    sharedPDFTitle: {
+        marginLeft: 12,
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1E293B',
+        flex: 1,
+    },
+    sharedContentTime: {
+        fontSize: 10,
+        color: '#94A3B8',
+        marginTop: 8,
         textAlign: 'right',
     },
     inputContainer: {

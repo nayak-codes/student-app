@@ -22,6 +22,12 @@ export interface Message {
     senderName: string;
     senderPhoto?: string;
     text: string;
+    messageType: 'text' | 'sharedPost' | 'sharedPDF';
+    sharedContent?: {
+        contentType: 'post' | 'pdf';
+        contentId: string;
+        contentData: any;
+    };
     timestamp: Timestamp;
     read: boolean;
 }
@@ -112,7 +118,9 @@ export const getOrCreateConversation = async (
  */
 export const sendMessage = async (
     conversationId: string,
-    text: string
+    text: string,
+    messageType: 'text' | 'sharedPost' | 'sharedPDF' = 'text',
+    sharedContent?: { contentType: 'post' | 'pdf'; contentId: string; contentData: any }
 ): Promise<void> => {
     try {
         const currentUser = auth.currentUser;
@@ -122,17 +130,26 @@ export const sendMessage = async (
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         const userData = userDoc.data();
 
-        // Add message to messages subcollection
-        const messagesRef = collection(db, 'conversations', conversationId, 'messages');
-        await addDoc(messagesRef, {
+        // Prepare message data
+        const messageData: any = {
             conversationId,
             senderId: currentUser.uid,
             senderName: userData?.name || currentUser.displayName || 'User',
             senderPhoto: userData?.photoURL || currentUser.photoURL || '',
             text,
+            messageType,
             timestamp: serverTimestamp(),
             read: false,
-        });
+        };
+
+        // Add shared content if present
+        if (sharedContent) {
+            messageData.sharedContent = sharedContent;
+        }
+
+        // Add message to messages subcollection
+        const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+        await addDoc(messagesRef, messageData);
 
         // Update conversation's last message and unread count
         const conversationRef = doc(db, 'conversations', conversationId);
@@ -164,6 +181,62 @@ export const sendMessage = async (
         console.error('Error sending message:', error);
         throw error;
     }
+};
+
+/**
+ * Send a shared post to a conversation
+ */
+export const sendSharedPost = async (
+    conversationId: string,
+    postData: any
+): Promise<void> => {
+    // Clean undefined values from postData (Firebase doesn't accept undefined)
+    const cleanedPostData = Object.keys(postData).reduce((acc: any, key) => {
+        if (postData[key] !== undefined) {
+            acc[key] = postData[key];
+        }
+        return acc;
+    }, {});
+
+    const messageText = `Shared a post: ${postData.content.substring(0, 50)}...`;
+    await sendMessage(
+        conversationId,
+        messageText,
+        'sharedPost',
+        {
+            contentType: 'post',
+            contentId: postData.id,
+            contentData: cleanedPostData,
+        }
+    );
+};
+
+/**
+ * Send a shared PDF to a conversation
+ */
+export const sendSharedPDF = async (
+    conversationId: string,
+    pdfData: any
+): Promise<void> => {
+    // Clean undefined values from pdfData
+    const cleanedPDFData = Object.keys(pdfData).reduce((acc: any, key) => {
+        if (pdfData[key] !== undefined) {
+            acc[key] = pdfData[key];
+        }
+        return acc;
+    }, {});
+
+    const messageText = `Shared a document: ${pdfData.title || 'Untitled'}`;
+    await sendMessage(
+        conversationId,
+        messageText,
+        'sharedPDF',
+        {
+            contentType: 'pdf',
+            contentId: pdfData.id,
+            contentData: cleanedPDFData,
+        }
+    );
 };
 
 /**

@@ -1,14 +1,17 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
+import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAllPosts, likePost, Post, unlikePost } from '../../services/postsService';
+import { getAllPosts, likePost, Post, savePost, unlikePost, unsavePost } from '../../services/postsService';
 import FeedPost from './FeedPost';
 
 const FeedList: React.FC = () => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [shareModalVisible, setShareModalVisible] = useState(false);
+    const [shareData, setShareData] = useState<any>(null);
     const { user } = useAuth();
 
     const fetchPosts = async () => {
@@ -80,13 +83,84 @@ const FeedList: React.FC = () => {
     };
 
     const handleComment = (postId: string) => {
-        console.log('Open comments for', postId);
-        // Navigate to comments screen or open modal
+        // Navigate to comments screen
+        const router = require('expo-router').router;
+        router.push({
+            pathname: '/post-comments',
+            params: { postId },
+        });
     };
 
-    const handleShare = (postId: string) => {
-        console.log('Share post', postId);
-        // Open share sheet
+    const handleShare = async (postId: string) => {
+        try {
+            const post = posts.find(p => p.id === postId);
+            if (!post) return;
+
+            // Show action sheet for share options
+            Alert.alert(
+                'Share Post',
+                'Choose how you want to share this post',
+                [
+                    {
+                        text: 'Share to Friend',
+                        onPress: () => {
+                            setShareData(post);
+                            setShareModalVisible(true);
+                        },
+                    },
+                    {
+                        text: 'Share Externally',
+                        onPress: async () => {
+                            const result = await Share.share({
+                                message: `Check out this post by ${post.userName}!\n\n${post.content}`,
+                            });
+
+                            if (result.action === Share.sharedAction) {
+                                console.log('Post shared successfully');
+                            }
+                        },
+                    },
+                    {
+                        text: 'Cancel',
+                        style: 'cancel',
+                    },
+                ],
+                { cancelable: true }
+            );
+        } catch (error) {
+            console.error('Error sharing post:', error);
+            Alert.alert('Error', 'Failed to share post');
+        }
+    };
+
+    const handleSave = async (postId: string) => {
+        if (!user) return;
+
+        const postIndex = posts.findIndex(p => p.id === postId);
+        if (postIndex === -1) return;
+
+        const post = posts[postIndex];
+        const isSaved = post.savedBy?.includes(user.uid);
+
+        if (isSaved) {
+            await unsavePost(postId, user.uid);
+            // Update local state
+            const updatedPosts = [...posts];
+            updatedPosts[postIndex] = {
+                ...post,
+                savedBy: post.savedBy.filter(id => id !== user.uid)
+            };
+            setPosts(updatedPosts);
+        } else {
+            await savePost(postId, user.uid);
+            // Update local state
+            const updatedPosts = [...posts];
+            updatedPosts[postIndex] = {
+                ...post,
+                savedBy: [...(post.savedBy || []), user.uid]
+            };
+            setPosts(updatedPosts);
+        }
     };
 
     if (loading) {
@@ -106,9 +180,11 @@ const FeedList: React.FC = () => {
                     <FeedPost
                         post={item}
                         currentUserLiked={item.likedBy?.includes(user?.uid || '')}
+                        currentUserSaved={item.savedBy?.includes(user?.uid || '')}
                         onLike={handleLike}
                         onComment={handleComment}
                         onShare={handleShare}
+                        onSave={handleSave}
                     />
                 )}
                 refreshControl={
@@ -120,6 +196,17 @@ const FeedList: React.FC = () => {
                         <Text style={styles.emptyText}>No posts yet. Be the first to share!</Text>
                     </View>
                 }
+            />
+
+            {/* Share Modal */}
+            <ShareModal
+                visible={shareModalVisible}
+                onClose={() => {
+                    setShareModalVisible(false);
+                    setShareData(null);
+                }}
+                shareType="post"
+                shareData={shareData}
             />
         </View>
     );
