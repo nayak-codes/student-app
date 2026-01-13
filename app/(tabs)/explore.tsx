@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
+import { addToHistory } from '../../src/services/historyService';
 
 import {
   Alert,
@@ -22,7 +23,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { getAllPosts, likePost, Post, unlikePost } from '../../src/services/postsService';
 
 // Type definitions
-type ContentType = 'video' | 'note' | 'news' | 'image' | 'all';
+type ContentType = 'video' | 'clip';
 
 interface FeedItem {
   id: string;
@@ -42,39 +43,28 @@ interface FeedItem {
 }
 
 // Sample image posts (keeping original 3)
-const sampleImagePosts: FeedItem[] = [
+const sampleVideoPosts: FeedItem[] = [
   {
     id: 'sample_1',
-    type: 'image',
-    title: 'Summer Skills',
+    type: 'video',
+    title: 'How to prepare for JEE Mains 2026? | Strategy & Tips',
     author: 'Physics Galaxy',
-    likes: 509000,
-    comments: 132,
+    likes: 1200,
+    comments: 45,
     saved: false,
-    timeAgo: '10 min ago',
-    image: require('../../assets/images/four_months_plan.jpg'),
+    timeAgo: '2 hours ago',
+    videoLink: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', // Placeholder
   },
   {
     id: 'sample_2',
-    type: 'image',
-    title: 'MREC OLD LOGO',
-    author: 'Physics Galaxy',
-    likes: 509,
-    comments: 132,
+    type: 'clip',
+    title: 'Motivation for Students #shorts',
+    author: 'Study Motivation',
+    likes: 5600,
+    comments: 120,
     saved: false,
-    timeAgo: '10 min ago',
-    image: require('../../assets/images/mrec.webp'),
-  },
-  {
-    id: 'sample_3',
-    type: 'image',
-    title: 'CBIT COLLEGE',
-    author: 'Physics Galaxy',
-    likes: 509,
-    comments: 132,
-    saved: false,
-    timeAgo: '10 min ago',
-    image: require('../../assets/images/CBIT.jpeg'),
+    timeAgo: '1 day ago',
+    videoLink: 'https://www.youtube.com/shorts/12345678901', // Placeholder
   },
 ];
 
@@ -88,10 +78,20 @@ function getTimeAgo(date: Date): string {
 }
 
 // Convert Firestore post to FeedItem
-function convertToFeedItem(post: Post): FeedItem {
+function convertToFeedItem(post: Post): FeedItem | null {
+  // Only process video posts
+  if (post.type !== 'video' && !post.videoLink) {
+    return null;
+  }
+
+  let type: ContentType = 'video';
+  if (post.videoLink && (post.videoLink.includes('/shorts/') || post.videoLink.includes('#shorts'))) {
+    type = 'clip';
+  }
+
   return {
     id: post.id,
-    type: post.type as ContentType,
+    type: type,
     title: post.content.substring(0, 60) + (post.content.length > 60 ? '...' : ''),
     author: post.userName,
     likes: post.likes,
@@ -108,9 +108,9 @@ function convertToFeedItem(post: Post): FeedItem {
 
 const ExploreScreen: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<ContentType | 'all'>('all');
+  const [activeTab, setActiveTab] = useState<ContentType>('video');
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
-  const [feedData, setFeedData] = useState<FeedItem[]>(sampleImagePosts);
+  const [feedData, setFeedData] = useState<FeedItem[]>(sampleVideoPosts);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
@@ -123,10 +123,12 @@ const ExploreScreen: React.FC = () => {
     try {
       setIsLoading(true);
       const posts = await getAllPosts();
-      const feedItems = posts.map(convertToFeedItem);
+      const feedItems = posts
+        .map(convertToFeedItem)
+        .filter((item): item is FeedItem => item !== null);
 
-      // Combine sample image posts with real posts
-      setFeedData([...sampleImagePosts, ...feedItems]);
+      // Combine sample posts with real posts
+      setFeedData([...sampleVideoPosts, ...feedItems]);
     } catch (error) {
       console.error('Error loading posts:', error);
       Alert.alert('Error', 'Failed to load posts');
@@ -217,9 +219,7 @@ const ExploreScreen: React.FC = () => {
     }
   };
 
-  const filteredData = activeTab === 'all'
-    ? feedData
-    : feedData.filter(item => item.type === activeTab);
+  const filteredData = feedData.filter(item => item.type === activeTab);
 
   const renderFeedItem = ({ item }: { item: FeedItem }) => {
     const hasLiked = user && item.likedBy?.includes(user.uid);
@@ -255,6 +255,16 @@ const ExploreScreen: React.FC = () => {
               style={styles.videoContainer}
               onPress={() => {
                 if (videoId) {
+                  // Track in History
+                  addToHistory({
+                    id: item.id,
+                    type: activeTab === 'clip' ? 'clip' : 'video',
+                    title: item.title,
+                    subtitle: item.author,
+                    image: thumbnailUrl,
+                    url: item.videoLink
+                  });
+
                   setPlayingVideoId(videoId);
                   setPlayingVideoTitle(item.title);
                   setShowVideoPlayer(true);
@@ -363,11 +373,8 @@ const ExploreScreen: React.FC = () => {
 
       {/* Tabs */}
       <View style={styles.tabs}>
-        <TabButton icon="apps" label="All" active={activeTab === 'all'} onPress={() => setActiveTab('all')} />
         <TabButton icon="videocam-outline" label="Videos" active={activeTab === 'video'} onPress={() => setActiveTab('video')} />
-        <TabButton icon="document-text-outline" label="Notes" active={activeTab === 'note'} onPress={() => setActiveTab('note')} />
-        <TabButton icon="newspaper-outline" label="News" active={activeTab === 'news'} onPress={() => setActiveTab('news')} />
-        <TabButton icon="image-outline" label="Images" active={activeTab === 'image'} onPress={() => setActiveTab('image')} />
+        <TabButton icon="film-outline" label="Clips (Shots)" active={activeTab === 'clip'} onPress={() => setActiveTab('clip')} />
       </View>
 
       {/* Feed */}

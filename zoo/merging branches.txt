@@ -1,0 +1,4 @@
+step 1: GIT MAIN BRANCH
+step 2: GIT PULL
+step 3: GIT MERGE <branch-name>
+step 4: GIT PUSH

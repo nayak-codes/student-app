@@ -34,6 +34,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
     const [city, setCity] = useState(userProfile?.location?.city || '');
     const [state, setState] = useState(userProfile?.location?.state || '');
     const [country, setCountry] = useState(userProfile?.location?.country || 'India');
+    const [role, setRole] = useState<'student' | 'teacher' | 'creator'>(userProfile?.role || 'student');
 
     // Skills state
     const [technicalSkills, setTechnicalSkills] = useState(userProfile?.skills?.technical?.join(', ') || '');
@@ -85,6 +86,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
             const updates: any = {
                 headline: headline.trim() || '',
                 about: about.trim() || '',
+                role,
             };
 
             // Upload profile photo if changed
@@ -216,6 +218,38 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                                 onChangeText={setName}
                                 maxLength={50}
                             />
+                        </View>
+
+                        {/* Role Selection */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>I am a</Text>
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                {(['student', 'teacher', 'creator'] as const).map((r) => (
+                                    <TouchableOpacity
+                                        key={r}
+                                        onPress={() => setRole(r)}
+                                        style={{
+                                            paddingVertical: 8,
+                                            paddingHorizontal: 16,
+                                            borderRadius: 20,
+                                            backgroundColor: role === r ? '#EEF2FF' : '#F8FAFC',
+                                            borderWidth: 1,
+                                            borderColor: role === r ? '#4F46E5' : '#E2E8F0',
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 14,
+                                                fontWeight: '600',
+                                                color: role === r ? '#4F46E5' : '#64748B',
+                                                textTransform: 'capitalize',
+                                            }}
+                                        >
+                                            {r}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
 
                         {/* Headline */}
@@ -357,6 +391,8 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
         </Modal>
     );
 };
+
+
 
 const styles = StyleSheet.create({
     modalOverlay: {

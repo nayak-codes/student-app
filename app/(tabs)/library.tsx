@@ -1,9 +1,11 @@
 // Library Screen - Students can browse and upload PDFs
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   FlatList,
+  Image,
+  Modal,
   RefreshControl,
   SafeAreaView,
   StyleSheet,
@@ -12,23 +14,29 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import DocumentViewer from '../../src/components/DocumentViewer';
 import UploadResourceModal from '../../src/components/UploadResourceModal';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { getAllResources, incrementViews, LibraryResource, likeResource, unlikeResource } from '../../src/services/libraryService';
+import { getAllResources, LibraryResource } from '../../src/services/libraryService';
 
 type FilterType = 'all' | 'pdf' | 'notes' | 'formula';
 type ExamFilter = 'ALL' | 'JEE' | 'NEET' | 'EAPCET';
 type SubjectFilter = 'All' | 'Physics' | 'Chemistry' | 'Maths' | 'Biology';
 
 const LibraryScreen = () => {
-  const { user } = useAuth();
+  // const { user } = useAuth(); // Removed duplicate
   const [resources, setResources] = useState<LibraryResource[]>([]);
   const [filteredResources, setFilteredResources] = useState<LibraryResource[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'home' | 'suggested' | 'network'>('home');
+
+  // Filters
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [examFilter, setExamFilter] = useState<ExamFilter>('ALL');
   const [subjectFilter, setSubjectFilter] = useState<SubjectFilter>('All');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -37,16 +45,26 @@ const LibraryScreen = () => {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedResource, setSelectedResource] = useState<LibraryResource | null>(null);
 
+  // Get User Profile for Network/Suggested Logic
+  const { user, userProfile } = useAuth();
+
+  useFocusEffect(
+    useCallback(() => {
+      loadResources();
+    }, [])
+  );
+
   // Load resources
   const loadResources = async () => {
     try {
-      setIsLoading(true);
+      // Don't set loading on focus refresh to avoid flicker, only on initial mount if needed
+      if (resources.length === 0) setIsLoading(true);
+
       const data = await getAllResources();
       setResources(data);
-      applyFilters(data, activeFilter, examFilter, subjectFilter, searchQuery);
+      applyFilters(data, activeTab, activeFilter, examFilter, subjectFilter, searchQuery);
     } catch (error) {
       console.error('Error loading resources:', error);
-      Alert.alert('Error', 'Failed to load library resources');
     } finally {
       setIsLoading(false);
     }
@@ -62,6 +80,7 @@ const LibraryScreen = () => {
   // Apply filters
   const applyFilters = (
     data: LibraryResource[],
+    tab: 'home' | 'suggested' | 'network',
     type: FilterType,
     exam: ExamFilter,
     subject: SubjectFilter,
@@ -69,22 +88,46 @@ const LibraryScreen = () => {
   ) => {
     let filtered = data;
 
-    // Filter by type
+    // 1. Tab Logic
+    if (tab === 'suggested') {
+      // Filter by exam matching user profile if available, otherwise just show highly rated/viewed
+      if (userProfile?.exam) {
+        filtered = filtered.filter(r => r.exam === userProfile.exam || r.exam === 'ALL');
+      }
+      // Sort by views/downloads for "Suggested" feel
+      filtered.sort((a, b) => (b.views || 0) - (a.views || 0));
+    } else if (tab === 'network') {
+      // Filter by following
+      const following = userProfile?.following || [];
+      if (following.length > 0) {
+        filtered = filtered.filter(r => following.includes(r.uploadedBy));
+      } else {
+        // If following no one, show empty or maybe highly rated as fallback? 
+        // Better to show empty state with "Follow people to see their resources"
+        filtered = [];
+      }
+    } else {
+      // Home - Default sorting (newest first usually)
+      // Ensure data is sorted by createdAt if not already from backend
+      // filtered.sort((a,b) => b.createdAt - a.createdAt); // Assuming date objects or timestamps
+    }
+
+    // 2. Filter by type
     if (type !== 'all') {
       filtered = filtered.filter(r => r.type === type);
     }
 
-    // Filter by exam
+    // 3. Filter by exam
     if (exam !== 'ALL') {
       filtered = filtered.filter(r => r.exam === exam || r.exam === 'ALL');
     }
 
-    // Filter by subject
+    // 4. Filter by subject
     if (subject !== 'All') {
       filtered = filtered.filter(r => r.subject === subject);
     }
 
-    // Search
+    // 5. Search
     if (search) {
       filtered = filtered.filter(r =>
         r.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -101,125 +144,114 @@ const LibraryScreen = () => {
   }, []);
 
   useEffect(() => {
-    applyFilters(resources, activeFilter, examFilter, subjectFilter, searchQuery);
-  }, [activeFilter, examFilter, subjectFilter, searchQuery, resources]);
+    applyFilters(resources, activeTab, activeFilter, examFilter, subjectFilter, searchQuery);
+  }, [activeTab, activeFilter, examFilter, subjectFilter, searchQuery, resources]);
 
-  // Handle like
-  const handleLike = async (resource: LibraryResource) => {
-    if (!user) {
-      Alert.alert('Login Required', 'Please login to like resources');
-      return;
+  // Helper to get thumbnail URL
+  const getThumbnailUrl = (item: LibraryResource) => {
+    // 1. Custom Cover selected during upload
+    if (item.customCoverUrl) return item.customCoverUrl;
+
+    // 2. Explicitly "No Cover" selected (empty string)
+    if (item.customCoverUrl === '') return null;
+
+    // 3. Auto-generate from PDF (Default)
+    if (item.fileUrl && item.fileUrl.includes('cloudinary.com') && item.fileUrl.endsWith('.pdf')) {
+      return item.fileUrl.replace('.pdf', '.jpg');
     }
 
-    try {
-      const hasLiked = resource.likedBy.includes(user.uid);
-
-      // Optimistic update
-      setResources(prev =>
-        prev.map(r => {
-          if (r.id === resource.id) {
-            return {
-              ...r,
-              likes: hasLiked ? r.likes - 1 : r.likes + 1,
-              likedBy: hasLiked
-                ? r.likedBy.filter(id => id !== user.uid)
-                : [...r.likedBy, user.uid],
-            };
-          }
-          return r;
-        })
-      );
-
-      // Update in Firestore
-      if (hasLiked) {
-        await unlikeResource(resource.id, user.uid);
-      } else {
-        await likeResource(resource.id, user.uid);
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
-      await loadResources();
-    }
-  };
-
-  // Open PDF
-  const openPDF = async (resource: LibraryResource) => {
-    try {
-      await incrementViews(resource.id);
-      setSelectedResource(resource);
-      setViewerVisible(true);
-    } catch (error) {
-      console.error('Error opening PDF:', error);
-      Alert.alert('Error', 'Failed to open PDF');
-    }
+    return null;
   };
 
   const renderResource = ({ item }: { item: LibraryResource }) => {
-    const hasLiked = user && item.likedBy.includes(user.uid);
+    // const thumbnailUrl = getThumbnailUrl(item);
+    // const [isExpanded, setIsExpanded] = useState(false); // Can't use hook in render item easily directly like this without component, 
+    // but FlatList renderItem isn't a hook component.
+    // Better to make a sub-component for the card if we want state.
+    // OR just use a simple hack for now: Show description only if length < X, or show truncated version. 
+    // User wants "...more", usually implying interactability, but doing that on a card in a grid might be tricky if it changes height.
+    // Let's implement a clean "Component" for the card to handle state safely.
+    return <ResourceCard item={item} />;
+  };
+
+  // Create a separate component to safely use state
+  const ResourceCard = ({ item }: { item: LibraryResource }) => {
+    const thumbnailUrl = getThumbnailUrl(item);
 
     return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.typeBadge}>
-            <Ionicons
-              name={item.type === 'pdf' ? 'document-text' : item.type === 'formula' ? 'calculator' : 'create'}
-              size={16}
-              color="#4F46E5"
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push({ pathname: '/document-detail', params: { id: item.id } })}
+        activeOpacity={0.7}
+      >
+        {/* Cover Image Area */}
+        <View style={styles.cardCover}>
+          {thumbnailUrl ? (
+            <Image
+              source={{ uri: thumbnailUrl }}
+              style={styles.coverImage}
+              resizeMode="cover"
             />
-            <Text style={styles.typeBadgeText}>{item.type.toUpperCase()}</Text>
-          </View>
-          <View style={styles.examBadge}>
-            <Text style={styles.examBadgeText}>{item.exam}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-        <Text style={styles.cardDescription} numberOfLines={2}>{item.description}</Text>
-
-        <View style={styles.cardMeta}>
-          <Text style={styles.subject}>{item.subject}</Text>
-          <Text style={styles.metaSeparator}>•</Text>
-          <Text style={styles.topic}>{item.topic}</Text>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <View style={styles.stats}>
-            <View style={styles.stat}>
-              <Ionicons name="eye-outline" size={14} color="#64748B" />
-              <Text style={styles.statText}>{item.views}</Text>
-            </View>
-            <View style={styles.stat}>
-              <Ionicons name="download-outline" size={14} color="#64748B" />
-              <Text style={styles.statText}>{item.downloads}</Text>
-            </View>
-          </View>
-
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item)}>
+          ) : (
+            <View style={[styles.placeholderCover, { backgroundColor: item.type === 'pdf' ? '#F3E8FF' : '#E0F2FE' }]}>
               <Ionicons
-                name={hasLiked ? 'heart' : 'heart-outline'}
-                size={18}
-                color={hasLiked ? '#EF4444' : '#64748B'}
+                name={item.type === 'pdf' ? 'document-text' : 'create'}
+                size={32}
+                color={item.type === 'pdf' ? '#9333EA' : '#0284C7'}
               />
-              <Text style={[styles.actionText, hasLiked && { color: '#EF4444' }]}>
-                {item.likes}
-              </Text>
-            </TouchableOpacity>
+            </View>
+          )}
 
-            <TouchableOpacity style={styles.viewButton} onPress={() => openPDF(item)}>
-              <Ionicons name="open-outline" size={16} color="#FFF" />
-              <Text style={styles.viewButtonText}>View PDF</Text>
-            </TouchableOpacity>
+          {/* Badges Overlay */}
+          <View style={styles.badgeOverlay}>
+            <View style={styles.examBadge}>
+              <Text style={styles.examBadgeText}>{item.exam}</Text>
+            </View>
+            {item.type === 'pdf' && (
+              <View style={styles.typeBadgeOverlay}>
+                <Text style={styles.typeText}>PDF</Text>
+              </View>
+            )}
           </View>
         </View>
 
-        <View style={styles.uploaderInfo}>
-          <Ionicons name="person-circle-outline" size={14} color="#94A3B8" />
-          <Text style={styles.uploaderText}>
-            Shared by {item.uploaderName} ({item.uploaderExam})
-          </Text>
+        {/* Content */}
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+
+          {/* Description */}
+          {item.description ? (
+            <Text style={styles.cardDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+          ) : null}
+
+          <View style={styles.authorRow}>
+            <Ionicons name="person-circle-outline" size={14} color="#64748B" />
+            <Text style={styles.authorName} numberOfLines={1}>{item.uploaderName || 'Unknown'}</Text>
+          </View>
+
+          <View style={styles.statsContainer}>
+            {/* Rating */}
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={12} color="#EAB308" />
+              <Text style={styles.ratingValue}>{item.rating !== undefined ? `${item.rating.toFixed(1)}/5` : '0.0/5'}</Text>
+              {item.ratingCount ? <Text style={styles.ratingCount}>({item.ratingCount})</Text> : null}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={styles.viewStat}>
+                <Ionicons name="heart-outline" size={12} color="#EF4444" />
+                <Text style={styles.statText}>{item.likes || 0}</Text>
+              </View>
+              <View style={styles.viewStat}>
+                <Ionicons name="eye-outline" size={12} color="#94A3B8" />
+                <Text style={styles.statText}>{item.views}</Text>
+              </View>
+            </View>
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -228,58 +260,58 @@ const LibraryScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>📚 Library</Text>
-          <Text style={styles.headerSubtitle}>Study Resources & PDFs</Text>
+          <Text style={styles.headerTitle}>Library</Text>
+          <Text style={styles.headerSubtitle}>Study Resources</Text>
         </View>
         <TouchableOpacity
           style={styles.uploadButton}
           onPress={() => setShowUploadModal(true)}
         >
-          <Ionicons name="cloud-upload-outline" size={20} color="#4F46E5" />
+          <Ionicons name="add" size={20} color="#FFF" />
           <Text style={styles.uploadButtonText}>Upload</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
+      {/* Search & Filter */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={20} color="#64748B" />
+        <Ionicons name="search-outline" size={20} color="#94A3B8" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search PDFs, notes, formulas..."
+          placeholder="Search resources..."
           placeholderTextColor="#94A3B8"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
+        <TouchableOpacity style={styles.filterButtonIcon} onPress={() => setShowFilterModal(true)}>
+          <Ionicons name="filter" size={20} color={(activeFilter !== 'all' || examFilter !== 'ALL') ? "#4F46E5" : "#64748B"} />
+        </TouchableOpacity>
       </View>
 
-      {/* Type Filters */}
-      <View style={styles.filtersRow}>
-        {(['all', 'pdf', 'notes', 'formula'] as FilterType[]).map((filter) => (
-          <TouchableOpacity
-            key={filter}
-            style={[styles.filterChip, activeFilter === filter && styles.filterChipActive]}
-            onPress={() => setActiveFilter(filter)}
-          >
-            <Text style={[styles.filterChipText, activeFilter === filter && styles.filterChipTextActive]}>
-              {filter === 'all' ? 'All' : filter.toUpperCase()}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
+          onPress={() => setActiveTab('home')}
+        >
+          <Text style={[styles.tabText, activeTab === 'home' && styles.tabTextActive]}>Home</Text>
+          {activeTab === 'home' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
 
-      {/* Exam & Subject Filters */}
-      <View style={styles.secondaryFilters}>
-        {(['ALL', 'JEE', 'NEET', 'EAPCET'] as ExamFilter[]).map((exam) => (
-          <TouchableOpacity
-            key={exam}
-            style={[styles.examChip, examFilter === exam && styles.examChipActive]}
-            onPress={() => setExamFilter(exam)}
-          >
-            <Text style={[styles.examChipText, examFilter === exam && styles.examChipTextActive]}>
-              {exam}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'suggested' && styles.tabItemActive]}
+          onPress={() => setActiveTab('suggested')}
+        >
+          <Text style={[styles.tabText, activeTab === 'suggested' && styles.tabTextActive]}>Suggested</Text>
+          {activeTab === 'suggested' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'network' && styles.tabItemActive]}
+          onPress={() => setActiveTab('network')}
+        >
+          <Text style={[styles.tabText, activeTab === 'network' && styles.tabTextActive]}>Your Network</Text>
+          {activeTab === 'network' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
       </View>
 
       {/* Resources List */}
@@ -289,6 +321,9 @@ const LibraryScreen = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        numColumns={2}
+        key={2}
+        columnWrapperStyle={{ justifyContent: 'space-between' }}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#4F46E5']} />
         }
@@ -299,16 +334,65 @@ const LibraryScreen = () => {
             <Text style={styles.emptySubtitle}>
               {searchQuery ? 'Try different keywords' : 'Be the first to upload!'}
             </Text>
-            <TouchableOpacity
-              style={styles.uploadEmptyButton}
-              onPress={() => setShowUploadModal(true)}
-            >
-              <Ionicons name="cloud-upload-outline" size={20} color="#FFF" />
-              <Text style={styles.uploadEmptyButtonText}>Upload Resource</Text>
-            </TouchableOpacity>
           </View>
         }
       />
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter Resources</Text>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.filterLabel}>Resource Type</Text>
+            <View style={styles.filterOptions}>
+              {(['all', 'pdf', 'notes', 'formula'] as FilterType[]).map((filter) => (
+                <TouchableOpacity
+                  key={filter}
+                  style={[styles.filterOption, activeFilter === filter && styles.filterOptionActive]}
+                  onPress={() => setActiveFilter(filter)}
+                >
+                  <Text style={[styles.filterOptionText, activeFilter === filter && styles.filterOptionTextActive]}>
+                    {filter === 'all' ? 'All' : filter.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.filterLabel}>Exam</Text>
+            <View style={styles.filterOptions}>
+              {(['ALL', 'JEE', 'NEET', 'EAPCET'] as ExamFilter[]).map((exam) => (
+                <TouchableOpacity
+                  key={exam}
+                  style={[styles.filterOption, examFilter === exam && styles.filterOptionActive]}
+                  onPress={() => setExamFilter(exam)}
+                >
+                  <Text style={[styles.filterOptionText, examFilter === exam && styles.filterOptionTextActive]}>
+                    {exam}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.applyButton}
+              onPress={() => setShowFilterModal(false)}
+            >
+              <Text style={styles.applyButtonText}>Apply Filters</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Upload Modal */}
       <UploadResourceModal
@@ -316,20 +400,6 @@ const LibraryScreen = () => {
         onClose={() => setShowUploadModal(false)}
         onUploadComplete={loadResources}
       />
-
-      {/* Document Viewer */}
-      {selectedResource && (
-        <DocumentViewer
-          visible={viewerVisible}
-          onClose={() => {
-            setViewerVisible(false);
-            setSelectedResource(null);
-          }}
-          documentUrl={selectedResource.fileUrl}
-          documentName={selectedResource.title}
-          documentType={selectedResource.type} // 'pdf', 'notes', 'formula' are roughly treated as documents
-        />
-      )}
     </SafeAreaView>
   );
 };
@@ -346,230 +416,179 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#1E293B',
   },
   headerSubtitle: {
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
+    fontWeight: '500',
   },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 8,
-    gap: 6,
+    backgroundColor: '#4F46E5',
+    borderRadius: 20,
+    gap: 4,
   },
   uploadButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4F46E5',
+    color: '#FFF',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF',
     marginHorizontal: 16,
-    marginVertical: 12,
+    marginBottom: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 10,
     fontSize: 14,
     color: '#1E293B',
   },
-  filtersRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 12,
-  },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-  },
-  filterChipActive: {
-    backgroundColor: '#4F46E5',
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  filterChipTextActive: {
-    color: '#FFF',
-  },
-  secondaryFilters: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 12,
-  },
-  examChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  examChipActive: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
-  },
-  examChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  examChipTextActive: {
-    color: '#FFF',
+  filterButtonIcon: {
+    padding: 4,
   },
   list: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
   },
   card: {
+    width: '48%',
     backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    overflow: 'hidden', // ensuring image doesn't bleed
   },
-  cardHeader: {
+  cardCover: {
+    height: 120,
+    width: '100%',
+    backgroundColor: '#F1F5F9',
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholderCover: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    right: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#4F46E5',
   },
   examBadge: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 6,
   },
   examBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  typeBadgeOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  typeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  cardContent: {
+    padding: 12,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#1E293B',
-    marginBottom: 6,
+    marginBottom: 0,
+    lineHeight: 18,
   },
   cardDescription: {
-    fontSize: 14,
+    fontSize: 11,
     color: '#64748B',
-    lineHeight: 20,
-    marginBottom: 10,
+    marginBottom: 4,
+    marginTop: 0,
+    lineHeight: 14,
   },
-  cardMeta: {
+  authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 4,
+    marginBottom: 6,
   },
-  subject: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4F46E5',
-  },
-  metaSeparator: {
-    marginHorizontal: 8,
-    color: '#CBD5E1',
-  },
-  topic: {
-    fontSize: 13,
+  authorName: {
+    fontSize: 10,
     color: '#64748B',
+    flex: 1,
   },
-  cardFooter: {
+  statsContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    marginBottom: 8,
   },
-  stats: {
+  ratingContainer: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    gap: 2,
   },
-  stat: {
+  ratingValue: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  ratingCount: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  viewStat: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
   statText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
     fontWeight: '500',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  viewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  viewButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  uploaderInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  uploaderText: {
-    fontSize: 11,
-    color: '#94A3B8',
   },
   emptyState: {
     alignItems: 'center',
@@ -586,21 +605,113 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#94A3B8',
     marginTop: 8,
+    textAlign: 'center',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    minHeight: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  filterLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  filterOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
     marginBottom: 20,
   },
-  uploadEmptyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
+  filterOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  uploadEmptyButtonText: {
+  filterOptionActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#4F46E5',
+  },
+  filterOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  filterOptionTextActive: {
+    color: '#4F46E5',
+    fontWeight: '600',
+  },
+  applyButton: {
+    backgroundColor: '#4F46E5',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  applyButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Tab Styles
+  tabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    gap: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tabItem: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  tabItemActive: {
+    // borderBottomWidth managed by indicator
+  },
+  tabText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFF',
+    color: '#64748B',
+  },
+  tabTextActive: {
+    color: '#4F46E5',
+    fontWeight: '700',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: 3,
+    backgroundColor: '#4F46E5',
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
   },
 });
 

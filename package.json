@@ -21,6 +21,7 @@
     "@react-navigation/native-stack": "^7.3.10",
     "@xmldom/xmldom": "^0.8.10",
     "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
     "dotenv": "^17.2.0",
     "expo": "^54.0.30",
     "expo-av": "~16.0.8",

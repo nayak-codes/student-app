@@ -5,7 +5,7 @@ import {
     signOut,
     User
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
 // Extended LinkedIn-Style User Profile
@@ -20,6 +20,11 @@ export interface UserProfile {
     rank?: number;
     percentile?: number;
     isVerified?: boolean;
+    role?: 'student' | 'teacher' | 'creator';
+
+    // Education Details
+    educationLevel?: '10th' | 'Intermediate' | 'Undergraduate' | 'Graduate';
+    course?: string; // e.g., MPC, BiPC, CSE, etc.
 
     // Progress (existing)
     progress: {
@@ -53,6 +58,13 @@ export interface UserProfile {
         technical: string[];
         softSkills: string[];
         languages: string[];
+    };
+
+    // Network Stats
+    networkStats?: {
+        followersCount: number;
+        followingCount: number;
+        friendsCount: number;
     };
 
     // Compatibility Fields (for full-profile.tsx)
@@ -174,7 +186,9 @@ export const signUp = async (
     email: string,
     password: string,
     name: string,
-    exam: 'JEE' | 'NEET' | 'EAPCET' | 'SRMJEE'
+    exam: 'JEE' | 'NEET' | 'EAPCET' | 'SRMJEE',
+    educationLevel?: '10th' | 'Intermediate' | 'Undergraduate' | 'Graduate',
+    course?: string
 ): Promise<User> => {
     try {
         // Create authentication user
@@ -187,6 +201,8 @@ export const signUp = async (
             email: user.email || email,
             name,
             exam,
+            educationLevel,
+            course,
             progress: {
                 topicsCovered: 0,
                 mockTestsTaken: 0,
@@ -286,4 +302,25 @@ export const updateUserProfile = async (
  */
 export const onAuthChange = (callback: (user: User | null) => void) => {
     return onAuthStateChanged(auth, callback);
+};
+
+/**
+ * Get all users for search
+ */
+export const getAllUsers = async (limitCount = 100): Promise<UserProfile[]> => {
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, limit(limitCount));
+        const querySnapshot = await getDocs(q);
+
+        const users: UserProfile[] = [];
+        querySnapshot.forEach((doc) => {
+            users.push(doc.data() as UserProfile);
+        });
+
+        return users;
+    } catch (error: any) {
+        console.error('❌ Get all users error:', error.message);
+        return [];
+    }
 };

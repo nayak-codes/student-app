@@ -1,699 +1,793 @@
-// Full Profile Details Page
+
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
+    Image,
+    Pressable,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DocumentViewer from '../src/components/DocumentViewer';
+import PostDetailModal from '../src/components/PostDetailModal'; // Reuse the modal we checked/created
 import { useAuth } from '../src/contexts/AuthContext';
 import { Education } from '../src/services/authService';
+import {
+    followUser,
+    getConnectionStatus,
+    sendFriendRequest,
+    subscribeToNetworkStats,
+    unfollowUser,
+} from '../src/services/connectionService';
+import { getUserResources, LibraryResource } from '../src/services/libraryService';
+import { getAllPosts, Post } from '../src/services/postsService';
 
+// Grid Item Component (Local definition to match style)
+const PostGridItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({ post, onPress }) => {
+    return (
+        <Pressable
+            style={({ pressed }) => [
+                styles.gridItem,
+                { opacity: pressed ? 0.9 : 1 }
+            ]}
+            onPress={() => onPress(post)}
+        >
+            {post.imageUrl ? (
+                <Image source={{ uri: post.imageUrl }} style={styles.gridImage} resizeMode="cover" />
+            ) : post.videoLink ? (
+                <View style={[styles.gridImage, styles.gridPlaceholder]}>
+                    <Ionicons name="play" size={24} color="#FFF" />
+                </View>
+            ) : (
+                <View style={[styles.gridImage, styles.gridPlaceholder, { backgroundColor: '#F1F5F9' }]}>
+                    <Ionicons name="text" size={24} color="#64748B" />
+                    <Text style={styles.gridTextPreview} numberOfLines={2}>{post.content}</Text>
+                </View>
+            )}
+            {post.type === 'video' && (
+                <View style={styles.gridIconOverlay}>
+                    <Ionicons name="play" size={12} color="#FFF" />
+                </View>
+            )}
+        </Pressable>
+    );
+};
+
+// Resource Grid Item
+const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource: LibraryResource) => void }> = ({ resource, onPress }) => {
+    return (
+        <Pressable
+            style={({ pressed }) => [
+                styles.resourceCard,
+                { opacity: pressed ? 0.95 : 1 }
+            ]}
+            onPress={() => onPress(resource)}
+        >
+            <View style={styles.pdfIconContainer}>
+                <Ionicons name="document-text" size={32} color="#EF4444" />
+                <View style={styles.pdfBadge}>
+                    <Text style={styles.pdfBadgeText}>PDF</Text>
+                </View>
+            </View>
+            <Text style={styles.resourceTitle} numberOfLines={2}>{resource.title}</Text>
+        </Pressable>
+    );
+};
 
 const ProfileDetailsScreen = () => {
-    const { userProfile } = useAuth();
+    // 1. Params & Auth
     const router = useRouter();
+    const { userId } = useLocalSearchParams<{ userId: string }>();
+    const { user: authUser } = useAuth();
+
+    // 2. Data State
+    const [profileData, setProfileData] = useState<any>(null);
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [resources, setResources] = useState<LibraryResource[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    // 3. Status State
+    const [connectionStatus, setConnectionStatus] = useState({
+        isFriend: false,
+        isFollowing: false,
+        isFollower: false,
+        friendshipStatus: 'none' as 'pending' | 'accepted' | 'none',
+        pendingRequestSentByMe: false,
+    });
+    const [loadingConnection, setLoadingConnection] = useState(false);
+
+    const [stats, setStats] = useState({
+        friends: 0,
+        followers: 0,
+        uploads: 0,
+        streak: 0,
+    });
+
+    // 4. UI State
+    const [activeTab, setActiveTab] = useState<'posts' | 'videos' | 'docs'>('posts');
+    const [detailModalVisible, setDetailModalVisible] = useState(false);
+    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+    const [docViewerVisible, setDocViewerVisible] = useState(false);
+    const [selectedDoc, setSelectedDoc] = useState<LibraryResource | null>(null);
+
+    // 5. Fetch Data
+    const loadProfileData = async () => {
+        if (!userId) return;
+        try {
+            // Profile & Auth Service import
+            const { getUserProfile } = await import('../src/services/authService');
+
+            // Parallel Fetching
+            const [profile, allPosts, userDocs] = await Promise.all([
+                getUserProfile(userId),
+                getAllPosts(),
+                getUserResources(userId)
+            ]);
+
+            setProfileData(profile);
+
+            // Filter posts
+            const userPosts = allPosts.filter(p => p.userId === userId);
+            setPosts(userPosts);
+            setResources(userDocs);
+
+            // Initial stats calculation
+            setStats(prev => ({
+                ...prev,
+                uploads: userPosts.length + userDocs.length,
+                streak: profile?.progress?.studyStreak || 0,
+                friends: profile?.networkStats?.friendsCount || 0,
+                followers: profile?.networkStats?.followersCount || 0,
+            }));
+
+        } catch (error) {
+            console.error('Error loading profile:', error);
+            Alert.alert("Error", "Could not load profile");
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    const loadConnectionInfo = async () => {
+        if (!userId || !authUser) return;
+        try {
+            const status = await getConnectionStatus(authUser.uid, userId);
+            setConnectionStatus({
+                isFriend: status.isFriend,
+                isFollowing: status.isFollowing,
+                isFollower: status.isFollower,
+                friendshipStatus: status.friendshipStatus || 'none',
+                pendingRequestSentByMe: status.pendingRequestSentByMe || false,
+            });
+        } catch (error) {
+            console.error("Connection status error", error);
+        }
+    };
+
+    useEffect(() => {
+        loadProfileData();
+        loadConnectionInfo();
+    }, [userId]);
+
+    // Real-time stats
+    useEffect(() => {
+        if (!userId) return;
+        const unsubscribe = subscribeToNetworkStats(userId, (newStats) => {
+            setStats(prev => ({
+                ...prev,
+                followers: newStats.followersCount,
+                friends: newStats.friendsCount,
+            }));
+        });
+        return () => unsubscribe();
+    }, [userId]);
+
+
+    // 6. Handlers
+    const handleConnect = async () => {
+        if (!userId || !authUser) return;
+        setLoadingConnection(true);
+        try {
+            await sendFriendRequest(userId);
+            Alert.alert("Success", "Friend request sent!");
+            await loadConnectionInfo();
+        } catch (error: any) {
+            Alert.alert("Error", error.message);
+        } finally {
+            setLoadingConnection(false);
+        }
+    };
+
+    const handleFollow = async () => {
+        if (!userId || !authUser) return;
+        setLoadingConnection(true);
+        try {
+            if (connectionStatus.isFollowing) {
+                await unfollowUser(userId);
+                Alert.alert("Unfollowed", "You are no longer following this user.");
+            } else {
+                await followUser(userId);
+                Alert.alert("Following", "You are now following this user!");
+            }
+            await loadConnectionInfo();
+        } catch (error: any) {
+            Alert.alert("Error", error.message);
+        } finally {
+            setLoadingConnection(false);
+        }
+    };
+
+    const handleMessage = async () => {
+        if (!userId || !authUser || !profileData) return;
+        try {
+            const { getOrCreateConversation } = await import('../src/services/chatService');
+            const conversationId = await getOrCreateConversation(
+                authUser.uid,
+                userId,
+                {
+                    name: profileData.name,
+                    photoURL: profileData.photoURL || profileData.profilePhoto,
+                    email: profileData.email
+                }
+            );
+            router.push({
+                pathname: '/chat-screen',
+                params: { conversationId, otherUserId: userId, otherUserName: profileData.name }
+            });
+        } catch (error) {
+            Alert.alert("Error", "Could not start conversation");
+        }
+    };
+
+    const openPost = (post: Post) => {
+        setSelectedPost(post);
+        setDetailModalVisible(true);
+    };
+
+    const openDoc = (doc: LibraryResource) => {
+        setSelectedDoc(doc);
+        setDocViewerVisible(true);
+    };
+
+    // 7. Filtering Content
+    const getDisplayContent = () => {
+        if (activeTab === 'posts') return posts.filter(p => !p.type || p.type === 'note' || p.type === 'news'); // Default types
+        if (activeTab === 'videos') return posts.filter(p => p.type === 'video' || p.videoLink);
+        if (activeTab === 'docs') return resources; // Return resources
+        return [];
+    };
+
+    const displayData = getDisplayContent();
+
+    // 8. Computed Display values
+    const displayName = profileData?.name || 'User';
+    const photoURL = profileData?.profilePhoto || profileData?.photoURL;
+    const role = profileData?.role || 'Student';
+    const username = profileData?.username || displayName.toLowerCase().replace(/\s/g, '');
+    const about = profileData?.about;
+
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#4F46E5" />
+            </View>
+        );
+    }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.mainContainer}>
+            {/* Header Gradient */}
+            <LinearGradient
+                colors={['#4F46E5', '#818CF8']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.headerBackground}
+            />
 
+            <SafeAreaView style={styles.safeArea} edges={['top']}>
+                <View style={styles.navBar}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color="#FFF" />
+                    </TouchableOpacity>
+                </View>
 
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1E293B" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>About</Text>
-                <View style={styles.placeholder} />
-            </View>
-
-            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
-
-
-                {userProfile?.about && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>About</Text>
-                        <Text style={styles.aboutText}>{userProfile.about}</Text>
-                    </View>
-                )}
-
-                {userProfile?.skills && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Skills</Text>
-
-                        {userProfile.skills.technical && userProfile.skills.technical.length > 0 && (
-                            <View style={styles.skillCategory}>
-                                <Text style={styles.categoryTitle}>Technical Skills</Text>
-                                <View style={styles.skillsContainer}>
-                                    {userProfile.skills.technical.map((skill: string, index: number) => (
-                                        <View key={index} style={[styles.skillChip, styles.technicalChip]}>
-                                            <Text style={styles.technicalText}>{skill}</Text>
-                                        </View>
-                                    ))}
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={{ paddingBottom: 40 }}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadProfileData(); }} tintColor="#FFF" />
+                    }
+                >
+                    <View style={styles.profileHeaderContent}>
+                        {/* Avatar */}
+                        <View style={styles.avatarContainer}>
+                            {photoURL ? (
+                                <Image source={{ uri: photoURL }} style={styles.avatar} />
+                            ) : (
+                                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                    <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
                                 </View>
+                            )}
+                        </View>
+
+                        {/* Name & Role */}
+                        <View style={styles.nameContainer}>
+                            <Text style={styles.nameText}>{displayName}</Text>
+                            <View style={styles.roleBadge}>
+                                <Text style={styles.roleText}>{role}</Text>
+                            </View>
+                        </View>
+                        <Text style={styles.usernameText}>@{username}</Text>
+
+                        {/* Stats Row */}
+                        <View style={styles.statsRow}>
+                            <View style={styles.statItem}>
+                                <Text style={styles.statNumber}>{stats.followers}</Text>
+                                <Text style={styles.statLabel}>Followers</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statItem}>
+                                <Text style={styles.statNumber}>{stats.friends}</Text>
+                                <Text style={styles.statLabel}>Network</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statItem}>
+                                <Text style={styles.statNumber}>{stats.uploads}</Text>
+                                <Text style={styles.statLabel}>Uploads</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statItem}>
+                                <Text style={styles.statNumber}>{stats.streak}🔥</Text>
+                                <Text style={styles.statLabel}>Streak</Text>
+                            </View>
+                        </View>
+
+                        {/* Bio */}
+                        {about && (
+                            <View style={styles.bioContainer}>
+                                <Text style={styles.bioText} numberOfLines={3}>{about}</Text>
                             </View>
                         )}
 
-                        {userProfile.skills.softSkills && userProfile.skills.softSkills.length > 0 && (
-                            <View style={styles.skillCategory}>
-                                <Text style={styles.categoryTitle}>Soft Skills</Text>
-                                <View style={styles.skillsContainer}>
-                                    {userProfile.skills.softSkills.map((skill: string, index: number) => (
-                                        <View key={index} style={[styles.skillChip, styles.softChip]}>
-                                            <Text style={styles.softText}>{skill}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
-                        )}
+                        {/* Actions */}
+                        <View style={styles.actionsRow}>
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.primaryButton]}
+                                onPress={connectionStatus.isFriend ? undefined : handleConnect}
+                                disabled={loadingConnection || connectionStatus.isFriend || connectionStatus.pendingRequestSentByMe}
+                            >
+                                {loadingConnection ? <ActivityIndicator color="#FFF" /> : (
+                                    <>
+                                        <Ionicons name={connectionStatus.isFriend ? "checkmark" : "person-add"} size={18} color="#FFF" />
+                                        <Text style={styles.primaryButtonText}>
+                                            {connectionStatus.isFriend ? 'Friends' :
+                                                connectionStatus.pendingRequestSentByMe ? 'Sent' : 'Connect'}
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
 
-                        {userProfile.skills.languages && userProfile.skills.languages.length > 0 && (
-                            <View style={styles.skillCategory}>
-                                <Text style={styles.categoryTitle}>Languages</Text>
-                                <View style={styles.skillsContainer}>
-                                    {userProfile.skills.languages.map((skill: string, index: number) => (
-                                        <View key={index} style={[styles.skillChip, styles.languageChip]}>
-                                            <Text style={styles.languageText}>{skill}</Text>
-                                        </View>
-                                    ))}
-                                </View>
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.secondaryButton]}
+                                onPress={handleFollow}
+                                disabled={loadingConnection}
+                            >
+                                <Ionicons name={connectionStatus.isFollowing ? "checkmark" : "add"} size={18} color="#4F46E5" />
+                                <Text style={styles.secondaryButtonText}>{connectionStatus.isFollowing ? 'Following' : 'Follow'}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.secondaryButton]}
+                                onPress={handleMessage}
+                            >
+                                <Ionicons name="chatbubble-ellipses-outline" size={18} color="#4F46E5" />
+                                <Text style={styles.secondaryButtonText}>Message</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Tabs */}
+                    <View style={styles.tabsContainer}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
+                            <TouchableOpacity
+                                style={[styles.tab, activeTab === 'posts' && styles.activeTab]}
+                                onPress={() => setActiveTab('posts')}
+                            >
+                                <Text style={[styles.tabText, activeTab === 'posts' && styles.activeTabText]}>Posts</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.tab, activeTab === 'videos' && styles.activeTab]}
+                                onPress={() => setActiveTab('videos')}
+                            >
+                                <Text style={[styles.tabText, activeTab === 'videos' && styles.activeTabText]}>Videos</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.tab, activeTab === 'docs' && styles.activeTab]}
+                                onPress={() => setActiveTab('docs')}
+                            >
+                                <Text style={[styles.tabText, activeTab === 'docs' && styles.activeTabText]}>Docs</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+
+                    {/* Grid Content */}
+                    <View style={styles.gridContainer}>
+                        {displayData.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <Ionicons name="images-outline" size={48} color="#CBD5E1" />
+                                <Text style={styles.emptyText}>No content shared yet</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.grid}>
+                                {activeTab === 'docs' ? (
+                                    (displayData as LibraryResource[]).map(item => (
+                                        <ResourceGridItem key={item.id} resource={item} onPress={openDoc} />
+                                    ))
+                                ) : (
+                                    (displayData as Post[]).map(item => (
+                                        <PostGridItem key={item.id} post={item} onPress={openPost} />
+                                    ))
+                                )}
                             </View>
                         )}
                     </View>
-                )}
 
-                {userProfile?.education && userProfile.education.length > 0 && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Education</Text>
-                        {userProfile.education.map((edu: Education, index: number) => (
-                            <View key={index} style={styles.educationCard}>
-                                <View style={styles.educationIcon}>
-                                    <Ionicons name="school" size={24} color="#4F46E5" />
+                    {/* Education Section (Optional: add back if needed below grid) */}
+                    {profileData?.education && profileData.education.length > 0 && (
+                        <View style={styles.infoSection}>
+                            <Text style={styles.sectionTitle}>Education</Text>
+                            {profileData.education.map((edu: Education, index: number) => (
+                                <View key={index} style={styles.eduItem}>
+                                    <Ionicons name="school-outline" size={20} color="#64748B" />
+                                    <View>
+                                        <Text style={styles.eduInst}>{edu.institution}</Text>
+                                        <Text style={styles.eduDegree}>{edu.degree} • {edu.startYear}-{edu.endYear || 'Present'}</Text>
+                                    </View>
                                 </View>
-                                <View style={styles.educationInfo}>
-                                    <Text style={styles.educationInstitution}>{edu.institution}</Text>
-                                    <Text style={styles.educationDegree}>{edu.degree}</Text>
-                                    <Text style={styles.educationPeriod}>
-                                        {edu.startYear} - {edu.endYear || 'Present'}
-                                    </Text>
-                                </View>
-                            </View>
-                        ))}
-                    </View>
-                )}
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Contact Information</Text>
-                    {userProfile?.location && (
-                        <View style={styles.infoRow}>
-                            <Ionicons name="location" size={20} color="#64748B" />
-                            <Text style={styles.infoText}>
-                                {userProfile.location.city}, {userProfile.location.state}
-                            </Text>
+                            ))}
                         </View>
                     )}
-                    <View style={styles.infoRow}>
-                        <Ionicons name="school" size={20} color="#64748B" />
-                        <Text style={styles.infoText}>{userProfile?.exam || 'Student'}</Text>
-                    </View>
-                </View>
-            </ScrollView>
 
+                </ScrollView>
+            </SafeAreaView>
 
-        </SafeAreaView>
+            <PostDetailModal
+                visible={detailModalVisible}
+                postData={selectedPost}
+                onClose={() => setDetailModalVisible(false)}
+            />
+
+            <DocumentViewer
+                visible={docViewerVisible}
+                documentUrl={selectedDoc?.fileUrl || ''}
+                documentName={selectedDoc?.title || 'Document'}
+                documentType={selectedDoc?.type || 'pdf'}
+                onClose={() => setDocViewerVisible(false)}
+            />
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
+    mainContainer: {
         flex: 1,
         backgroundColor: '#F8FAFC',
     },
-    header: {
+    headerBackground: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 150, // Reduced height since we push content up
+    },
+    safeArea: {
+        flex: 1,
+    },
+    navBar: {
         flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        backgroundColor: '#FFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
     },
     backButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+        padding: 4,
     },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#1E293B',
-    },
-    placeholder: {
-        width: 40,
-    },
-    content: {
+    scrollView: {
         flex: 1,
     },
-    section: {
-        backgroundColor: '#FFF',
-        marginTop: 12,
+    profileHeaderContent: {
+        alignItems: 'center',
+        marginTop: 20,
         paddingHorizontal: 20,
-        paddingVertical: 20,
     },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1E293B',
-        marginBottom: 16,
-    },
-    aboutText: {
-        fontSize: 15,
-        lineHeight: 24,
-        color: '#334155',
-    },
-    skillCategory: {
-        marginBottom: 20,
-    },
-    categoryTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#64748B',
+    avatarContainer: {
         marginBottom: 12,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    skillsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    skillChip: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        borderWidth: 1,
-    },
-    technicalChip: {
-        backgroundColor: '#EEF2FF',
-        borderColor: '#4F46E5',
-    },
-    technicalText: {
-        fontSize: 14,
-        color: '#4F46E5',
-        fontWeight: '500',
-    },
-    softChip: {
-        backgroundColor: '#F0FDF4',
-        borderColor: '#10B981',
-    },
-    softText: {
-        fontSize: 14,
-        color: '#10B981',
-        fontWeight: '500',
-    },
-    languageChip: {
-        backgroundColor: '#FFF7ED',
-        borderColor: '#F59E0B',
-    },
-    languageText: {
-        fontSize: 14,
-        color: '#F59E0B',
-        fontWeight: '500',
-    },
-    educationCard: {
-        flexDirection: 'row',
-        marginBottom: 16,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-    },
-    educationIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#EEF2FF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    educationInfo: {
-        flex: 1,
-    },
-    educationInstitution: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1E293B',
-        marginBottom: 4,
-    },
-    educationDegree: {
-        fontSize: 14,
-        color: '#475569',
-        marginBottom: 2,
-    },
-    educationField: {
-        fontSize: 14,
-        color: '#64748B',
-        marginBottom: 4,
-    },
-    educationPeriod: {
-        fontSize: 13,
-        color: '#94A3B8',
-    },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 12,
-    },
-    infoText: {
-        fontSize: 15,
-        color: '#334155',
-    },
-    /* New profile styles */
-    profileCard: {
-        backgroundColor: '#FFFFFF',
-        marginHorizontal: 16,
-        marginTop: 16,
-        borderRadius: 12,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
         shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    profileLeft: {
-        marginRight: 12,
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 5,
     },
     avatar: {
-        width: 92,
-        height: 92,
-        borderRadius: 46,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        borderWidth: 4,
+        borderColor: '#FFF',
     },
     avatarPlaceholder: {
-        width: 92,
-        height: 92,
-        borderRadius: 46,
-        backgroundColor: '#E6F0FF',
+        backgroundColor: '#818CF8',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    avatarInitials: {
-        fontSize: 28,
+    avatarText: {
+        fontSize: 40,
         fontWeight: '700',
-        color: '#334155',
+        color: '#FFF',
     },
-    profileRight: {
-        flex: 1,
+    nameContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     nameText: {
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: '700',
-        color: '#0F172A',
+        color: '#1E293B',
     },
-    headlineText: {
-        fontSize: 13,
+    roleBadge: {
+        backgroundColor: '#EEF2FF',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    roleText: {
+        fontSize: 10,
+        color: '#4F46E5',
+        fontWeight: '700',
+        textTransform: 'uppercase',
+    },
+    usernameText: {
+        fontSize: 14,
         color: '#64748B',
         marginTop: 2,
-        marginBottom: 6,
-    },
-    aboutTextSmall: {
-        fontSize: 14,
-        color: '#475569',
-        marginBottom: 10,
     },
     statsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 6,
+        alignItems: 'center',
+        justifyContent: 'space-evenly',
+        backgroundColor: '#FFF',
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        marginTop: 20,
+        width: '100%',
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        // Removed heavy shadow for cleaner look
     },
     statItem: {
         alignItems: 'center',
-        minWidth: 56,
+        minWidth: 60,
     },
     statNumber: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
-        color: '#0F172A',
+        color: '#1E293B',
+        marginBottom: 2,
     },
     statLabel: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#64748B',
+        fontWeight: '500',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
-    progressContainer: {
-        marginTop: 12,
+    statDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: '#E2E8F0',
     },
-    progressBarBackground: {
-        height: 6,
-        backgroundColor: '#EEF2FF',
-        borderRadius: 6,
-        overflow: 'hidden',
+    bioContainer: {
+        marginTop: 20,
+        paddingHorizontal: 20,
     },
-    progressBarFill: {
-        height: 6,
-        backgroundColor: '#4F46E5',
+    bioText: {
+        textAlign: 'center',
+        color: '#334155',
+        fontSize: 14,
+        lineHeight: 22,
     },
-    progressText: {
-        marginTop: 6,
-        fontSize: 12,
-        color: '#64748B',
-    },
-    actionRow: {
+    actionsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        marginTop: 12,
+        gap: 12,
+        marginTop: 24,
+        paddingHorizontal: 10,
+        width: '100%',
+    },
+    actionButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        gap: 8,
+        borderRadius: 12,
+        height: 48,
     },
     primaryButton: {
-        flex: 1,
-        backgroundColor: '#6D28D9',
-        paddingVertical: 12,
-        borderRadius: 10,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 8,
+        backgroundColor: '#4F46E5',
+        shadowColor: '#4F46E5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
     },
     primaryButtonText: {
         color: '#FFF',
-        fontWeight: '700',
-    },
-    ghostButton: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#E6E9F2',
-        paddingVertical: 12,
-        borderRadius: 10,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 18,
-    },
-    ghostButtonText: {
-        color: '#64748B',
         fontWeight: '600',
+        fontSize: 15,
     },
-
-    // Docs Styles
-    docsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        padding: 16,
-        gap: 12,
-    },
-    docCard: {
-        width: '31%',
-        aspectRatio: 0.8,
+    secondaryButton: {
         backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 12,
-        justifyContent: 'space-between',
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        shadowColor: '#000',
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-        elevation: 1,
     },
-    docIconContainer: {
-        alignSelf: 'center',
-        marginVertical: 8,
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#FEF2F2',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    docTitle: {
-        fontSize: 12,
-        fontWeight: '600',
+    secondaryButtonText: {
         color: '#1E293B',
-        textAlign: 'center',
-        marginBottom: 8,
+        fontWeight: '600',
+        fontSize: 14,
     },
-    docStats: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
-        paddingTop: 8,
-    },
-    docStat: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    docStatText: {
-        fontSize: 10,
-        color: '#64748B',
-    },
-
-    /* Tabs styles */
     tabsContainer: {
-        flexDirection: 'row',
+        marginTop: 24,
         borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
+        borderBottomColor: '#F1F5F9',
         backgroundColor: '#FFF',
-        marginTop: 20,
-        paddingHorizontal: 16,
+    },
+    tabsContent: {
+        paddingHorizontal: 20,
     },
     tab: {
-        flex: 1,
         paddingVertical: 12,
-        alignItems: 'center',
-        borderBottomWidth: 3,
+        marginRight: 24,
+        borderBottomWidth: 2,
         borderBottomColor: 'transparent',
     },
-    tabActive: {
-        borderBottomColor: '#6D28D9',
+    activeTab: {
+        borderBottomColor: '#4F46E5',
     },
-    tabLabel: {
-        fontSize: 12,
-        color: '#94A3B8',
-        marginTop: 4,
+    tabText: {
+        fontSize: 14,
+        color: '#64748B',
         fontWeight: '500',
     },
-    tabLabelActive: {
-        color: '#6D28D9',
-    },
-    /* Feed styles */
-    feedContainer: {
-        marginTop: 16,
-    },
-    loaderContainer: {
-        height: 200,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    feedList: {
-        paddingHorizontal: 12,
-    },
-    emptyContainer: {
-        height: 300,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    emptyText: {
-        fontSize: 16,
+    activeTabText: {
+        color: '#4F46E5',
         fontWeight: '600',
-        color: '#94A3B8',
-        marginTop: 12,
     },
-    emptySubtext: {
-        fontSize: 14,
-        color: '#CBD5E1',
-        marginTop: 4,
+    gridContainer: {
+        padding: 1,
     },
-    /* Post card styles */
-    postCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        marginVertical: 8,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    postHeader: {
+    grid: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-    },
-    userAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#6D28D9',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 8,
-    },
-    avatarText: {
-        color: '#FFF',
-        fontWeight: '700',
-        fontSize: 16,
-    },
-    userInfo: {
-        flex: 1,
-    },
-    userName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1E293B',
-    },
-    postType: {
-        fontSize: 12,
-        color: '#64748B',
-        marginTop: 2,
-    },
-    /* Grid Styles */
-    feedListGrid: {
-        paddingHorizontal: 0,
-        marginHorizontal: -1,
-    },
-    feedRow: {
-        gap: 1,
+        flexWrap: 'wrap',
     },
     gridItem: {
-        flex: 1,
-        maxWidth: '33.33%',
+        width: '33.33%',
         aspectRatio: 1,
-        marginBottom: 1,
+        padding: 1,
         position: 'relative',
-        backgroundColor: '#f1f5f9',
     },
     gridImage: {
         width: '100%',
         height: '100%',
+        backgroundColor: '#F1F5F9',
     },
     gridPlaceholder: {
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#cbd5e1',
-        padding: 4,
+        padding: 8,
     },
     gridTextPreview: {
         fontSize: 10,
-        color: '#475569',
+        color: '#64748B',
         textAlign: 'center',
-        marginTop: 4,
     },
     gridIconOverlay: {
         position: 'absolute',
-        top: 4,
-        right: 4,
+        top: 6,
+        right: 6,
         backgroundColor: 'rgba(0,0,0,0.5)',
-        borderRadius: 4,
-        padding: 2,
-    },
-    /* Modal Styles */
-    modalContainer: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-    },
-    closeButton: {
+        borderRadius: 10,
         padding: 4,
     },
-    modalTitle: {
-        fontSize: 16,
+    // Resource Card Styles
+    resourceCard: {
+        width: '48%',
+        margin: '1%',
+        backgroundColor: '#FFF',
+        padding: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    pdfIconContainer: {
+        width: 50,
+        height: 60,
+        backgroundColor: '#FEF2F2',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    pdfBadge: {
+        position: 'absolute',
+        bottom: -6,
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    pdfBadgeText: {
+        color: '#FFF',
+        fontSize: 8,
+        fontWeight: '700',
+    },
+    resourceTitle: {
+        fontSize: 12,
         fontWeight: '600',
-        color: '#0F172A',
+        color: '#1E293B',
+        textAlign: 'center',
+        marginBottom: 4,
     },
-    /* Post Image Styles */
-    postImage: {
-        width: '100%',
-        height: 300,
-    },
-    videoContainer: {
-        width: '100%',
-        height: 200,
-        backgroundColor: '#F1F5F9',
-        justifyContent: 'center',
+    emptyState: {
+        padding: 40,
         alignItems: 'center',
     },
-    videoText: {
-        marginTop: 8,
-        color: '#64748B',
+    emptyText: {
+        color: '#94A3B8',
+        marginTop: 12,
         fontSize: 14,
     },
-    postContent: {
-        paddingHorizontal: 12,
-        paddingTop: 12,
-        paddingBottom: 8,
-    },
-    postText: {
-        fontSize: 14,
-        color: '#334155',
-        lineHeight: 20,
-    },
-    tagsContainer: {
-        flexDirection: 'row',
-        marginTop: 8,
-        flexWrap: 'wrap',
-    },
-    tag: {
-        marginRight: 6,
-        marginTop: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 6,
-    },
-    tagText: {
-        fontSize: 12,
-        color: '#4F46E5',
-        fontWeight: '500',
-    },
-    postFooter: {
-        flexDirection: 'row',
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
-    },
-    footerItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginRight: 20,
-    },
-    footerText: {
-        marginLeft: 4,
-        fontSize: 12,
-        color: '#64748B',
-    },
-    imageFallback: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-    },
-    modalOverlay: {
+    loadingContainer: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.9)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 16,
     },
-    fullImage: {
-        width: '100%',
-        height: '80%',
+    infoSection: {
+        padding: 20,
+        backgroundColor: '#FFF',
+        marginTop: 16,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1E293B',
+        marginBottom: 12,
+    },
+    eduItem: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 16,
+    },
+    eduInst: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1E293B',
+    },
+    eduDegree: {
+        fontSize: 12,
+        color: '#64748B',
     },
 });
 

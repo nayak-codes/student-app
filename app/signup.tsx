@@ -1,3 +1,4 @@
+
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -15,6 +16,26 @@ import {
 } from 'react-native';
 import { signUp } from '../src/services/authService';
 
+const EDUCATION_LEVELS = [
+    { id: '10th', label: 'Class 10' },
+    { id: 'Intermediate', label: 'Inter / +2' },
+    { id: 'Undergraduate', label: 'B.Tech / Degree' },
+    { id: 'Graduate', label: 'Masters / PG' },
+];
+
+const COURSES = [
+    { id: 'MPC', label: 'MPC' },
+    { id: 'BiPC', label: 'BiPC' },
+    { id: 'MEC', label: 'MEC' },
+    { id: 'CEC', label: 'CEC' },
+    { id: 'CSE', label: 'CSE' },
+    { id: 'ECE', label: 'ECE' },
+    { id: 'EEE', label: 'EEE' },
+    { id: 'Mechanical', label: 'Mechanical' },
+    { id: 'Civil', label: 'Civil' },
+    { id: 'Other', label: 'Other' },
+];
+
 const EXAMS = [
     { id: 'JEE', name: 'JEE Main/Advanced', icon: '🎓' },
     { id: 'NEET', name: 'NEET', icon: '⚕️' },
@@ -24,17 +45,24 @@ const EXAMS = [
 
 export default function SignupScreen() {
     const router = useRouter();
+    const [step, setStep] = useState(1); // 1: Basic Info, 2: Education
+
+    // Basic Info
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [selectedExam, setSelectedExam] = useState<'JEE' | 'NEET' | 'EAPCET' | 'SRMJEE'>('JEE');
-    const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    const handleSignup = async () => {
-        // Validation
+    // Education Info
+    const [educationLevel, setEducationLevel] = useState<'10th' | 'Intermediate' | 'Undergraduate' | 'Graduate' | null>(null);
+    const [course, setCourse] = useState('');
+    const [selectedExam, setSelectedExam] = useState<'JEE' | 'NEET' | 'EAPCET' | 'SRMJEE'>('JEE');
+
+    const [loading, setLoading] = useState(false);
+
+    const handleNext = () => {
         if (!name || !email || !password || !confirmPassword) {
             Alert.alert('Error', 'Please fill in all fields');
             return;
@@ -50,9 +78,22 @@ export default function SignupScreen() {
             return;
         }
 
+        setStep(2);
+    };
+
+    const handleBack = () => {
+        setStep(1);
+    };
+
+    const handleSignup = async () => {
+        if (!educationLevel || !course) {
+            Alert.alert('Error', 'Please select your education details');
+            return;
+        }
+
         setLoading(true);
         try {
-            await signUp(email, password, name, selectedExam);
+            await signUp(email, password, name, selectedExam, educationLevel, course);
             Alert.alert('Success', 'Account created successfully!', [
                 { text: 'OK', onPress: () => router.replace('/(tabs)') }
             ]);
@@ -62,6 +103,155 @@ export default function SignupScreen() {
             setLoading(false);
         }
     };
+
+    const renderStep1 = () => (
+        <>
+            {/* Name Input */}
+            <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
+                <TextInput
+                    style={styles.input}
+                    placeholder="Full Name"
+                    value={name}
+                    onChangeText={setName}
+                    autoComplete="name"
+                    editable={!loading}
+                />
+            </View>
+
+            {/* Email Input */}
+            <View style={styles.inputContainer}>
+                <Ionicons name="mail-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
+                <TextInput
+                    style={styles.input}
+                    placeholder="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    editable={!loading}
+                />
+            </View>
+
+            {/* Password Input */}
+            <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
+                <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoComplete="password-new"
+                    editable={!loading}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                    <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#94a3b8" />
+                </TouchableOpacity>
+            </View>
+
+            {/* Confirm Password Input */}
+            <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
+                <TextInput
+                    style={styles.input}
+                    placeholder="Confirm Password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
+                    editable={!loading}
+                />
+                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
+                    <Ionicons name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#94a3b8" />
+                </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.signupButton} onPress={handleNext}>
+                <Text style={styles.signupButtonText}>Next</Text>
+                <Ionicons name="arrow-forward" size={20} color="#FFF" style={{ marginLeft: 8 }} />
+            </TouchableOpacity>
+        </>
+    );
+
+    const renderStep2 = () => (
+        <>
+            <Text style={styles.sectionTitle}>Education Level</Text>
+            <View style={styles.chipContainer}>
+                {EDUCATION_LEVELS.map((item) => (
+                    <TouchableOpacity
+                        key={item.id}
+                        style={[styles.chip, educationLevel === item.id && styles.chipSelected]}
+                        onPress={() => setEducationLevel(item.id as any)}
+                    >
+                        <Text style={[styles.chipText, educationLevel === item.id && styles.chipTextSelected]}>
+                            {item.label}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            <Text style={styles.sectionTitle}>Course / Stream</Text>
+            <View style={styles.chipContainer}>
+                {COURSES.map((item) => (
+                    <TouchableOpacity
+                        key={item.id}
+                        style={[styles.chip, course === item.id && styles.chipSelected]}
+                        onPress={() => setCourse(item.id)}
+                    >
+                        <Text style={[styles.chipText, course === item.id && styles.chipTextSelected]}>
+                            {item.label}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* Exam Selection - Keep as part of the flow */}
+            <Text style={styles.sectionTitle}>Target Exam</Text>
+            <View style={styles.examGrid}>
+                {EXAMS.map((exam) => (
+                    <TouchableOpacity
+                        key={exam.id}
+                        style={[
+                            styles.examCard,
+                            selectedExam === exam.id && styles.examCardSelected,
+                        ]}
+                        onPress={() => setSelectedExam(exam.id as any)}
+                        disabled={loading}
+                    >
+                        <Text style={styles.examIcon}>{exam.icon}</Text>
+                        <Text style={[
+                            styles.examName,
+                            selectedExam === exam.id && styles.examNameSelected,
+                        ]}>
+                            {exam.name}
+                        </Text>
+                        {selectedExam === exam.id && (
+                            <Ionicons name="checkmark-circle" size={20} color="#6C63FF" style={styles.checkIcon} />
+                        )}
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.backButton} onPress={handleBack} disabled={loading}>
+                    <Ionicons name="arrow-back" size={20} color="#64748b" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.signupButton, styles.flexButton, loading && styles.signupButtonDisabled]}
+                    onPress={handleSignup}
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <Text style={styles.signupButtonText}>Create Account</Text>
+                    )}
+                </TouchableOpacity>
+            </View>
+        </>
+    );
 
     return (
         <KeyboardAvoidingView
@@ -73,133 +263,29 @@ export default function SignupScreen() {
                 <View style={styles.header}>
                     <Text style={styles.logo}>📚 StudentVerse</Text>
                     <Text style={styles.title}>Create Account</Text>
-                    <Text style={styles.subtitle}>Join thousands of students learning together</Text>
+                    <Text style={styles.subtitle}>
+                        {step === 1 ? "Let's get your basics down" : "Tell us about your education"}
+                    </Text>
                 </View>
 
                 {/* Form */}
                 <View style={styles.form}>
-                    {/* Name Input */}
-                    <View style={styles.inputContainer}>
-                        <Ionicons name="person-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Full Name"
-                            value={name}
-                            onChangeText={setName}
-                            autoComplete="name"
-                            editable={!loading}
-                        />
-                    </View>
+                    {step === 1 ? renderStep1() : renderStep2()}
 
-                    {/* Email Input */}
-                    <View style={styles.inputContainer}>
-                        <Ionicons name="mail-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Email"
-                            value={email}
-                            onChangeText={setEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            editable={!loading}
-                        />
+                    <View style={styles.stepIndicator}>
+                        <View style={[styles.stepDot, step >= 1 ? styles.stepDotActive : {}]} />
+                        <View style={[styles.stepDot, step >= 2 ? styles.stepDotActive : {}]} />
                     </View>
-
-                    {/* Password Input */}
-                    <View style={styles.inputContainer}>
-                        <Ionicons name="lock-closed-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Password"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry={!showPassword}
-                            autoComplete="password-new"
-                            editable={!loading}
-                        />
-                        <TouchableOpacity
-                            onPress={() => setShowPassword(!showPassword)}
-                            style={styles.eyeIcon}
-                        >
-                            <Ionicons
-                                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                                size={20}
-                                color="#94a3b8"
-                            />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Confirm Password Input */}
-                    <View style={styles.inputContainer}>
-                        <Ionicons name="lock-closed-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Confirm Password"
-                            value={confirmPassword}
-                            onChangeText={setConfirmPassword}
-                            secureTextEntry={!showConfirmPassword}
-                            editable={!loading}
-                        />
-                        <TouchableOpacity
-                            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                            style={styles.eyeIcon}
-                        >
-                            <Ionicons
-                                name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
-                                size={20}
-                                color="#94a3b8"
-                            />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Exam Selection */}
-                    <Text style={styles.sectionTitle}>Select Your Target Exam</Text>
-                    <View style={styles.examGrid}>
-                        {EXAMS.map((exam) => (
-                            <TouchableOpacity
-                                key={exam.id}
-                                style={[
-                                    styles.examCard,
-                                    selectedExam === exam.id && styles.examCardSelected,
-                                ]}
-                                onPress={() => setSelectedExam(exam.id as any)}
-                                disabled={loading}
-                            >
-                                <Text style={styles.examIcon}>{exam.icon}</Text>
-                                <Text style={[
-                                    styles.examName,
-                                    selectedExam === exam.id && styles.examNameSelected,
-                                ]}>
-                                    {exam.name}
-                                </Text>
-                                {selectedExam === exam.id && (
-                                    <Ionicons name="checkmark-circle" size={20} color="#6C63FF" style={styles.checkIcon} />
-                                )}
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    {/* Signup Button */}
-                    <TouchableOpacity
-                        style={[styles.signupButton, loading && styles.signupButtonDisabled]}
-                        onPress={handleSignup}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={styles.signupButtonText}>Create Account</Text>
-                        )}
-                    </TouchableOpacity>
 
                     {/* Login Link */}
-                    <View style={styles.loginContainer}>
-                        <Text style={styles.loginText}>Already have an account? </Text>
-                        <TouchableOpacity onPress={() => router.back()}>
-                            <Text style={styles.loginLink}>Sign In</Text>
-                        </TouchableOpacity>
-                    </View>
+                    {step === 1 && (
+                        <View style={styles.loginContainer}>
+                            <Text style={styles.loginText}>Already have an account? </Text>
+                            <TouchableOpacity onPress={() => router.back()}>
+                                <Text style={styles.loginLink}>Sign In</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -267,6 +353,33 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         marginTop: 8,
     },
+    chipContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 20,
+    },
+    chip: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: '#f1f5f9',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    chipSelected: {
+        backgroundColor: '#e0e7ff',
+        borderColor: '#6C63FF',
+    },
+    chipText: {
+        fontSize: 14,
+        color: '#64748b',
+        fontWeight: '500',
+    },
+    chipTextSelected: {
+        color: '#6C63FF',
+        fontWeight: '600',
+    },
     examGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -311,6 +424,12 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         alignItems: 'center',
         marginBottom: 24,
+        flexDirection: 'row',
+        justifyContent: 'center',
+    },
+    flexButton: {
+        flex: 1,
+        marginBottom: 0,
     },
     signupButtonDisabled: {
         opacity: 0.6,
@@ -319,6 +438,18 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    buttonRow: {
+        flexDirection: 'row',
+        gap: 16,
+        marginBottom: 24,
+    },
+    backButton: {
+        padding: 16,
+        borderRadius: 12,
+        backgroundColor: '#f1f5f9',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     loginContainer: {
         flexDirection: 'row',
@@ -333,5 +464,21 @@ const styles = StyleSheet.create({
         color: '#6C63FF',
         fontSize: 14,
         fontWeight: '600',
+    },
+    stepIndicator: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 20,
+    },
+    stepDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#e2e8f0',
+    },
+    stepDotActive: {
+        backgroundColor: '#6C63FF',
+        width: 24,
     },
 });
