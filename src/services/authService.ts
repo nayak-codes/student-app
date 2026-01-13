@@ -60,6 +60,13 @@ export interface UserProfile {
         languages: string[];
     };
 
+    // Network Stats
+    networkStats?: {
+        followersCount: number;
+        followingCount: number;
+        friendsCount: number;
+    };
+
     // Compatibility Fields (for full-profile.tsx)
     bannerUrl?: string; // Maps to coverPhoto
     institution?: string; // Maps to education[0].institutionName generally
