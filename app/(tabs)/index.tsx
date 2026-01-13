@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import FeedList from '../../src/components/feed/FeedList';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getTotalUnreadCount } from '../../src/services/chatService';
@@ -57,7 +58,7 @@ export default function HomeScreen() {
   }, [user]);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       {/* Standard App Header */}
@@ -109,7 +110,7 @@ export default function HomeScreen() {
         onAccept={handleAccept}
         onReject={handleReject}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -122,11 +123,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#fff',
+    paddingHorizontal: 16, // Standard spacing
+    paddingVertical: 8, // Tighter vertical padding
+    backgroundColor: '#fff', // Flat background
+    // No border bottom for seamless look
   },
   brandContainer: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ import {
     doc,
     getDoc,
     getDocs,
+    limit,
     onSnapshot,
     query,
     serverTimestamp,
@@ -14,6 +15,7 @@ import {
     writeBatch
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { UserProfile } from './authService';
 
 // ============================================
 // TYPES & INTERFACES
@@ -642,4 +644,132 @@ const decrementFollowerCounts = async (followerId: string, followingId: string):
     });
 
     await batch.commit();
+};
+
+// ============================================
+// SUGGESTED CONNECTIONS (Mutual Friends)
+// ============================================
+
+export interface SuggestedUser {
+    user: UserProfile;
+    mutualFriendsCount: number;
+}
+
+/**
+ * Get suggested connections based on mutual friends
+ * Algorithm:
+ * 1. Get current user's friends (1st degree)
+ * 2. Get pending requests (to exclude)
+ * 3. For each friend, get their friends (2nd degree)
+ * 4. Count occurrences of 2nd degree friends
+ * 5. Return top N users with most mutual friends
+ */
+export const getSuggestedConnections = async (
+    currentUserId: string,
+    limitCount: number = 10
+): Promise<SuggestedUser[]> => {
+    try {
+        // 1. Get my friends
+        const myFriends = await getFriends(currentUserId);
+        const myFriendIds = new Set(myFriends.map(u => u.id));
+
+        // 2. Get pending requests (sent and received)
+        const pendingRequests = await getPendingFriendRequests(currentUserId);
+        // We also need requests I sent... but getPendingFriendRequests only returns received.
+        // We should query sent requests too to avoid suggesting people I already requested.
+        const sentRequestsQuery = query(
+            collection(db, 'friendships'),
+            where('requestedBy', '==', currentUserId),
+            where('status', '==', 'pending')
+        );
+        const sentRequestsSnap = await getDocs(sentRequestsQuery);
+        const sentRequestIds = new Set(sentRequestsSnap.docs.map(d => d.data().friendId));
+
+        const receivedRequestIds = new Set(pendingRequests.map(r => r.sender.id));
+
+        const excludedIds = new Set([
+            currentUserId,
+            ...Array.from(myFriendIds),
+            ...Array.from(sentRequestIds),
+            ...Array.from(receivedRequestIds)
+        ]);
+
+        // 3. Find 2nd degree connections
+        // Map: userId -> count
+        const candidateMap = new Map<string, number>();
+
+        // Optimization: Limit to checking a subset of friends if the list is huge?
+        // For now, check all friends.
+
+        // Parallel fetch for friends of friends
+        const friendsOfFriendsPromises = myFriends.map(friend => getFriends(friend.id));
+        const friendsOfFriendsResults = await Promise.all(friendsOfFriendsPromises);
+
+        friendsOfFriendsResults.forEach(friendsList => {
+            friendsList.forEach(friendOfFriend => {
+                if (!excludedIds.has(friendOfFriend.id)) {
+                    const currentCount = candidateMap.get(friendOfFriend.id) || 0;
+                    candidateMap.set(friendOfFriend.id, currentCount + 1);
+                }
+            });
+        });
+
+        // 4. Sort candidates by mutual friend count
+        const sortedCandidates = Array.from(candidateMap.entries())
+            .sort((a, b) => b[1] - a[1]) // Descending
+            .slice(0, limitCount);
+
+        // 5. Fetch full user profiles for the candidates
+        // (Note: We might already have them from getFriends result if we restructure,
+        // but friendsOfFriendsResults contains UserProfiles!)
+
+        // Efficient: We have the UserProfile objects in friendsOfFriendsResults.
+        // We need to extract them to avoid re-fetching.
+        const candidateProfiles = new Map<string, UserProfile>();
+        friendsOfFriendsResults.flat().forEach(u => {
+            if (candidateMap.has(u.id)) {
+                candidateProfiles.set(u.id, u);
+            }
+        });
+
+        const suggestions: SuggestedUser[] = sortedCandidates.map(([userId, count]) => {
+            const profile = candidateProfiles.get(userId);
+            if (!profile) return null;
+            return {
+                user: profile,
+                mutualFriendsCount: count
+            }
+        }).filter((s): s is SuggestedUser => s !== null);
+
+        // Fallback: If suggestions are empty/low (e.g., new user), fetch random users?
+        // For now, let's keep it strict to mutuals. 
+        // If we want "Discover" functionality, we can mix in randoms later.
+
+        // If no mutuals found (e.g. new user), fallback to fetching generic users who are not friends
+        if (suggestions.length < 5) {
+            const allUsersQuery = query(collection(db, 'users'), limit(20));
+            const allUsersSnap = await getDocs(allUsersQuery);
+
+            allUsersSnap.docs.forEach(doc => {
+                const userData = doc.data() as UserProfile;
+                // Ensure ID is set
+                if (!userData.id) userData.id = doc.id;
+
+                if (!excludedIds.has(userData.id) && !candidateMap.has(userData.id)) {
+                    // Add as 0 mutual friends
+                    suggestions.push({
+                        user: userData,
+                        mutualFriendsCount: 0
+                    });
+                    excludedIds.add(userData.id); // Prevent dupes
+                }
+            });
+        }
+
+        return suggestions.slice(0, limitCount);
+
+    } catch (error) {
+        console.error('Error fetching suggested connections:', error);
+        return [];
+    }
 };

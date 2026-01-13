@@ -15,13 +15,23 @@ export default function TabLayout() {
         tabBarInactiveTintColor: '#888',
         headerShown: false,
         tabBarStyle: {
-          height: 60,
-          paddingBottom: 4,
+          height: 60, // Standard modern height
+          paddingTop: 8,
+          paddingBottom: 8,
+          borderTopWidth: 0.5, // Subtle border
+          borderTopColor: '#E5E5E5', // Very light grey
+          backgroundColor: '#FFF',
+          elevation: 0, // Remove shadow on Android
+          shadowOpacity: 0, // Remove shadow on iOS
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          marginBottom: 4,
+          fontSize: 10,
+          marginBottom: 2,
+          fontWeight: '500',
         },
+        tabBarItemStyle: {
+          paddingVertical: 4,
+        }
       }}
     >
       {/* Home Tab */}
