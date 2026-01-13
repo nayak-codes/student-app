@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     Image,
     KeyboardAvoidingView,
@@ -89,9 +90,9 @@ const ChatScreen = () => {
         const minutes = date.getMinutes();
         const ampm = hours >= 12 ? 'PM' : 'AM';
         const displayHours = hours % 12 || 12;
-        const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+        const displayMinutes = minutes < 10 ? `0${minutes} ` : minutes;
 
-        return `${displayHours}:${displayMinutes} ${ampm}`;
+        return `${displayHours}:${displayMinutes} ${ampm} `;
     };
 
     const renderMessage = ({ item, index }: { item: Message; index: number }) => {
@@ -141,10 +142,21 @@ const ChatScreen = () => {
 
                     {/* Render shared content or normal message */}
                     {isSharedContent && item.sharedContent ? (
-                        <View style={[
-                            styles.sharedContentCard,
-                            isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard
-                        ]}>
+                        <TouchableOpacity
+                            style={[
+                                styles.sharedContentCard,
+                                isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard
+                            ]}
+                            onPress={() => {
+                                if (item.messageType === 'sharedPost') {
+                                    // Navigate to post (you could create a post detail screen)
+                                    console.log('Open post:', item.sharedContent?.contentId);
+                                    // For now, just show an alert
+                                    Alert.alert('Shared Post', 'Post viewing coming soon!');
+                                }
+                            }}
+                            activeOpacity={0.7}
+                        >
                             <View style={styles.sharedContentHeader}>
                                 <Ionicons
                                     name={item.messageType === 'sharedPost' ? 'document-text' : 'document'}
@@ -158,18 +170,27 @@ const ChatScreen = () => {
 
                             {item.messageType === 'sharedPost' && item.sharedContent.contentData ? (
                                 <View style={styles.sharedPostContent}>
-                                    <Text style={styles.sharedPostAuthor}>
-                                        @{item.sharedContent.contentData.userName}
-                                    </Text>
-                                    <Text style={styles.sharedPostText} numberOfLines={3}>
-                                        {item.sharedContent.contentData.content}
-                                    </Text>
+                                    {/* Image first if available */}
                                     {item.sharedContent.contentData.imageUrl && (
-                                        <View style={styles.sharedPostImageContainer}>
-                                            <Ionicons name="image" size={16} color="#64748B" />
-                                            <Text style={styles.sharedPostImageText}>Image attached</Text>
-                                        </View>
+                                        <Image
+                                            source={{ uri: item.sharedContent.contentData.imageUrl }}
+                                            style={styles.sharedPostImage}
+                                            resizeMode="cover"
+                                        />
                                     )}
+
+                                    {/* Author and content */}
+                                    <View style={styles.sharedPostTextContainer}>
+                                        <View style={styles.sharedPostMeta}>
+                                            <Text style={styles.sharedPostAuthor}>
+                                                {item.sharedContent.contentData.userName}
+                                            </Text>
+                                            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+                                        </View>
+                                        <Text style={styles.sharedPostText} numberOfLines={2}>
+                                            {item.sharedContent.contentData.content}
+                                        </Text>
+                                    </View>
                                 </View>
                             ) : item.messageType === 'sharedPDF' && item.sharedContent.contentData ? (
                                 <View style={styles.sharedPDFContent}>
@@ -177,13 +198,14 @@ const ChatScreen = () => {
                                     <Text style={styles.sharedPDFTitle}>
                                         {item.sharedContent.contentData.title || 'Untitled Document'}
                                     </Text>
+                                    <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
                                 </View>
                             ) : null}
 
                             <Text style={styles.sharedContentTime}>
                                 {formatMessageTime(item.timestamp)}
                             </Text>
-                        </View>
+                        </TouchableOpacity>
                     ) : (
                         <View
                             style={[
@@ -497,20 +519,22 @@ const styles = StyleSheet.create({
     },
     // Shared Content Card Styles
     sharedContentCard: {
-        maxWidth: '80%',
+        minWidth: '85%',
+        maxWidth: '100%',
         backgroundColor: '#FFF',
         borderRadius: 12,
-        padding: 12,
+        padding: 0,
         shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
         shadowOffset: { width: 0, height: 2 },
-        elevation: 3,
+        elevation: 4,
         borderWidth: 1,
         borderColor: '#E2E8F0',
+        overflow: 'hidden',
     },
     ownSharedCard: {
-        borderColor: '#A78BFA',
+        borderColor: '#C7D2FE',
     },
     otherSharedCard: {
         borderColor: '#E2E8F0',
@@ -518,31 +542,50 @@ const styles = StyleSheet.create({
     sharedContentHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
-        paddingBottom: 8,
+        marginBottom: 0,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: '#F8FAFC',
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        borderBottomColor: '#E2E8F0',
     },
     sharedContentLabel: {
         marginLeft: 8,
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#4F46E5',
-        textTransform: 'uppercase',
-    },
-    sharedPostContent: {
-        paddingVertical: 8,
-    },
-    sharedPostAuthor: {
-        fontSize: 13,
+        fontSize: 11,
         fontWeight: '700',
         color: '#4F46E5',
-        marginBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    sharedPostContent: {
+        paddingVertical: 0,
+    },
+    sharedPostMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    sharedPostAuthor: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1E293B',
+        flex: 1,
     },
     sharedPostText: {
         fontSize: 14,
         lineHeight: 20,
-        color: '#334155',
+        color: '#64748B',
+    },
+    sharedPostTextContainer: {
+        padding: 12,
+        paddingTop: 10,
+        paddingBottom: 12,
+    },
+    sharedPostImage: {
+        width: '100%',
+        height: 200,
+        backgroundColor: '#F1F5F9',
     },
     sharedPostImageContainer: {
         flexDirection: 'row',
