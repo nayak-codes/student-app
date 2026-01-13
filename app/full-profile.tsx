@@ -26,6 +26,16 @@ import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Education } from '../src/services/authService';
+import {
+    acceptFriendRequest,
+    followUser,
+    getConnectionStatus,
+    getPendingFriendRequests,
+    rejectFriendRequest,
+    sendFriendRequest,
+    subscribeToNetworkStats,
+    unfollowUser
+} from '../src/services/connectionService';
 import { getUserResources, LibraryResource } from '../src/services/libraryService';
 import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
@@ -367,6 +377,18 @@ const ProfileScreen = () => {
     const [scrollY, setScrollY] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
+    // Connection state
+    const [connectionStatus, setConnectionStatus] = useState({
+        isFriend: false,
+        isFollowing: false,
+        isFollower: false,
+        friendshipStatus: 'none' as 'pending' | 'accepted' | 'none',
+        pendingRequestSentByMe: false,
+    });
+    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [loadingConnection, setLoadingConnection] = useState(false);
+
     // Data State
     const [posts, setPosts] = useState<Post[]>([]);
     const [resources, setResources] = useState<LibraryResource[]>([]);
@@ -376,7 +398,8 @@ const ProfileScreen = () => {
         posts: 0,
         likes: 0,
         followers: 0,
-        streak: 5,
+        friends: 0,
+        streak: 0,
     });
 
     // Modals State
@@ -440,7 +463,8 @@ const ProfileScreen = () => {
             setStats({
                 posts: userPosts.length + userResources.length,
                 likes: totalLikes,
-                followers: (displayProfile as any)?.connections?.length || Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2),
+                followers: (displayProfile as any)?.networkStats?.followersCount || (displayProfile as any)?.connections?.length || Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2),
+                friends: (displayProfile as any)?.networkStats?.friendsCount || 0,
                 streak: (displayProfile as any)?.progress?.studyStreak || 5,
             });
 
@@ -459,14 +483,123 @@ const ProfileScreen = () => {
         }
     };
 
+    // Load connection status and pending requests
+    const loadConnectionData = async () => {
+        if (!authUser) return;
+
+        try {
+            // Load pending requests (for notification badge)
+            const requests = await getPendingFriendRequests(authUser.uid);
+            setPendingRequests(requests);
+
+            // Load connection status with target user if not own profile
+            if (!isOwnProfile && targetUserId) {
+                const status = await getConnectionStatus(authUser.uid, targetUserId);
+                setConnectionStatus({
+                    isFriend: status.isFriend,
+                    isFollowing: status.isFollowing,
+                    isFollower: status.isFollower,
+                    friendshipStatus: status.friendshipStatus || 'none',
+                    pendingRequestSentByMe: status.pendingRequestSentByMe || false,
+                });
+            }
+        } catch (error) {
+            console.error('Error loading connection data:', error);
+        }
+    };
+
+    // Real-time stats subscription
+    useEffect(() => {
+        if (!targetUserId) return;
+
+        const unsubscribe = subscribeToNetworkStats(targetUserId, (newStats) => {
+            setStats(prev => ({
+                ...prev,
+                followers: newStats.followersCount,
+                friends: newStats.friendsCount || 0, // Ensure friends property exists in stats object if you plan to use it
+            }));
+
+            // Note: You might want to update other stats if they are part of the state
+            // For now, updating followers which maps to followersCount
+            // You may need to update the stats state definition to include friends count explicitly 
+            // or map it accordingly. 
+            // Assuming 'followers' in stats state is used for the Followers count display.
+            // If you want to show 'Network' count (friends), you should check where that is displayed.
+            // The user asked for "network and followers", so let's update accordingly.
+        });
+
+        return () => unsubscribe();
+    }, [targetUserId]);
+
+    // Handle connection actions
+    const handleConnect = async () => {
+        if (!targetUserId || !authUser || loadingConnection) return;
+
+        try {
+            setLoadingConnection(true);
+            await sendFriendRequest(targetUserId);
+            Alert.alert('Success', 'Friend request sent!');
+            await loadConnectionData();
+        } catch (error: any) {
+            console.error('Error sending friend request:', error);
+            Alert.alert('Error', error.message || 'Failed to send request');
+        } finally {
+            setLoadingConnection(false);
+        }
+    };
+
+    const handleFollow = async () => {
+        if (!targetUserId || !authUser || loadingConnection) return;
+
+        try {
+            setLoadingConnection(true);
+            if (connectionStatus.isFollowing) {
+                await unfollowUser(targetUserId);
+                Alert.alert('Success', 'Unfollowed');
+            } else {
+                await followUser(targetUserId);
+                Alert.alert('Success', 'Now following!');
+            }
+            await loadConnectionData();
+        } catch (error: any) {
+            console.error('Error following/unfollowing:', error);
+            Alert.alert('Error', error.message || 'Failed to follow/unfollow');
+        } finally {
+            setLoadingConnection(false);
+        }
+    };
+
+    const handleAcceptRequest = async (requestId: string) => {
+        try {
+            await acceptFriendRequest(requestId);
+            Alert.alert('Success', 'Friend request accepted!');
+            await loadConnectionData();
+        } catch (error) {
+            console.error('Error accepting request:', error);
+            Alert.alert('Error', 'Failed to accept request');
+        }
+    };
+
+    const handleRejectRequest = async (requestId: string) => {
+        try {
+            await rejectFriendRequest(requestId);
+            await loadConnectionData();
+        } catch (error) {
+            console.error('Error rejecting request:', error);
+            Alert.alert('Error', 'Failed to reject request');
+        }
+    };
+
     useEffect(() => {
         loadData();
+        loadConnectionData();
     }, [targetUserId]);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
         if (isOwnProfile && refreshProfile) await refreshProfile();
         await loadData();
+        await loadConnectionData();
         setIsRefreshing(false);
     };
 
@@ -588,6 +721,22 @@ const ProfileScreen = () => {
                                 <Ionicons name="arrow-back" size={20} color="#FFF" />
                             </TouchableOpacity>
                             <View style={{ flex: 1 }} />
+
+                            {/* Notification Bell with Badge */}
+                            <TouchableOpacity
+                                style={[styles.iconButtonBlur, { marginLeft: 8 }]}
+                                onPress={() => setShowNotifications(true)}
+                            >
+                                <Ionicons name="notifications-outline" size={20} color="#FFF" />
+                                {pendingRequests.length > 0 && (
+                                    <View style={styles.notificationBadge}>
+                                        <Text style={styles.notificationBadgeText}>
+                                            {pendingRequests.length}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+
                             {isOwnProfile && (
                                 <TouchableOpacity style={[styles.iconButtonBlur, { marginLeft: 8 }]}>
                                     <Ionicons name="settings-outline" size={20} color="#FFF" />
@@ -622,7 +771,12 @@ const ProfileScreen = () => {
                         <View style={styles.statsRow}>
                             <View style={styles.statItem}>
                                 <Text style={styles.statNumber}>{stats.followers}</Text>
-                                <Text style={styles.statLabel}>Connections</Text>
+                                <Text style={styles.statLabel}>Followers</Text>
+                            </View>
+                            <View style={styles.statDividerVertical} />
+                            <View style={styles.statItem}>
+                                <Text style={styles.statNumber}>{stats.friends}</Text>
+                                <Text style={styles.statLabel}>Network</Text>
                             </View>
                             <View style={styles.statDividerVertical} />
                             <View style={styles.statItem}>
@@ -662,9 +816,48 @@ const ProfileScreen = () => {
                                 </>
                             ) : (
                                 <>
-                                    <TouchableOpacity style={styles.ytPrimaryButton} onPress={() => Alert.alert('Connected', 'Request sent!')}>
-                                        <Text style={styles.ytPrimaryButtonText}>Connect</Text>
+                                    {/* Smart Connection Button */}
+                                    <TouchableOpacity
+                                        style={styles.ytPrimaryButton}
+                                        onPress={connectionStatus.isFriend ? undefined : handleConnect}
+                                        disabled={loadingConnection || connectionStatus.isFriend || connectionStatus.pendingRequestSentByMe}
+                                    >
+                                        {loadingConnection ? (
+                                            <ActivityIndicator size="small" color="#FFF" />
+                                        ) : (
+                                            <Text style={styles.ytPrimaryButtonText}>
+                                                {connectionStatus.isFriend
+                                                    ? '✓ Friends'
+                                                    : connectionStatus.pendingRequestSentByMe
+                                                        ? 'Request Sent'
+                                                        : 'Add Friend'}
+                                            </Text>
+                                        )}
                                     </TouchableOpacity>
+
+                                    {/* Follow Button */}
+                                    <TouchableOpacity
+                                        style={[styles.ytSecondaryButton, { marginRight: 8 }]}
+                                        onPress={handleFollow}
+                                        disabled={loadingConnection}
+                                    >
+                                        {loadingConnection ? (
+                                            <ActivityIndicator size="small" color="#4F46E5" />
+                                        ) : (
+                                            <>
+                                                <Ionicons
+                                                    name={connectionStatus.isFollowing ? "checkmark" : "person-add"}
+                                                    size={16}
+                                                    color="#4F46E5"
+                                                />
+                                                <Text style={[styles.ytSecondaryButtonText, { marginLeft: 4 }]}>
+                                                    {connectionStatus.isFollowing ? 'Following' : 'Follow'}
+                                                </Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+
+                                    {/* Message Button */}
                                     <TouchableOpacity
                                         style={styles.ytSecondaryButton}
                                         onPress={async () => {
@@ -823,6 +1016,90 @@ const ProfileScreen = () => {
                         style={styles.fullImage}
                         resizeMode="contain"
                     />
+                </View>
+            </Modal>
+
+            {/* Notifications Modal */}
+            <Modal
+                visible={showNotifications}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowNotifications(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <View style={{
+                        backgroundColor: '#FFF',
+                        borderTopLeftRadius: 20,
+                        borderTopRightRadius: 20,
+                        maxHeight: '80%',
+                        paddingTop: 20
+                    }}>
+                        {/* Header */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                            <Text style={{ fontSize: 20, fontWeight: '700', color: '#1E293B' }}>Friend Requests</Text>
+                            <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                                <Ionicons name="close" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Requests List */}
+                        <ScrollView style={{ maxHeight: '100%' }}>
+                            {pendingRequests.length === 0 ? (
+                                <View style={{ padding: 40, alignItems: 'center' }}>
+                                    <Ionicons name="mail-outline" size={64} color="#CBD5E1" />
+                                    <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '600', color: '#64748B' }}>
+                                        No pending requests
+                                    </Text>
+                                </View>
+                            ) : (
+                                pendingRequests.map((request) => (
+                                    <View key={request.id} style={{
+                                        flexDirection: 'row',
+                                        padding: 16,
+                                        borderBottomWidth: 1,
+                                        borderBottomColor: '#F1F5F9',
+                                        alignItems: 'center'
+                                    }}>
+                                        {/* Avatar */}
+                                        {request.photoURL ? (
+                                            <Image source={{ uri: request.photoURL }} style={{ width: 56, height: 56, borderRadius: 28 }} />
+                                        ) : (
+                                            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#4F46E5', justifyContent: 'center', alignItems: 'center' }}>
+                                                <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '700' }}>
+                                                    {request.name?.charAt(0).toUpperCase() || 'U'}
+                                                </Text>
+                                            </View>
+                                        )}
+
+                                        {/* Info */}
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={{ fontSize: 16, fontWeight: '600', color: '#1E293B' }}>{request.name || 'Unknown'}</Text>
+                                            <Text style={{ fontSize: 14, color: '#64748B', marginTop: 2 }}>{request.exam || 'Student'}</Text>
+                                        </View>
+
+                                        {/* Actions */}
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <TouchableOpacity
+                                                style={{ backgroundColor: '#4F46E5', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+                                                onPress={() => {
+                                                    handleAcceptRequest(request.id);
+                                                    setShowNotifications(false);
+                                                }}
+                                            >
+                                                <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '600' }}>Accept</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+                                                onPress={() => handleRejectRequest(request.id)}
+                                            >
+                                                <Text style={{ color: '#64748B', fontSize: 14, fontWeight: '600' }}>Reject</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ))
+                            )}
+                        </ScrollView>
+                    </View>
                 </View>
             </Modal>
 
@@ -1479,6 +1756,24 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '500',
         color: '#475569',
+    },
+    // Notification Badge Styles
+    notificationBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+    },
+    notificationBadgeText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '700',
     },
 });
 

@@ -1,8 +1,8 @@
-// Full Profile Details Page
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Image,
     ScrollView,
@@ -14,6 +14,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Education } from '../src/services/authService';
+import {
+    followUser,
+    getConnectionStatus,
+    sendFriendRequest,
+    unfollowUser
+} from '../src/services/connectionService';
 
 
 const ProfileDetailsScreen = () => {
@@ -27,6 +33,14 @@ const ProfileDetailsScreen = () => {
     }>();
 
     const [profileData, setProfileData] = useState<any>(null);
+    const [connectionStatus, setConnectionStatus] = useState({
+        isFriend: false,
+        isFollowing: false,
+        isFollower: false,
+        friendshipStatus: 'none' as 'pending' | 'accepted' | 'none',
+        pendingRequestSentByMe: false,
+    });
+    const [loadingConnection, setLoadingConnection] = useState(false);
 
     // Fetch user profile data
     useEffect(() => {
@@ -89,6 +103,82 @@ const ProfileDetailsScreen = () => {
         }
     };
 
+    // Load connection status
+    useEffect(() => {
+        const loadConnectionStatus = async () => {
+            if (userId && authUser && userId !== authUser.uid) {
+                try {
+                    const status = await getConnectionStatus(authUser.uid, userId);
+                    setConnectionStatus({
+                        isFriend: status.isFriend,
+                        isFollowing: status.isFollowing,
+                        isFollower: status.isFollower,
+                        friendshipStatus: status.friendshipStatus || 'none',
+                        pendingRequestSentByMe: status.pendingRequestSentByMe || false,
+                    });
+                } catch (error) {
+                    console.error('Error loading connection status:', error);
+                }
+            }
+        };
+        loadConnectionStatus();
+    }, [userId, authUser]);
+
+    const handleConnect = async () => {
+        if (!userId || !authUser || loadingConnection) return;
+
+        try {
+            setLoadingConnection(true);
+            await sendFriendRequest(userId);
+            Alert.alert('Success', 'Friend request sent!');
+
+            // Reload connection status
+            const status = await getConnectionStatus(authUser.uid, userId);
+            setConnectionStatus({
+                isFriend: status.isFriend,
+                isFollowing: status.isFollowing,
+                isFollower: status.isFollower,
+                friendshipStatus: status.friendshipStatus || 'none',
+                pendingRequestSentByMe: status.pendingRequestSentByMe || false,
+            });
+        } catch (error: any) {
+            console.error('Error sending friend request:', error);
+            Alert.alert('Error', error.message || 'Failed to send request');
+        } finally {
+            setLoadingConnection(false);
+        }
+    };
+
+    const handleFollow = async () => {
+        if (!userId || !authUser || loadingConnection) return;
+
+        try {
+            setLoadingConnection(true);
+            if (connectionStatus.isFollowing) {
+                await unfollowUser(userId);
+                Alert.alert('Success', 'Unfollowed');
+            } else {
+                await followUser(userId);
+                Alert.alert('Success', 'Now following!');
+            }
+
+            // Reload connection status
+            const status = await getConnectionStatus(authUser.uid, userId);
+            setConnectionStatus({
+                isFriend: status.isFriend,
+                isFollowing: status.isFollowing,
+                isFollower: status.isFollower,
+                friendshipStatus: status.friendshipStatus || 'none',
+                pendingRequestSentByMe: status.pendingRequestSentByMe || false,
+            });
+        } catch (error: any) {
+            console.error('Error following/unfollowing:', error);
+            Alert.alert('Error', error.message || 'Failed to follow/unfollow');
+        } finally {
+            setLoadingConnection(false);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
 
@@ -122,13 +212,51 @@ const ProfileDetailsScreen = () => {
             {/* Action Buttons */}
             {userId && userId !== authUser?.uid && (
                 <View style={styles.actionRow}>
+                    {/* Smart Connection Button */}
                     <TouchableOpacity
                         style={styles.primaryButton}
-                        onPress={() => Alert.alert('Connect', 'Connection request sent!')}
+                        onPress={connectionStatus.isFriend ? undefined : handleConnect}
+                        disabled={loadingConnection || connectionStatus.isFriend || connectionStatus.pendingRequestSentByMe}
                     >
-                        <Ionicons name="person-add" size={18} color="#FFF" />
-                        <Text style={styles.primaryButtonText}>Connect</Text>
+                        {loadingConnection ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                            <>
+                                <Ionicons name="person-add" size={18} color="#FFF" />
+                                <Text style={styles.primaryButtonText}>
+                                    {connectionStatus.isFriend
+                                        ? '✓ Friends'
+                                        : connectionStatus.pendingRequestSentByMe
+                                            ? 'Request Sent'
+                                            : 'Add Friend'}
+                                </Text>
+                            </>
+                        )}
                     </TouchableOpacity>
+
+                    {/* Follow Button */}
+                    <TouchableOpacity
+                        style={[styles.secondaryButton, { marginRight: 8 }]}
+                        onPress={handleFollow}
+                        disabled={loadingConnection}
+                    >
+                        {loadingConnection ? (
+                            <ActivityIndicator size="small" color="#4F46E5" />
+                        ) : (
+                            <>
+                                <Ionicons
+                                    name={connectionStatus.isFollowing ? "checkmark" : "person-add"}
+                                    size={18}
+                                    color="#4F46E5"
+                                />
+                                <Text style={styles.secondaryButtonText}>
+                                    {connectionStatus.isFollowing ? 'Following' : 'Follow'}
+                                </Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Message Button */}
                     <TouchableOpacity
                         style={styles.secondaryButton}
                         onPress={handleSendMessage}
@@ -226,12 +354,10 @@ const ProfileDetailsScreen = () => {
                     )}
                     <View style={styles.infoRow}>
                         <Ionicons name="school" size={20} color="#64748B" />
-                        <Text style={styles.infoText}>{userProfile?.exam || 'Student'}</Text>
+                        <Text style={styles.contactText}>{userProfile?.exam || 'Student'}</Text>
                     </View>
                 </View>
             </ScrollView>
-
-
         </SafeAreaView>
     );
 };
@@ -245,56 +371,140 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         backgroundColor: '#FFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
+        borderBottomColor: '#F1F5F9',
     },
     backButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+        padding: 4,
     },
     headerTitle: {
         fontSize: 18,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#1E293B',
     },
     placeholder: {
-        width: 40,
+        width: 32,
+    },
+    profileCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#FFF',
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
+    },
+    avatar: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+    },
+    avatarPlaceholder: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#4F46E5',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarInitials: {
+        color: '#FFF',
+        fontSize: 24,
+        fontWeight: '700',
+    },
+    profileInfo: {
+        marginLeft: 16,
+        flex: 1,
+    },
+    profileName: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1E293B',
+    },
+    profileRole: {
+        fontSize: 14,
+        color: '#64748B',
+        marginTop: 4,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        gap: 12,
+        paddingHorizontal: 16,
+        marginTop: 16,
+    },
+    primaryButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#4F46E5',
+        paddingVertical: 12,
+        borderRadius: 8,
+        gap: 8,
+    },
+    primaryButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    secondaryButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F1F5F9',
+        paddingVertical: 12,
+        borderRadius: 8,
+        gap: 8,
+    },
+    secondaryButtonText: {
+        color: '#4F46E5',
+        fontSize: 16,
+        fontWeight: '600',
     },
     content: {
         flex: 1,
     },
     section: {
         backgroundColor: '#FFF',
-        marginTop: 12,
-        paddingHorizontal: 20,
-        paddingVertical: 20,
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderRadius: 12,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
     },
     sectionTitle: {
         fontSize: 18,
         fontWeight: '700',
         color: '#1E293B',
-        marginBottom: 16,
+        marginBottom: 12,
     },
     aboutText: {
-        fontSize: 15,
-        lineHeight: 24,
-        color: '#334155',
+        fontSize: 14,
+        color: '#475569',
+        lineHeight: 22,
     },
     skillCategory: {
-        marginBottom: 20,
+        marginBottom: 16,
     },
     categoryTitle: {
         fontSize: 14,
         fontWeight: '600',
         color: '#64748B',
-        marginBottom: 12,
+        marginBottom: 8,
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
     },
     skillsContainer: {
         flexDirection: 'row',
@@ -309,37 +519,36 @@ const styles = StyleSheet.create({
     },
     technicalChip: {
         backgroundColor: '#EEF2FF',
-        borderColor: '#4F46E5',
+        borderColor: '#C7D2FE',
     },
     technicalText: {
-        fontSize: 14,
         color: '#4F46E5',
-        fontWeight: '500',
+        fontSize: 12,
+        fontWeight: '600',
     },
     softChip: {
-        backgroundColor: '#F0FDF4',
-        borderColor: '#10B981',
+        backgroundColor: '#ECFDF5',
+        borderColor: '#A7F3D0',
     },
     softText: {
-        fontSize: 14,
-        color: '#10B981',
-        fontWeight: '500',
+        color: '#059669',
+        fontSize: 12,
+        fontWeight: '600',
     },
     languageChip: {
-        backgroundColor: '#FFF7ED',
-        borderColor: '#F59E0B',
+        backgroundColor: '#FEF3C7',
+        borderColor: '#FDE68A',
     },
     languageText: {
-        fontSize: 14,
-        color: '#F59E0B',
-        fontWeight: '500',
+        color: '#D97706',
+        fontSize: 12,
+        fontWeight: '600',
     },
+    // Education Styles
     educationCard: {
         flexDirection: 'row',
+        alignItems: 'flex-start',
         marginBottom: 16,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
     },
     educationIcon: {
         width: 48,
@@ -353,499 +562,50 @@ const styles = StyleSheet.create({
     educationInfo: {
         flex: 1,
     },
+    educationItem: {
+        marginBottom: 16,
+    },
     educationInstitution: {
         fontSize: 16,
         fontWeight: '600',
         color: '#1E293B',
-        marginBottom: 4,
     },
     educationDegree: {
         fontSize: 14,
-        color: '#475569',
-        marginBottom: 2,
-    },
-    educationField: {
-        fontSize: 14,
         color: '#64748B',
-        marginBottom: 4,
+        marginTop: 2,
+    },
+    educationYear: {
+        fontSize: 12,
+        color: '#94A3B8',
+        marginTop: 2,
     },
     educationPeriod: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#94A3B8',
+        marginTop: 2,
+    },
+    // Contact/Info Styles
+    contactItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    contactText: {
+        fontSize: 14,
+        color: '#475569',
+        marginLeft: 12,
     },
     infoRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
         marginBottom: 12,
     },
     infoText: {
-        fontSize: 15,
-        color: '#334155',
-    },
-    /* New profile styles - removed duplicate, using the one below */
-    profileLeft: {
-        marginRight: 12,
-    },
-    avatar: {
-        width: 92,
-        height: 92,
-        borderRadius: 46,
-    },
-    avatarPlaceholder: {
-        width: 92,
-        height: 92,
-        borderRadius: 46,
-        backgroundColor: '#E6F0FF',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    avatarInitials: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: '#334155',
-    },
-    profileRight: {
-        flex: 1,
-    },
-    nameText: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#0F172A',
-    },
-    headlineText: {
-        fontSize: 13,
-        color: '#64748B',
-        marginTop: 2,
-        marginBottom: 6,
-    },
-    aboutTextSmall: {
         fontSize: 14,
-        color: '#475569',
-        marginBottom: 10,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 6,
-    },
-    statItem: {
-        alignItems: 'center',
-        minWidth: 56,
-    },
-    statNumber: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#0F172A',
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#64748B',
-    },
-    progressContainer: {
-        marginTop: 12,
-    },
-    progressBarBackground: {
-        height: 6,
-        backgroundColor: '#EEF2FF',
-        borderRadius: 6,
-        overflow: 'hidden',
-    },
-    progressBarFill: {
-        height: 6,
-        backgroundColor: '#4F46E5',
-    },
-    progressText: {
-        marginTop: 6,
-        fontSize: 12,
-        color: '#64748B',
-    },
-    actionRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        marginTop: 12,
-    },
-    primaryButton: {
-        flex: 1,
-        backgroundColor: '#4F46E5',
-        paddingVertical: 12,
-        borderRadius: 10,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 8,
-        marginRight: 8,
-        shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    primaryButtonText: {
-        color: '#FFF',
-        fontWeight: '700',
-        fontSize: 15,
-    },
-    ghostButton: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#E6E9F2',
-        paddingVertical: 12,
-        borderRadius: 10,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 18,
-    },
-    ghostButtonText: {
-        color: '#64748B',
-        fontWeight: '600',
-    },
-    secondaryButton: {
-        flex: 1,
-        backgroundColor: '#FFF',
-        paddingVertical: 12,
-        borderRadius: 10,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 8,
-        marginLeft: 8,
-        borderWidth: 1.5,
-        borderColor: '#4F46E5',
-    },
-    secondaryButtonText: {
-        color: '#4F46E5',
-        fontWeight: '700',
-        fontSize: 15,
-    },
-    profileCard: {
-        backgroundColor: '#FFF',
-        marginHorizontal: 16,
-        marginTop: 12,
-        marginBottom: 8,
-        borderRadius: 16,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    profileInfo: {
-        flex: 1,
+        color: '#334155',
         marginLeft: 12,
-    },
-    profileName: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1E293B',
-        marginBottom: 4,
-    },
-    profileRole: {
-        fontSize: 14,
-        color: '#64748B',
-        fontWeight: '500',
-    },
-
-    // Docs Styles
-    docsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        padding: 16,
-        gap: 12,
-    },
-    docCard: {
-        width: '31%',
-        aspectRatio: 0.8,
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 12,
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#000',
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-        elevation: 1,
-    },
-    docIconContainer: {
-        alignSelf: 'center',
-        marginVertical: 8,
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#FEF2F2',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    docTitle: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#1E293B',
-        textAlign: 'center',
-        marginBottom: 8,
-    },
-    docStats: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
-        paddingTop: 8,
-    },
-    docStat: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    docStatText: {
-        fontSize: 10,
-        color: '#64748B',
-    },
-
-    /* Tabs styles */
-    tabsContainer: {
-        flexDirection: 'row',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-        backgroundColor: '#FFF',
-        marginTop: 20,
-        paddingHorizontal: 16,
-    },
-    tab: {
         flex: 1,
-        paddingVertical: 12,
-        alignItems: 'center',
-        borderBottomWidth: 3,
-        borderBottomColor: 'transparent',
-    },
-    tabActive: {
-        borderBottomColor: '#6D28D9',
-    },
-    tabLabel: {
-        fontSize: 12,
-        color: '#94A3B8',
-        marginTop: 4,
-        fontWeight: '500',
-    },
-    tabLabelActive: {
-        color: '#6D28D9',
-    },
-    /* Feed styles */
-    feedContainer: {
-        marginTop: 16,
-    },
-    loaderContainer: {
-        height: 200,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    feedList: {
-        paddingHorizontal: 12,
-    },
-    emptyContainer: {
-        height: 300,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    emptyText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#94A3B8',
-        marginTop: 12,
-    },
-    emptySubtext: {
-        fontSize: 14,
-        color: '#CBD5E1',
-        marginTop: 4,
-    },
-    /* Post card styles */
-    postCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        marginVertical: 8,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    postHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-    },
-    userAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#6D28D9',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 8,
-    },
-    avatarText: {
-        color: '#FFF',
-        fontWeight: '700',
-        fontSize: 16,
-    },
-    userInfo: {
-        flex: 1,
-    },
-    userName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1E293B',
-    },
-    postType: {
-        fontSize: 12,
-        color: '#64748B',
-        marginTop: 2,
-    },
-    /* Grid Styles */
-    feedListGrid: {
-        paddingHorizontal: 0,
-        marginHorizontal: -1,
-    },
-    feedRow: {
-        gap: 1,
-    },
-    gridItem: {
-        flex: 1,
-        maxWidth: '33.33%',
-        aspectRatio: 1,
-        marginBottom: 1,
-        position: 'relative',
-        backgroundColor: '#f1f5f9',
-    },
-    gridImage: {
-        width: '100%',
-        height: '100%',
-    },
-    gridPlaceholder: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#cbd5e1',
-        padding: 4,
-    },
-    gridTextPreview: {
-        fontSize: 10,
-        color: '#475569',
-        textAlign: 'center',
-        marginTop: 4,
-    },
-    gridIconOverlay: {
-        position: 'absolute',
-        top: 4,
-        right: 4,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        borderRadius: 4,
-        padding: 2,
-    },
-    /* Modal Styles */
-    modalContainer: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-    },
-    closeButton: {
-        padding: 4,
-    },
-    modalTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#0F172A',
-    },
-    /* Post Image Styles */
-    postImage: {
-        width: '100%',
-        height: 300,
-    },
-    videoContainer: {
-        width: '100%',
-        height: 200,
-        backgroundColor: '#F1F5F9',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    videoText: {
-        marginTop: 8,
-        color: '#64748B',
-        fontSize: 14,
-    },
-    postContent: {
-        paddingHorizontal: 12,
-        paddingTop: 12,
-        paddingBottom: 8,
-    },
-    postText: {
-        fontSize: 14,
-        color: '#334155',
-        lineHeight: 20,
-    },
-    tagsContainer: {
-        flexDirection: 'row',
-        marginTop: 8,
-        flexWrap: 'wrap',
-    },
-    tag: {
-        marginRight: 6,
-        marginTop: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 6,
-    },
-    tagText: {
-        fontSize: 12,
-        color: '#4F46E5',
-        fontWeight: '500',
-    },
-    postFooter: {
-        flexDirection: 'row',
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
-    },
-    footerItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginRight: 20,
-    },
-    footerText: {
-        marginLeft: 4,
-        fontSize: 12,
-        color: '#64748B',
-    },
-    imageFallback: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.9)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-    },
-    fullImage: {
-        width: '100%',
-        height: '80%',
     },
 });
 
