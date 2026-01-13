@@ -31,6 +31,17 @@ export interface Post {
     likes: number;
     likedBy: string[]; // Array of user IDs who liked
     comments: number;
+    savedBy: string[]; // Array of user IDs who saved
+    createdAt: Date;
+}
+
+export interface Comment {
+    id: string;
+    postId: string;
+    userId: string;
+    userName: string;
+    userPhoto?: string;
+    text: string;
     createdAt: Date;
 }
 
@@ -52,6 +63,7 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt' | 'like
             likes: 0,
             comments: 0,
             likedBy: [],
+            savedBy: [],
             createdAt: Timestamp.now(),
         };
 
@@ -104,6 +116,7 @@ export const getAllPosts = async (limitCount: number = 50): Promise<Post[]> => {
                 likes: data.likes || 0,
                 likedBy: data.likedBy || [],
                 comments: data.comments || 0,
+                savedBy: data.savedBy || [],
                 createdAt: data.createdAt?.toDate() || new Date(),
             });
         });
@@ -145,6 +158,7 @@ export const getPostsByType = async (type: string): Promise<Post[]> => {
                 likes: data.likes || 0,
                 likedBy: data.likedBy || [],
                 comments: data.comments || 0,
+                savedBy: data.savedBy || [],
                 createdAt: data.createdAt?.toDate() || new Date(),
             });
         });
@@ -250,6 +264,7 @@ export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
                 likes: data.likes || 0,
                 likedBy: data.likedBy || [],
                 comments: data.comments || 0,
+                savedBy: data.savedBy || [],
                 createdAt: data.createdAt?.toDate() || new Date(),
             });
         });
@@ -294,6 +309,7 @@ export const getPostsByUserIdAndType = async (userId: string, type: string): Pro
                 likes: data.likes || 0,
                 likedBy: data.likedBy || [],
                 comments: data.comments || 0,
+                savedBy: data.savedBy || [],
                 createdAt: data.createdAt?.toDate() || new Date(),
             });
         });
@@ -337,6 +353,194 @@ export const hasUserLikedPost = async (postId: string, userId: string): Promise<
         return false;
     } catch (error) {
         console.error('Error checking if user liked post:', error);
+        return false;
+    }
+};
+
+// ==================== COMMENT FUNCTIONS ====================
+
+/**
+ * Add a comment to a post
+ */
+export const addComment = async (
+    postId: string,
+    userId: string,
+    userName: string,
+    userPhoto: string | undefined,
+    text: string
+): Promise<string> => {
+    try {
+        const commentData = {
+            postId,
+            userId,
+            userName,
+            userPhoto: userPhoto || '',
+            text,
+            createdAt: Timestamp.now(),
+        };
+
+        // Add comment to subcollection
+        const commentsRef = collection(db, POSTS_COLLECTION, postId, 'comments');
+        const docRef = await addDoc(commentsRef, commentData);
+
+        // Increment comment count on post
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        await updateDoc(postRef, {
+            comments: increment(1),
+        });
+
+        console.log('Comment added');
+        return docRef.id;
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get comments for a post
+ */
+export const getComments = async (postId: string): Promise<Comment[]> => {
+    try {
+        const commentsRef = collection(db, POSTS_COLLECTION, postId, 'comments');
+        const q = query(commentsRef, orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+
+        const comments: Comment[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            comments.push({
+                id: doc.id,
+                postId,
+                userId: data.userId,
+                userName: data.userName,
+                userPhoto: data.userPhoto,
+                text: data.text,
+                createdAt: data.createdAt?.toDate() || new Date(),
+            });
+        });
+
+        return comments;
+    } catch (error) {
+        console.error('Error getting comments:', error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a comment
+ */
+export const deleteComment = async (postId: string, commentId: string): Promise<void> => {
+    try {
+        const commentRef = doc(db, POSTS_COLLECTION, postId, 'comments', commentId);
+        await deleteDoc(commentRef);
+
+        // Decrement comment count on post
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        await updateDoc(postRef, {
+            comments: increment(-1),
+        });
+
+        console.log('Comment deleted');
+    } catch (error) {
+        console.error('Error deleting comment:', error);
+        throw error;
+    }
+};
+
+// ==================== SAVE POST FUNCTIONS ====================
+
+/**
+ * Save a post
+ */
+export const savePost = async (postId: string, userId: string): Promise<void> => {
+    try {
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        await updateDoc(postRef, {
+            savedBy: arrayUnion(userId),
+        });
+        console.log('Post saved');
+    } catch (error) {
+        console.error('Error saving post:', error);
+        throw error;
+    }
+};
+
+/**
+ * Unsave a post
+ */
+export const unsavePost = async (postId: string, userId: string): Promise<void> => {
+    try {
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        await updateDoc(postRef, {
+            savedBy: arrayRemove(userId),
+        });
+        console.log('Post unsaved');
+    } catch (error) {
+        console.error('Error unsaving post:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get saved posts for a user
+ */
+export const getSavedPosts = async (userId: string): Promise<Post[]> => {
+    try {
+        const q = query(
+            collection(db, POSTS_COLLECTION),
+            where('savedBy', 'array-contains', userId)
+        );
+
+        const querySnapshot = await getDocs(q);
+        const posts: Post[] = [];
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            posts.push({
+                id: doc.id,
+                userId: data.userId,
+                userName: data.userName,
+                userExam: data.userExam,
+                content: data.content,
+                type: data.type,
+                imageUrl: data.imageUrl,
+                videoLink: data.videoLink,
+                tags: data.tags || [],
+                likes: data.likes || 0,
+                likedBy: data.likedBy || [],
+                comments: data.comments || 0,
+                savedBy: data.savedBy || [],
+                createdAt: data.createdAt?.toDate() || new Date(),
+            });
+        });
+
+        // Sort by date
+        posts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+        return posts;
+    } catch (error) {
+        console.error('Error getting saved posts:', error);
+        throw error;
+    }
+};
+
+/**
+ * Check if user has saved a post
+ */
+export const hasUserSavedPost = async (postId: string, userId: string): Promise<boolean> => {
+    try {
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        const postSnap = await getDoc(postRef);
+
+        if (postSnap.exists()) {
+            const savedBy = postSnap.data().savedBy || [];
+            return savedBy.includes(userId);
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Error checking if user saved post:', error);
         return false;
     }
 };

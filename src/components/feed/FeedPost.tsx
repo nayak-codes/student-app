@@ -11,13 +11,16 @@ interface FeedPostProps {
     onLike: (postId: string) => void;
     onComment: (postId: string) => void;
     onShare: (postId: string) => void;
+    onSave: (postId: string) => void;
     currentUserLiked: boolean;
+    currentUserSaved: boolean;
 }
 
-const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, currentUserLiked }) => {
+const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, onSave, currentUserLiked, currentUserSaved }) => {
     const router = useRouter(); // Initialize router
     const [aspectRatio, setAspectRatio] = useState(1);
     const [liked, setLiked] = useState(currentUserLiked);
+    const [saved, setSaved] = useState(currentUserSaved);
     const [likeCount, setLikeCount] = useState(post.likes);
 
     React.useEffect(() => {
@@ -35,6 +38,11 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, c
         setLiked(newLikedState);
         setLikeCount(prev => newLikedState ? prev + 1 : prev - 1);
         onLike(post.id);
+    };
+
+    const handleSave = () => {
+        setSaved(!saved);
+        onSave(post.id);
     };
 
     const handleProfilePress = () => {
@@ -96,14 +104,23 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, c
                         />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => onComment(post.id)} style={styles.actionButton}>
-                        <Ionicons name="chatbubble-outline" size={26} color="#333" />
+                        <View style={styles.commentButtonContainer}>
+                            <Ionicons name="chatbubble-outline" size={26} color="#333" />
+                            {post.comments > 0 && (
+                                <Text style={styles.commentCount}>{post.comments}</Text>
+                            )}
+                        </View>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => onShare(post.id)} style={styles.actionButton}>
                         <Ionicons name="paper-plane-outline" size={26} color="#333" />
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity>
-                    <Ionicons name="bookmark-outline" size={26} color="#333" />
+                <TouchableOpacity onPress={handleSave}>
+                    <Ionicons
+                        name={saved ? "bookmark" : "bookmark-outline"}
+                        size={26}
+                        color={saved ? "#4F46E5" : "#333"}
+                    />
                 </TouchableOpacity>
             </View>
 
@@ -231,6 +248,25 @@ const styles = StyleSheet.create({
     },
     captionUsername: {
         fontWeight: '700',
+    },
+    commentButtonContainer: {
+        position: 'relative',
+    },
+    commentCount: {
+        position: 'absolute',
+        top: -6,
+        right: -8,
+        backgroundColor: '#4F46E5',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        paddingHorizontal: 4,
+        justifyContent: 'center',
+        alignItems: 'center',
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FFF',
+        textAlign: 'center',
     },
 });
 

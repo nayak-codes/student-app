@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import PostDetailModal from '../src/components/PostDetailModal';
 import { auth } from '../src/config/firebase';
 import {
     markMessagesAsRead,
@@ -32,6 +33,8 @@ const ChatScreen = () => {
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const [postModalVisible, setPostModalVisible] = useState(false);
+    const [selectedPost, setSelectedPost] = useState<any>(null);
     const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
@@ -89,9 +92,9 @@ const ChatScreen = () => {
         const minutes = date.getMinutes();
         const ampm = hours >= 12 ? 'PM' : 'AM';
         const displayHours = hours % 12 || 12;
-        const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+        const displayMinutes = minutes < 10 ? `0${minutes} ` : minutes;
 
-        return `${displayHours}:${displayMinutes} ${ampm}`;
+        return `${displayHours}:${displayMinutes} ${ampm} `;
     };
 
     const renderMessage = ({ item, index }: { item: Message; index: number }) => {
@@ -102,6 +105,8 @@ const ChatScreen = () => {
         const showDateDivider = index === 0 ||
             (messages[index - 1] &&
                 Math.abs(item.timestamp?.toMillis() - messages[index - 1].timestamp?.toMillis()) > 3600000); // 1 hour
+
+        const isSharedContent = item.messageType === 'sharedPost' || item.messageType === 'sharedPDF';
 
         return (
             <View>
@@ -136,27 +141,94 @@ const ChatScreen = () => {
                             )}
                         </View>
                     )}
-                    <View
-                        style={[
-                            styles.messageBubble,
-                            isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
-                        ]}
-                    >
-                        <Text
+
+                    {/* Render shared content or normal message */}
+                    {isSharedContent && item.sharedContent ? (
+                        <TouchableOpacity
                             style={[
-                                styles.messageText,
-                                isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                                styles.sharedContentCard,
+                                isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard
+                            ]}
+                            onPress={() => {
+                                if (item.messageType === 'sharedPost' && item.sharedContent?.contentData) {
+                                    setSelectedPost(item.sharedContent.contentData);
+                                    setPostModalVisible(true);
+                                }
+                            }}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.sharedContentHeader}>
+                                <Ionicons
+                                    name={item.messageType === 'sharedPost' ? 'document-text' : 'document'}
+                                    size={20}
+                                    color="#4F46E5"
+                                />
+                                <Text style={styles.sharedContentLabel}>
+                                    {item.messageType === 'sharedPost' ? 'Shared Post' : 'Shared Document'}
+                                </Text>
+                            </View>
+
+                            {item.messageType === 'sharedPost' && item.sharedContent.contentData ? (
+                                <View style={styles.sharedPostContent}>
+                                    {/* Image first if available */}
+                                    {item.sharedContent.contentData.imageUrl && (
+                                        <Image
+                                            source={{ uri: item.sharedContent.contentData.imageUrl }}
+                                            style={styles.sharedPostImage}
+                                            resizeMode="cover"
+                                        />
+                                    )}
+
+                                    {/* Author and content */}
+                                    <View style={styles.sharedPostTextContainer}>
+                                        <View style={styles.sharedPostMeta}>
+                                            <Text style={styles.sharedPostAuthor}>
+                                                {item.sharedContent.contentData.userName}
+                                            </Text>
+                                            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+                                        </View>
+                                        <Text style={styles.sharedPostText} numberOfLines={2}>
+                                            {item.sharedContent.contentData.content}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ) : item.messageType === 'sharedPDF' && item.sharedContent.contentData ? (
+                                <View style={styles.sharedPDFContent}>
+                                    <Ionicons name="document" size={32} color="#4F46E5" />
+                                    <Text style={styles.sharedPDFTitle}>
+                                        {item.sharedContent.contentData.title || 'Untitled Document'}
+                                    </Text>
+                                    <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+                                </View>
+                            ) : null}
+
+                            <Text style={styles.sharedContentTime}>
+                                {formatMessageTime(item.timestamp)}
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <View
+                            style={[
+                                styles.messageBubble,
+                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
                             ]}
                         >
-                            {item.text}
-                        </Text>
-                        <Text style={[
-                            styles.messageTimeInline,
-                            isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline
-                        ]}>
-                            {formatMessageTime(item.timestamp)}
-                        </Text>
-                    </View>
+                            <Text
+                                style={[
+                                    styles.messageText,
+                                    isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                                ]}
+                            >
+                                {item.text}
+                            </Text>
+                            <Text style={[
+                                styles.messageTimeInline,
+                                isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline
+                            ]}>
+                                {formatMessageTime(item.timestamp)}
+                            </Text>
+                        </View>
+                    )}
                 </View>
             </View>
         );
@@ -266,6 +338,16 @@ const ChatScreen = () => {
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
+
+            {/* Post Detail Modal */}
+            <PostDetailModal
+                visible={postModalVisible}
+                onClose={() => {
+                    setPostModalVisible(false);
+                    setSelectedPost(null);
+                }}
+                postData={selectedPost}
+            />
         </SafeAreaView>
     );
 };
@@ -443,6 +525,107 @@ const styles = StyleSheet.create({
     },
     otherMessageTimeInline: {
         color: '#94A3B8',
+        textAlign: 'right',
+    },
+    // Shared Content Card Styles
+    sharedContentCard: {
+        minWidth: '85%',
+        maxWidth: '100%',
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        padding: 0,
+        shadowColor: '#000',
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        overflow: 'hidden',
+    },
+    ownSharedCard: {
+        borderColor: '#C7D2FE',
+    },
+    otherSharedCard: {
+        borderColor: '#E2E8F0',
+    },
+    sharedContentHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 0,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: '#F8FAFC',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+    },
+    sharedContentLabel: {
+        marginLeft: 8,
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#4F46E5',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    sharedPostContent: {
+        paddingVertical: 0,
+    },
+    sharedPostMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    sharedPostAuthor: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1E293B',
+        flex: 1,
+    },
+    sharedPostText: {
+        fontSize: 14,
+        lineHeight: 20,
+        color: '#64748B',
+    },
+    sharedPostTextContainer: {
+        padding: 12,
+        paddingTop: 10,
+        paddingBottom: 12,
+    },
+    sharedPostImage: {
+        width: '100%',
+        height: 200,
+        backgroundColor: '#F1F5F9',
+    },
+    sharedPostImageContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+    },
+    sharedPostImageText: {
+        marginLeft: 6,
+        fontSize: 12,
+        color: '#64748B',
+    },
+    sharedPDFContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+    sharedPDFTitle: {
+        marginLeft: 12,
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1E293B',
+        flex: 1,
+    },
+    sharedContentTime: {
+        fontSize: 10,
+        color: '#94A3B8',
+        marginTop: 8,
         textAlign: 'right',
     },
     inputContainer: {
