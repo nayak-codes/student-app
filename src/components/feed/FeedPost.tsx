@@ -47,7 +47,7 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
 
     const handleProfilePress = () => {
         router.push({
-            pathname: '/profile-details',
+            pathname: '/public-profile',
             params: {
                 userId: post.userId,
                 userName: post.userName,

@@ -260,7 +260,7 @@ const SearchScreen = () => {
         } else if (item.type === 'user') {
             const user = item.data as UserProfile;
             router.push({
-                pathname: '/full-profile',
+                pathname: '/public-profile',
                 params: { userId: user.id }
             });
         } else if (item.type === 'post') {
