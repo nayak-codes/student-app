@@ -231,7 +231,44 @@ const PostCard: React.FC<{
 
 // ... (existing imports)
 
-// Resource Grid Item Component
+// Video List Item Component - YouTube Style
+const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({ post, onPress }) => {
+    return (
+        <TouchableOpacity
+            style={styles.videoListItem}
+            activeOpacity={0.9}
+            onPress={() => onPress(post)}
+        >
+            {/* Thumbnail */}
+            <View style={styles.videoListThumbnailContainer}>
+                {post.imageUrl ? (
+                    <Image source={{ uri: post.imageUrl }} style={styles.videoListThumbnail} resizeMode="cover" />
+                ) : (
+                    <View style={[styles.videoListThumbnail, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Ionicons name="play-circle" size={32} color="#FFF" />
+                    </View>
+                )}
+                <View style={styles.videoDurationBadge}>
+                    <Text style={styles.videoDurationText}>3:45</Text>{/* Mock Duration */}
+                </View>
+            </View>
+
+            {/* Details */}
+            <View style={styles.videoListDetails}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={styles.videoListTitle} numberOfLines={2}>{post.content || 'Untitled Video'}</Text>
+                    <TouchableOpacity style={{ paddingLeft: 8 }}>
+                        <Ionicons name="ellipsis-vertical" size={16} color="#0F172A" />
+                    </TouchableOpacity>
+                </View>
+                <Text style={styles.videoListMeta}>
+                    {post.userName} • {post.likes || 0} views • 2 hours ago
+                </Text>
+            </View>
+        </TouchableOpacity>
+    );
+};
+
 // Resource Grid Item Component - Professional Card Style
 const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource: LibraryResource) => void }> = ({ resource, onPress }) => {
     return (
@@ -413,6 +450,7 @@ const ProfileScreen = () => {
 
     const [detailModalVisible, setDetailModalVisible] = useState(false);
     const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list'); // Default to list view
 
     const [viewerVisible, setViewerVisible] = useState(false);
     const [viewerUri, setViewerUri] = useState<string>('');
@@ -674,17 +712,53 @@ const ProfileScreen = () => {
         }
     };
 
-    // Filter Logic
-    const getDisplayPosts = () => {
+    // Filter & Sort Logic
+    const getFilteredAndSortedContent = () => {
+        let content: any[] = [];
+        const isDocs = activeTab === 'docs';
+
+        // 1. Filter by Tab
         switch (activeTab) {
+            case 'home':
+                content = [...posts]; // Show all posts in Home
+                break;
+            case 'posts':
+                content = posts.filter(p => p.type === 'image' || p.type === 'note' || p.type === 'news');
+                break;
             case 'videos':
-                return posts.filter(p => p.type === 'video' || !!p.videoLink);
-            case 'videos':
-                return posts.filter(p => p.type === 'video' || !!p.videoLink);
+                content = posts.filter(p => p.type === 'video' || !!p.videoLink);
+                break;
+            case 'docs':
+                content = [...resources];
+                break;
+            case 'more':
+                content = []; // Placeholder for now
+                break;
             default:
-                return [];
+                content = [...posts];
         }
+
+        // 2. Sort
+        return content.sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            const likesA = a.likes || 0;
+            const likesB = b.likes || 0;
+
+            switch (filterType) {
+                case 'recent':
+                    return dateB - dateA; // Newest first
+                case 'old':
+                    return dateA - dateB; // Oldest first
+                case 'popular':
+                    return likesB - likesA; // Most likes first
+                default:
+                    return 0;
+            }
+        });
     };
+
+    const hasContent = getFilteredAndSortedContent().length > 0;
 
     if (loadingProfile && !displayProfile) {
         return (
@@ -777,7 +851,12 @@ const ProfileScreen = () => {
                         {/* Bio - Left align */}
                         {about && (
                             <View style={styles.ytBioContainer}>
-                                <Text style={styles.ytBioText} numberOfLines={3}>{about}</Text>
+                                <Text style={styles.ytBioText} numberOfLines={3}>
+                                    {about}
+                                    <Text style={{ color: '#4F46E5', fontWeight: '600' }} onPress={() => router.push({ pathname: '/profile-details', params: { userId: targetUserId } })}>
+                                        {' '}...more
+                                    </Text>
+                                </Text>
                                 {institution && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, opacity: 0.8 }}>
                                         <Ionicons name="school-outline" size={14} color="#475569" />
@@ -884,34 +963,6 @@ const ProfileScreen = () => {
                                 </>
                             )}
                         </View>
-
-                        {/* Highlights (Middle Section like Instagram) */}
-                        {isOwnProfile && (
-                            <View style={styles.highlightsContainer}>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 0, gap: 20 }}>
-                                    <TouchableOpacity style={styles.highlightItem}>
-                                        <View style={[styles.highlightIconCircle, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
-                                            <Ionicons name="trophy-outline" size={22} color="#F59E0B" />
-                                        </View>
-                                        <Text style={styles.highlightLabel}>Awards</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity style={styles.highlightItem} onPress={() => router.push('/document-vault')}>
-                                        <View style={[styles.highlightIconCircle, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
-                                            <Ionicons name="folder-open-outline" size={22} color="#EF4444" />
-                                        </View>
-                                        <Text style={styles.highlightLabel}>Vault</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity style={styles.highlightItem}>
-                                        <View style={[styles.highlightIconCircle, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
-                                            <Ionicons name="settings-outline" size={22} color="#64748B" />
-                                        </View>
-                                        <Text style={styles.highlightLabel}>Settings</Text>
-                                    </TouchableOpacity>
-                                </ScrollView>
-                            </View>
-                        )}
                     </View>
                 </View>
 
@@ -955,39 +1006,160 @@ const ProfileScreen = () => {
                     </ScrollView>
                 </View>
 
-                {/* Sub-Section Filters (Recent, Old, Popular) */}
-                <View style={styles.subFilterContainer}>
-                    {['recent', 'old', 'popular'].map((type) => (
-                        <TouchableOpacity
-                            key={type}
-                            style={[styles.subFilterChip, filterType === type && styles.subFilterChipActive]}
-                            onPress={() => setFilterType(type as any)}
-                        >
-                            <Text style={[styles.subFilterText, filterType === type && styles.subFilterTextActive]}>
-                                {type.charAt(0).toUpperCase() + type.slice(1)}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}
+                {activeTab !== 'home' && (
+                    <View style={styles.subFilterContainer}>
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            {['recent', 'old', 'popular'].map((type) => (
+                                <TouchableOpacity
+                                    key={type}
+                                    style={[styles.subFilterChip, filterType === type && styles.subFilterChipActive]}
+                                    onPress={() => setFilterType(type as any)}
+                                >
+                                    <Text style={[styles.subFilterText, filterType === type && styles.subFilterTextActive]}>
+                                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* View Toggle (Grid/List) - Visible only for Posts */}
+                        {activeTab === 'posts' && (
+                            <TouchableOpacity
+                                style={{ marginLeft: 'auto', padding: 8 }}
+                                onPress={() => setViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
+                            >
+                                <Ionicons
+                                    name={viewMode === 'grid' ? "list" : "grid-outline"}
+                                    size={20}
+                                    color="#64748B"
+                                />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
 
                 {/* Content Grid */}
                 <View style={styles.contentSection}>
                     <View style={styles.postsGrid}>
-                        {getDisplayPosts().length === 0 ? (
+                        {!hasContent ? (
                             <View style={styles.emptyPostsState}>
-                                <Ionicons name="school-outline" size={48} color="#CBD5E1" />
-                                <Text style={styles.emptyTitle}>{isOwnProfile ? 'Share your knowledge' : 'No posts yet'}</Text>
-                                {isOwnProfile && <Text style={{ color: '#94A3B8', marginTop: 4, fontSize: 13 }}>Upload notes or videos to inspire others.</Text>}
+                                <Ionicons name={activeTab === 'docs' ? "document-text-outline" : "school-outline"} size={48} color="#CBD5E1" />
+                                <Text style={styles.emptyTitle}>{isOwnProfile ? 'Share your knowledge' : 'No content yet'}</Text>
+                                {isOwnProfile && <Text style={{ color: '#94A3B8', marginTop: 4, fontSize: 13 }}>Upload {activeTab === 'docs' ? 'documents' : 'posts'} to inspire others.</Text>}
                             </View>
                         ) : (
-                            <View style={styles.gridContainer}>
-                                {getDisplayPosts().map((item: any) => (
-                                    <PostGridItem
-                                        key={item.id}
-                                        post={item}
-                                        onPress={openPostModal}
-                                    />
-                                ))}
+                            <View style={[
+                                styles.gridContainer,
+                                (activeTab === 'videos' || activeTab === 'posts') && viewMode === 'list' && { flexDirection: 'column', flexWrap: 'nowrap', paddingHorizontal: 16 }
+                            ]}>
+                                {activeTab === 'home' ? (
+                                    <View>
+                                        {/* Latest Posts Section */}
+                                        <View style={styles.homeSectionHeader}>
+                                            <Text style={styles.homeSectionTitle}>Latest Posts</Text>
+                                            <TouchableOpacity onPress={() => setActiveTab('posts')}>
+                                                <Text style={styles.seeAllText}>See All</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+                                            {posts.filter(p => !p.videoLink && p.type !== 'video').slice(0, 5).map((item) => (
+                                                <View key={item.id} style={{ width: 320, marginRight: 16 }}>
+                                                    <PostCard
+                                                        post={item}
+                                                        onPress={openPostModal}
+                                                        onImagePress={openImageViewer}
+                                                        onVideoPress={openVideo}
+                                                    // Minimal props for preview
+                                                    />
+                                                </View>
+                                            ))}
+                                            {posts.filter(p => !p.videoLink && p.type !== 'video').length === 0 && (
+                                                <Text style={{ color: '#94A3B8', fontStyle: 'italic' }}>No recent posts</Text>
+                                            )}
+                                        </ScrollView>
+
+                                        {/* Videos Section */}
+                                        <View style={styles.homeSectionHeader}>
+                                            <Text style={styles.homeSectionTitle}>Videos</Text>
+                                            <TouchableOpacity onPress={() => setActiveTab('videos')}>
+                                                <Text style={styles.seeAllText}>See All</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <View>
+                                            {posts.filter(p => p.type === 'video' || !!p.videoLink).slice(0, 3).map((item) => (
+                                                <VideoListItem key={item.id} post={item} onPress={openPostModal} />
+                                            ))}
+                                            {posts.filter(p => p.type === 'video' || !!p.videoLink).length === 0 && (
+                                                <Text style={{ color: '#94A3B8', fontStyle: 'italic', marginBottom: 16 }}>No videos yet</Text>
+                                            )}
+                                        </View>
+
+                                        {/* Docs Section */}
+                                        <View style={styles.homeSectionHeader}>
+                                            <Text style={styles.homeSectionTitle}>Documents</Text>
+                                            <TouchableOpacity onPress={() => setActiveTab('docs')}>
+                                                <Text style={styles.seeAllText}>See All</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+                                            {resources.slice(0, 5).map((item) => (
+                                                <View key={item.id} style={{ width: 280, marginRight: 12 }}>
+                                                    <ResourceGridItem resource={item} onPress={openResource} />
+                                                </View>
+                                            ))}
+                                            {resources.length === 0 && (
+                                                <Text style={{ color: '#94A3B8', fontStyle: 'italic' }}>No documents</Text>
+                                            )}
+                                        </ScrollView>
+                                    </View>
+                                ) : activeTab === 'docs' ? (
+                                    getFilteredAndSortedContent().map((item: any) => (
+                                        <ResourceGridItem
+                                            key={item.id}
+                                            resource={item}
+                                            onPress={openResource}
+                                        />
+                                    ))
+                                ) : activeTab === 'videos' ? (
+                                    getFilteredAndSortedContent().map((item: any) => (
+                                        <VideoListItem
+                                            key={item.id}
+                                            post={item}
+                                            onPress={openPostModal}
+                                        />
+                                    ))
+                                ) : activeTab === 'posts' ? (
+                                    viewMode === 'list' ? (
+                                        getFilteredAndSortedContent().map((item: any) => (
+                                            <PostCard
+                                                key={item.id}
+                                                post={item}
+                                                onImagePress={openImageViewer}
+                                                onVideoPress={openVideo}
+                                                onPress={openPostModal}
+                                                onDelete={isOwnProfile ? handleDeletePost : undefined}
+                                                onEdit={isOwnProfile ? handleEditPost : undefined}
+                                            />
+                                        ))
+                                    ) : (
+                                        getFilteredAndSortedContent().map((item: any) => (
+                                            <PostGridItem
+                                                key={item.id}
+                                                post={item}
+                                                onPress={openPostModal}
+                                            />
+                                        ))
+                                    )
+                                ) : (
+                                    getFilteredAndSortedContent().map((item: any) => (
+                                        <PostGridItem
+                                            key={item.id}
+                                            post={item}
+                                            onPress={openPostModal}
+                                        />
+                                    ))
+                                )}
                             </View>
                         )}
                     </View>
@@ -1181,7 +1353,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     profileInfoContainer: {
-        paddingHorizontal: 16,
+        paddingHorizontal: 16, // Keep standard edge spacing
         paddingTop: 12,
         paddingBottom: 4,
     },
@@ -1189,7 +1361,7 @@ const styles = StyleSheet.create({
         marginTop: -48, // Overlap banner slightly (half of 96)
         marginBottom: 12,
         alignItems: 'flex-start', // Left align
-        paddingLeft: 20, // Add padding for left alignment
+        // paddingLeft removed to align with parent container
     },
     ytAvatar: {
         width: 96,
@@ -1205,12 +1377,12 @@ const styles = StyleSheet.create({
         color: '#0F172A',
         marginBottom: 4,
         textAlign: 'left', // Left align
-        paddingHorizontal: 20, // Match avatar padding
+        // paddingHorizontal removed
     },
     ytHandleRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20, // Match alignment
+        // paddingHorizontal removed
         marginBottom: 16,
     },
     ytHandleText: {
@@ -1244,7 +1416,7 @@ const styles = StyleSheet.create({
     },
     ytBioContainer: {
         marginTop: 0,
-        paddingHorizontal: 20,
+        // paddingHorizontal removed
         alignItems: 'flex-start', // Left align
         marginBottom: 24,
     },
@@ -1264,7 +1436,7 @@ const styles = StyleSheet.create({
         gap: 12,
         marginTop: 8,
         marginBottom: 32,
-        paddingHorizontal: 20, // Match padding
+        paddingHorizontal: 0, // Removed extra padding
     },
     ytPrimaryButton: {
         backgroundColor: '#4F46E5',
@@ -1818,6 +1990,77 @@ const styles = StyleSheet.create({
     },
     subFilterTextActive: {
         color: '#4F46E5',
+    },
+    // Video List Item Styles
+    videoListItem: {
+        flexDirection: 'row',
+        marginBottom: 12,
+        gap: 12,
+        backgroundColor: '#FFF',
+    },
+    videoListThumbnailContainer: {
+        width: 140, // Fixed width for Thumbnail
+        aspectRatio: 16 / 9,
+        borderRadius: 8,
+        overflow: 'hidden',
+        position: 'relative',
+        backgroundColor: '#F1F5F9', // Placeholder color
+    },
+    videoListThumbnail: {
+        width: '100%',
+        height: '100%',
+    },
+    videoDurationBadge: {
+        position: 'absolute',
+        bottom: 4,
+        right: 4,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        borderRadius: 4,
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+    },
+    videoDurationText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '600',
+    },
+    videoListDetails: {
+        flex: 1,
+        paddingVertical: 4,
+    },
+    videoListTitle: {
+        fontSize: 14,
+        fontWeight: '500', // Semi-bold for title
+        color: '#0F172A',
+        lineHeight: 20,
+        marginBottom: 4,
+    },
+    videoListMeta: {
+        fontSize: 12,
+        color: '#64748B',
+    },
+    // Home Tab Section Styles
+    homeSectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        marginTop: 24,
+        marginBottom: 12,
+    },
+    homeSectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#0F172A',
+    },
+    seeAllText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#4F46E5',
+    },
+    horizontalList: {
+        paddingHorizontal: 16,
+        paddingBottom: 8,
     },
 });
 
