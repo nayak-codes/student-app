@@ -40,7 +40,7 @@ import { getUserResources, LibraryResource } from '../src/services/libraryServic
 import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type TabType = 'videos' | 'reels';
+type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'more';
 
 // Edit Post Modal
 const EditPostModal: React.FC<{
@@ -373,7 +373,8 @@ const ProfileScreen = () => {
     const [loadingProfile, setLoadingProfile] = useState(false);
 
     // UI State
-    const [activeTab, setActiveTab] = useState<TabType>('videos');
+    const [activeTab, setActiveTab] = useState<TabType>('posts');
+    const [filterType, setFilterType] = useState<'recent' | 'old' | 'popular'>('recent');
     const [scrollY, setScrollY] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -678,8 +679,7 @@ const ProfileScreen = () => {
         switch (activeTab) {
             case 'videos':
                 return posts.filter(p => p.type === 'video' || !!p.videoLink);
-            case 'reels':
-                // For demo, reusing videos or maybe short videos
+            case 'videos':
                 return posts.filter(p => p.type === 'video' || !!p.videoLink);
             default:
                 return [];
@@ -765,32 +765,16 @@ const ProfileScreen = () => {
                                 <Text style={styles.roleBadgeText}>{role}</Text>
                             </View>
                         </View>
-                        <Text style={styles.ytHandle}>@{username}</Text>
-
-                        {/* Stats Row */}
-                        <View style={styles.statsRow}>
-                            <View style={styles.statItem}>
-                                <Text style={styles.statNumber}>{stats.followers}</Text>
-                                <Text style={styles.statLabel}>Followers</Text>
-                            </View>
-                            <View style={styles.statDividerVertical} />
-                            <View style={styles.statItem}>
-                                <Text style={styles.statNumber}>{stats.friends}</Text>
-                                <Text style={styles.statLabel}>Network</Text>
-                            </View>
-                            <View style={styles.statDividerVertical} />
-                            <View style={styles.statItem}>
-                                <Text style={styles.statNumber}>{stats.posts}</Text>
-                                <Text style={styles.statLabel}>Uploads</Text>
-                            </View>
-                            <View style={styles.statDividerVertical} />
-                            <View style={styles.statItem}>
-                                <Text style={styles.statNumber}>{stats.streak}🔥</Text>
-                                <Text style={styles.statLabel}>Streak</Text>
-                            </View>
+                        {/* Handle & Stats Combined Row */}
+                        <View style={styles.ytHandleRow}>
+                            <Text style={styles.ytHandleText}>@{username}</Text>
+                            <Text style={styles.ytHandleSeparator}>•</Text>
+                            <Text style={styles.ytHandleText}>{stats.followers} Followers</Text>
+                            <Text style={styles.ytHandleSeparator}>•</Text>
+                            <Text style={styles.ytHandleText}>{stats.posts} Posts</Text>
                         </View>
 
-                        {/* Bio */}
+                        {/* Bio - Left align */}
                         {about && (
                             <View style={styles.ytBioContainer}>
                                 <Text style={styles.ytBioText} numberOfLines={3}>{about}</Text>
@@ -802,6 +786,8 @@ const ProfileScreen = () => {
                                 )}
                             </View>
                         )}
+
+
 
                         {/* Actions */}
                         <View style={styles.ytActionsRow}>
@@ -898,12 +884,54 @@ const ProfileScreen = () => {
                                 </>
                             )}
                         </View>
+
+                        {/* Highlights (Middle Section like Instagram) */}
+                        {isOwnProfile && (
+                            <View style={styles.highlightsContainer}>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 0, gap: 20 }}>
+                                    <TouchableOpacity style={styles.highlightItem}>
+                                        <View style={[styles.highlightIconCircle, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+                                            <Ionicons name="trophy-outline" size={22} color="#F59E0B" />
+                                        </View>
+                                        <Text style={styles.highlightLabel}>Awards</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity style={styles.highlightItem} onPress={() => router.push('/document-vault')}>
+                                        <View style={[styles.highlightIconCircle, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+                                            <Ionicons name="folder-open-outline" size={22} color="#EF4444" />
+                                        </View>
+                                        <Text style={styles.highlightLabel}>Vault</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity style={styles.highlightItem}>
+                                        <View style={[styles.highlightIconCircle, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+                                            <Ionicons name="settings-outline" size={22} color="#64748B" />
+                                        </View>
+                                        <Text style={styles.highlightLabel}>Settings</Text>
+                                    </TouchableOpacity>
+                                </ScrollView>
+                            </View>
+                        )}
                     </View>
                 </View>
 
                 {/* Tabs */}
                 <View style={styles.ytTabsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ytTabsContent}>
+                        <TouchableOpacity
+                            style={[styles.ytTab, activeTab === 'home' && styles.ytTabActive]}
+                            onPress={() => setActiveTab('home')}
+                        >
+                            <Text style={[styles.ytTabText, activeTab === 'home' && styles.ytTabTextActive]}>Home</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.ytTab, activeTab === 'posts' && styles.ytTabActive]}
+                            onPress={() => setActiveTab('posts')}
+                        >
+                            <Text style={[styles.ytTabText, activeTab === 'posts' && styles.ytTabTextActive]}>Posts</Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity
                             style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive]}
                             onPress={() => setActiveTab('videos')}
@@ -912,12 +940,34 @@ const ProfileScreen = () => {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'reels' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('reels')}
+                            style={[styles.ytTab, activeTab === 'docs' && styles.ytTabActive]}
+                            onPress={() => setActiveTab('docs')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'reels' && styles.ytTabTextActive]}>Clips</Text>
+                            <Text style={[styles.ytTabText, activeTab === 'docs' && styles.ytTabTextActive]}>Docs</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.ytTab, activeTab === 'more' && styles.ytTabActive]}
+                            onPress={() => setActiveTab('more')}
+                        >
+                            <Text style={[styles.ytTabText, activeTab === 'more' && styles.ytTabTextActive]}>More</Text>
                         </TouchableOpacity>
                     </ScrollView>
+                </View>
+
+                {/* Sub-Section Filters (Recent, Old, Popular) */}
+                <View style={styles.subFilterContainer}>
+                    {['recent', 'old', 'popular'].map((type) => (
+                        <TouchableOpacity
+                            key={type}
+                            style={[styles.subFilterChip, filterType === type && styles.subFilterChipActive]}
+                            onPress={() => setFilterType(type as any)}
+                        >
+                            <Text style={[styles.subFilterText, filterType === type && styles.subFilterTextActive]}>
+                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
 
                 {/* Content Grid */}
@@ -943,33 +993,6 @@ const ProfileScreen = () => {
                     </View>
                 </View>
 
-                {/* Highlights (Only for Own Profile for now, or maybe simplified for public) */}
-                {isOwnProfile && (
-                    <View style={styles.highlightsContainer}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}>
-                            <TouchableOpacity style={styles.highlightItem}>
-                                <View style={[styles.highlightIconCircle, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5' }]}>
-                                    <Ionicons name="trophy" size={20} color="#F59E0B" />
-                                </View>
-                                <Text style={styles.highlightLabel}>Awards</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.highlightItem} onPress={() => router.push('/document-vault')}>
-                                <View style={[styles.highlightIconCircle, { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' }]}>
-                                    <Ionicons name="document-text" size={20} color="#EF4444" />
-                                </View>
-                                <Text style={styles.highlightLabel}>Vault</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.highlightItem}>
-                                <View style={[styles.highlightIconCircle, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}>
-                                    <Ionicons name="settings" size={20} color="#64748B" />
-                                </View>
-                                <Text style={styles.highlightLabel}>Settings</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                )}
             </ScrollView>
 
             <EditProfileModal
@@ -1163,33 +1186,42 @@ const styles = StyleSheet.create({
         paddingBottom: 4,
     },
     ytAvatarContainer: {
-        marginTop: -40, // Overlap banner slightly
+        marginTop: -48, // Overlap banner slightly (half of 96)
         marginBottom: 12,
+        alignItems: 'flex-start', // Left align
+        paddingLeft: 20, // Add padding for left alignment
     },
     ytAvatar: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        borderWidth: 3,
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        borderWidth: 4,
         borderColor: '#FFF',
-        backgroundColor: '#FFF', // Ensure non-transparent for shadow
+        backgroundColor: '#FFF',
     },
     ytName: {
-        fontSize: 24,
-        fontWeight: '800', // Bold/Heavy font
+        fontSize: 26,
+        fontWeight: '800',
         color: '#0F172A',
-        marginBottom: 2,
+        marginBottom: 4,
+        textAlign: 'left', // Left align
+        paddingHorizontal: 20, // Match avatar padding
     },
     ytHandleRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        flexWrap: 'wrap',
+        paddingHorizontal: 20, // Match alignment
+        marginBottom: 16,
     },
-    ytHandle: {
+    ytHandleText: {
         fontSize: 14,
         fontWeight: '500',
         color: '#64748B',
-        marginBottom: 12,
+    },
+    ytHandleSeparator: {
+        marginHorizontal: 8,
+        color: '#CBD5E1',
+        fontSize: 14,
     },
     roleBadge: {
         backgroundColor: '#EEF2FF',
@@ -1205,113 +1237,98 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         textTransform: 'uppercase',
     },
-    statsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        paddingVertical: 16,
-        paddingHorizontal: 8,
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
-        marginVertical: 12,
-    },
-    statItem: {
-        alignItems: 'center',
-    },
-    statNumber: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#0F172A',
-        marginBottom: 2,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#64748B',
-        fontWeight: '500',
-    },
     statDividerVertical: {
         width: 1,
-        height: 24,
+        height: 32, // Taller divider
         backgroundColor: '#E2E8F0',
     },
     ytBioContainer: {
-        marginTop: 4,
-        paddingHorizontal: 4,
+        marginTop: 0,
+        paddingHorizontal: 20,
+        alignItems: 'flex-start', // Left align
+        marginBottom: 24,
     },
     ytBioText: {
-        fontSize: 14,
+        fontSize: 15, // Improved readability
         color: '#334155',
-        lineHeight: 22,
+        lineHeight: 24,
+        textAlign: 'left', // Left align
     },
     ytLinkText: {
-        color: '#334155',
-        fontWeight: '500',
+        color: '#4F46E5', // Color link
+        fontWeight: '600',
         fontSize: 13,
     },
     ytActionsRow: {
         flexDirection: 'row',
         gap: 12,
-        marginTop: 16,
-        marginBottom: 8,
+        marginTop: 8,
+        marginBottom: 32,
+        paddingHorizontal: 20, // Match padding
     },
     ytPrimaryButton: {
-        backgroundColor: '#4F46E5', // Solid Indigo
-        paddingVertical: 10,
+        backgroundColor: '#4F46E5',
+        paddingVertical: 14, // Taller buttons
         paddingHorizontal: 20,
-        borderRadius: 8,
+        borderRadius: 12,
         flex: 1,
         alignItems: 'center',
         shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3, // Stronger shadow
+        shadowRadius: 10,
+        elevation: 6,
+        height: 52,
+        justifyContent: 'center',
     },
     ytPrimaryButtonText: {
         color: '#FFF',
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
     },
     ytSecondaryButton: {
         backgroundColor: '#FFF',
-        paddingVertical: 10,
+        paddingVertical: 14,
         paddingHorizontal: 20,
-        borderRadius: 8,
+        borderRadius: 12,
         flex: 1,
         alignItems: 'center',
-        borderWidth: 1,
+        borderWidth: 1.5, // Thicker border
         borderColor: '#E2E8F0',
+        height: 52,
+        justifyContent: 'center',
     },
     ytSecondaryButtonText: {
         color: '#334155',
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
     },
     // YouTube Tabs
     // Pill Tabs
     ytTabsContainer: {
-        marginBottom: 0,
-        paddingVertical: 0,
-        borderBottomWidth: 0,
         backgroundColor: '#FFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        flexDirection: 'row',
     },
     ytTabsContent: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingHorizontal: 0,
+        paddingVertical: 0,
+        flexGrow: 1,
     },
     ytTab: {
-        paddingVertical: 6,
-        paddingHorizontal: 14,
-        borderRadius: 8,
-        marginRight: 8,
-        backgroundColor: '#F8FAFC',
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        marginRight: 0,
+        backgroundColor: 'transparent',
+        borderRadius: 0,
     },
     ytTabActive: {
-        backgroundColor: '#0F172A', // Active Pill Color
-        borderRadius: 20,
-        borderWidth: 0,
+        borderBottomWidth: 2,
+        borderBottomColor: '#0F172A',
+        backgroundColor: 'transparent',
     },
     ytTabText: {
         fontSize: 14,
@@ -1319,7 +1336,7 @@ const styles = StyleSheet.create({
         color: '#64748B',
     },
     ytTabTextActive: {
-        color: '#FFF',
+        color: '#0F172A',
     },
     contentSection: {
         flex: 1,
@@ -1757,7 +1774,6 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: '#475569',
     },
-    // Notification Badge Styles
     notificationBadge: {
         position: 'absolute',
         top: -4,
@@ -1774,6 +1790,34 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 10,
         fontWeight: '700',
+    },
+    // Sub Filter Styles
+    subFilterContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        gap: 12,
+        backgroundColor: '#FFF',
+    },
+    subFilterChip: {
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    subFilterChipActive: {
+        backgroundColor: '#EEF2FF',
+        borderColor: '#4F46E5',
+    },
+    subFilterText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#64748B',
+    },
+    subFilterTextActive: {
+        color: '#4F46E5',
     },
 });
 
