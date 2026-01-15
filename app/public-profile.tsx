@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -474,6 +474,13 @@ const ProfileScreen = () => {
     const institution = (displayProfile as any)?.institution || (displayProfile as any)?.education?.[0]?.institution;
 
 
+
+    // Use Ref to track latest profile for async loadData
+    const displayProfileRef = useRef(displayProfile);
+    useEffect(() => {
+        displayProfileRef.current = displayProfile;
+    }, [displayProfile]);
+
     // 6. Data Fetching
     const loadData = async () => {
         if (!targetUserId) return;
@@ -505,12 +512,14 @@ const ProfileScreen = () => {
                 userResources.reduce((sum, doc) => sum + (doc.likes || 0), 0);
             const totalHelpful = userResources.reduce((sum, doc) => sum + (doc.downloads || 0), 0);
 
+            const currentProfile = displayProfileRef.current as any;
+
             setStats({
                 posts: userPosts.length + userResources.length,
                 likes: totalLikes,
-                followers: (displayProfile as any)?.networkStats?.followersCount || (displayProfile as any)?.connections?.length || 0,
-                friends: (displayProfile as any)?.networkStats?.friendsCount || 0,
-                streak: (displayProfile as any)?.progress?.studyStreak || 5,
+                followers: currentProfile?.networkStats?.followersCount ?? currentProfile?.connections?.length ?? 0,
+                friends: currentProfile?.networkStats?.friendsCount ?? 0,
+                streak: currentProfile?.progress?.studyStreak ?? 5,
             });
 
             if (isOwnProfile) {

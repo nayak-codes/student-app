@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -475,6 +475,12 @@ const ProfileScreen = () => {
     const institution = (displayProfile as any)?.institution || (displayProfile as any)?.education?.[0]?.institution;
 
 
+    // Use Ref to track latest profile for async loadData
+    const displayProfileRef = useRef(displayProfile);
+    useEffect(() => {
+        displayProfileRef.current = displayProfile;
+    }, [displayProfile]);
+
     // 6. Data Fetching
     const loadData = async () => {
         if (!targetUserId) return;
@@ -505,12 +511,14 @@ const ProfileScreen = () => {
                 userResources.reduce((sum: number, doc: LibraryResource) => sum + (doc.likes || 0), 0);
             const totalHelpful = userResources.reduce((sum: number, doc: LibraryResource) => sum + (doc.downloads || 0), 0);
 
+            const currentProfile = displayProfileRef.current as any;
+
             setStats({
                 posts: userPosts.length + userResources.length,
                 likes: totalLikes,
-                followers: (displayProfile as any)?.networkStats?.followersCount || (displayProfile as any)?.connections?.length || Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2),
-                friends: (displayProfile as any)?.networkStats?.friendsCount || 0,
-                streak: (displayProfile as any)?.progress?.studyStreak || 5,
+                followers: currentProfile?.networkStats?.followersCount ?? currentProfile?.connections?.length ?? Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2),
+                friends: currentProfile?.networkStats?.friendsCount ?? 0,
+                streak: currentProfile?.progress?.studyStreak ?? 5,
             });
 
             if (isOwnProfile) {
@@ -573,8 +581,25 @@ const ProfileScreen = () => {
             // The user asked for "network and followers", so let's update accordingly.
         });
 
+
         return () => unsubscribe();
     }, [targetUserId]);
+
+    // Sync profile-based stats when profile data loads/updates (Fix for 0 count on login)
+    useEffect(() => {
+        if (displayProfile) {
+            const p = displayProfile as any;
+            // Only update if we have actual stats data to avoid overwriting with 0s from authUser
+            if (p.networkStats || p.connections) {
+                setStats(prev => ({
+                    ...prev,
+                    followers: p.networkStats?.followersCount ?? p.connections?.length ?? prev.followers,
+                    friends: p.networkStats?.friendsCount ?? prev.friends,
+                    streak: p.progress?.studyStreak ?? prev.streak
+                }));
+            }
+        }
+    }, [displayProfile]);
 
     // Handle connection actions
     const handleConnect = async () => {

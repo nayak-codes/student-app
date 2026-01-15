@@ -1,5 +1,6 @@
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { storage } from '../config/firebase';
+import { uploadImageToImgBB } from '../utils/imgbbUpload';
 
 /**
  * Upload a file to Firebase Storage
@@ -78,12 +79,8 @@ export const uploadPostImage = async (
  */
 export const uploadProfilePhoto = async (userId: string, uri: string): Promise<string> => {
     try {
-        // Convert URI to blob
-        const response = await fetch(uri);
-        const blob = await response.blob();
-
-        // Upload using existing uploadAvatar function
-        return await uploadAvatar(userId, blob);
+        // Upload to ImgBB (bypassing Firebase Storage CORS issues)
+        return await uploadImageToImgBB(uri);
     } catch (error: any) {
         console.error('❌ Profile photo upload error:', error.message);
         throw new Error(error.message);

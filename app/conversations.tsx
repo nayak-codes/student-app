@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRootNavigationState, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -28,7 +28,12 @@ const ConversationsScreen = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
+    const rootNavigationState = useRootNavigationState();
+
     useEffect(() => {
+        // Ensure navigation is ready
+        if (!rootNavigationState?.key) return;
+
         const currentUser = auth.currentUser;
         if (!currentUser) {
             router.replace('/login');
@@ -44,7 +49,7 @@ const ConversationsScreen = () => {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [rootNavigationState?.key]);
 
     useEffect(() => {
         if (searchQuery.trim()) {
