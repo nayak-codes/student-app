@@ -18,6 +18,7 @@ import {
     View
 } from 'react-native';
 import { auth } from '../../src/config/firebase';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { getUserProfile } from '../../src/services/authService';
 import {
     EventCategory,
@@ -79,6 +80,7 @@ const CATEGORY_FILTERS: Record<string, FilterGroup[]> = {
 
 const EventsScreen = () => {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
 
     // Data State
     const [events, setEvents] = useState<EventItem[]>([]);
@@ -297,26 +299,42 @@ const EventsScreen = () => {
 
 
 
-    const getCategoryStyle = (category: EventCategory) => {
-        const techCategories = ['Hackathons', 'Workshops', 'College Events'];
-        const examCategories = ['JEE', 'NEET', 'EAMCET', 'BITSAT', 'VITEEE', 'Board Exams'];
-        const resourceCategories = ['Model Papers', 'Syllabus', 'Counselling', 'Career Guidance', 'Scholarships', 'Study Tips'];
+    const getBadgeColors = (category: EventCategory | string) => {
+        const techCategories = ['Hackathons', 'Workshops', 'College Events', 'Internships', 'Jobs', 'Board Exams'];
+        const examCategories = ['JEE', 'NEET', 'EAMCET', 'BITSAT', 'VITEEE', 'PolyCET', 'Govt Jobs'];
+        const resourceCategories = ['Model Papers', 'Syllabus', 'Counselling', 'Career Guidance', 'Scholarships', 'Study Tips', 'Results'];
 
         if (techCategories.includes(category)) {
-            return { badge: styles.badgeTech, text: styles.badgeTextTech };
+            return {
+                bg: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF',
+                border: isDark ? 'rgba(79, 70, 229, 0.5)' : '#C7D2FE',
+                text: isDark ? '#A5B4FC' : '#4F46E5'
+            };
         }
         if (examCategories.includes(category)) {
-            return { badge: styles.badgeExam, text: styles.badgeTextExam };
+            return {
+                bg: isDark ? 'rgba(220, 38, 38, 0.2)' : '#FEF2F2',
+                border: isDark ? 'rgba(220, 38, 38, 0.5)' : '#FECACA',
+                text: isDark ? '#FCA5A5' : '#DC2626'
+            };
         }
         if (resourceCategories.includes(category)) {
-            return { badge: styles.badgeResources, text: styles.badgeTextResources };
+            return {
+                bg: isDark ? 'rgba(5, 150, 105, 0.2)' : '#ECFDF5',
+                border: isDark ? 'rgba(5, 150, 105, 0.5)' : '#A7F3D0',
+                text: isDark ? '#6EE7B7' : '#059669'
+            };
         }
-        return { badge: styles.badgeGeneral, text: styles.badgeTextGeneral };
+        return {
+            bg: isDark ? '#334155' : '#F1F5F9',
+            border: isDark ? '#475569' : '#E2E8F0',
+            text: isDark ? '#94A3B8' : '#64748B'
+        };
     };
 
     // Full Width Card for Single Column Feed
     const renderEventCard = ({ item }: { item: EventItem }) => {
-        const categoryStyle = getCategoryStyle(item.category);
+        const badgeColors = getBadgeColors(item.category);
 
         const handleCardPress = () => {
             router.push({
@@ -326,28 +344,32 @@ const EventsScreen = () => {
         };
 
         return (
-            <TouchableOpacity style={styles.card} onPress={handleCardPress} activeOpacity={0.7}>
+            <TouchableOpacity
+                style={[styles.card, { backgroundColor: colors.card }]}
+                onPress={handleCardPress}
+                activeOpacity={0.7}
+            >
                 {item.image && (
                     <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
                 )}
                 <View style={styles.cardContent}>
                     <View style={styles.badgeContainer}>
-                        <View style={[styles.badge, categoryStyle.badge]}>
-                            <Text style={[styles.badgeText, categoryStyle.text]}>{item.category}</Text>
+                        <View style={[styles.badge, { backgroundColor: badgeColors.bg, borderColor: badgeColors.border, borderWidth: 1 }]}>
+                            <Text style={[styles.badgeText, { color: badgeColors.text }]}>{item.category}</Text>
                         </View>
                     </View>
-                    <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
+                    <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
                     <View style={styles.metaRow}>
-                        <Ionicons name="business-outline" size={14} color="#6B7280" />
-                        <Text style={styles.metaText} numberOfLines={1}>{item.organization}</Text>
+                        <Ionicons name="business-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>{item.organization}</Text>
                     </View>
                     <View style={styles.metaRow}>
-                        <Ionicons name="calendar-outline" size={14} color="#6B7280" />
-                        <Text style={styles.metaText}>{item.date}</Text>
+                        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>{item.date}</Text>
                     </View>
                     <View style={styles.metaRow}>
-                        <Ionicons name={item.isOnline ? "globe-outline" : "location-outline"} size={14} color="#6B7280" />
-                        <Text style={styles.metaText} numberOfLines={1}>{item.location}</Text>
+                        <Ionicons name={item.isOnline ? "globe-outline" : "location-outline"} size={14} color={colors.textSecondary} />
+                        <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>{item.location}</Text>
                     </View>
                 </View>
             </TouchableOpacity>
@@ -355,32 +377,47 @@ const EventsScreen = () => {
     };
 
     // Horizontal Rec Card
-    const renderRecommendedCard = ({ item }: { item: EventItem }) => (
-        <TouchableOpacity style={styles.recCard}>
-            <View style={styles.recContent}>
-                <View style={[styles.badge, getBadgeStyle(item.category), { marginBottom: 8, alignSelf: 'flex-start' }]}>
-                    <Text style={styles.badgeText}>{item.category}</Text>
+    const renderRecommendedCard = ({ item }: { item: EventItem }) => {
+        const badgeColors = getBadgeColors(item.category);
+        return (
+            <TouchableOpacity style={[styles.recCard, { backgroundColor: isDark ? '#1E293B' : '#1E293B' }]}>
+                {/* Keep Rec Card dark always or adjust? Usually Rec Cards are promoted, maybe keeping them dark is a design choice. 
+                   But let's stick to colors.card if standard, or specific dark style. 
+                   Original code had #1E293B (Slate 800) hardcoded. 
+                   Let's make it consistent with card color but maybe inverted if intended to stand out? 
+                   No, let's use colors.card but maybe slightly different? 
+                   Actually, recommended cards in the original design looked like "Dark" cards even in light mode (since text was White/Grey).
+                   Let's keep them Dark for pop, OR adapt. 
+                   For now, I'll keep them as "inverted" cards if in light mode, or standard cards in dark mode.
+                   Wait, original styles: recCard bg #1E293B, title #FFF. So it was ALWAYS dark.
+                   I will preserve that "Always Dark" look for Premium feel, or maybe adapt. 
+                   Let's adapt to colors.card for 'clean' look.
+                   Actually, if I make it colors.card in Light Mode (White), I need to change text colors too.
+                   Let's make it use colors.card (White/Black) and proper text colors.
+                */}
+                <View style={styles.recContent}>
+                    <View style={[styles.badge, { backgroundColor: badgeColors.bg, borderColor: badgeColors.border, borderWidth: 1, marginBottom: 8, alignSelf: 'flex-start' }]}>
+                        <Text style={[styles.badgeText, { color: badgeColors.text }]}>{item.category}</Text>
+                    </View>
+                    <Text style={[styles.recTitle, { color: '#FFF' }]} numberOfLines={2}>{item.title}</Text>
+                    <Text style={[styles.recOrg, { color: '#94A3B8' }]} numberOfLines={1}>{item.organization}</Text>
+                    <Text style={[styles.recDate, { color: '#CBD5E1' }]}>{item.date}</Text>
                 </View>
-                <Text style={styles.recTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.recOrg} numberOfLines={1}>{item.organization}</Text>
-                <Text style={styles.recDate}>{item.date}</Text>
-            </View>
-            {item.image && <Image source={{ uri: item.image }} style={styles.recImage} />}
-        </TouchableOpacity>
-    );
-
-    const getBadgeStyle = (category: string) => {
-        if (['Hackathons', 'Internships', 'Jobs', 'Board Exams'].includes(category)) return styles.badgeTech;
-        if (['JEE', 'NEET', 'EAMCET', 'PolyCET', 'Govt Jobs'].includes(category)) return styles.badgeExam;
-        if (['Scholarships', 'Results', 'Career Guidance'].includes(category)) return styles.badgeResources;
-        return styles.badgeGeneral;
+                {item.image && <Image source={{ uri: item.image }} style={styles.recImage} />}
+            </TouchableOpacity>
+        );
     };
+    // Note: I kept Rec Card hardcoded dark colors because the original was hardcoded dark (#1E293B background, #FFF text) 
+    // even though the surrounding app was light. It acts as a "Featured" generic component. 
+    // I shall verify this decision. If I use `colors.card` (White in light mode), it loses prominence. 
+    // So I will keep it hardcoded Dark for now, or use a specific "primaryCard" color.
+    // I'll leave Rec Card as is (Hardcoded Dark) for high contrast features, but ensure it looks good in Dark Mode (it's already dark).
 
     const renderHeader = () => (
         <View>
             {/* Sub Filters */}
             {userPreferences.length > 0 ? (
-                <View style={styles.subFilterContainer}>
+                <View style={[styles.subFilterContainer, { backgroundColor: colors.background }]}>
                     <FlatList
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -391,13 +428,15 @@ const EventsScreen = () => {
                             <TouchableOpacity
                                 style={[
                                     styles.subFilterChip,
-                                    activeSubFilter === item && styles.subFilterChipActive
+                                    { backgroundColor: colors.card, borderColor: colors.border },
+                                    activeSubFilter === item && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
                                 ]}
                                 onPress={() => setActiveSubFilter(item as EventCategory | 'All')}
                             >
                                 <Text style={[
                                     styles.subFilterText,
-                                    activeSubFilter === item && styles.subFilterTextActive
+                                    { color: colors.textSecondary },
+                                    activeSubFilter === item && { color: colors.primary }
                                 ]}>{item}</Text>
                             </TouchableOpacity>
                         )}
@@ -410,7 +449,7 @@ const EventsScreen = () => {
                 <View style={styles.sectionContainer}>
                     <View style={styles.sectionHeader}>
                         <Ionicons name="sparkles" size={18} color="#F59E0B" />
-                        <Text style={styles.sectionTitleText}>Recommended for You</Text>
+                        <Text style={[styles.sectionTitleText, { color: colors.text }]}>Recommended for You</Text>
                     </View>
                     <FlatList
                         data={recommendedEvents}
@@ -425,15 +464,15 @@ const EventsScreen = () => {
 
             {/* Main Feed Title with Filter Button */}
             <View style={styles.feedHeader}>
-                <Text style={styles.feedTitle}>
+                <Text style={[styles.feedTitle, { color: colors.text }]}>
                     {activeSubFilter !== 'All' ? activeSubFilter : 'Your Feed'}
                 </Text>
                 {activeSubFilter !== 'All' && getCurrentFilters().length > 0 && (
                     <TouchableOpacity
-                        style={styles.feedFilterButton}
+                        style={[styles.feedFilterButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                         onPress={() => setShowFilterModal(true)}
                     >
-                        <Ionicons name="filter" size={18} color="#4F46E5" />
+                        <Ionicons name="filter" size={18} color={colors.primary} />
                         {getActiveFilterCount() > 0 && (
                             <View style={styles.filterBadge}>
                                 <Text style={styles.filterBadgeText}>{getActiveFilterCount()}</Text>
@@ -446,44 +485,44 @@ const EventsScreen = () => {
     );
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
             {/* Sticky Header with Tab */}
-            <View style={styles.stickyHeader}>
+            <View style={[styles.stickyHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
                 <View style={styles.tabContainer}>
-                    <View style={styles.activeTab}>
-                        <Text style={styles.tabText}>For You</Text>
+                    <View style={[styles.activeTab, { borderBottomColor: colors.primary }]}>
+                        <Text style={[styles.tabText, { color: colors.primary }]}>For You</Text>
                     </View>
                 </View>
             </View>
 
             {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <View style={styles.searchInputWrapper}>
-                    <Ionicons name="search-outline" size={20} color="#94A3B8" style={styles.searchIcon} />
+            <View style={[styles.searchContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border }]}>
+                    <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
                     <TextInput
-                        style={styles.searchInput}
+                        style={[styles.searchInput, { color: colors.text }]}
                         placeholder="Search events..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={colors.textSecondary}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                            <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
                     )}
                 </View>
-                <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.filterButton}>
-                    <Ionicons name="options-outline" size={20} color="#4F46E5" />
+                <TouchableOpacity onPress={() => setModalVisible(true)} style={[styles.filterButton, { backgroundColor: isDark ? colors.card : '#EEF2FF', borderColor: isDark ? colors.border : '#C7D2FE' }]}>
+                    <Ionicons name="options-outline" size={20} color={colors.primary} />
                 </TouchableOpacity>
             </View>
 
             {/* Main Feed */}
             {loading ? (
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#4F46E5" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             ) : (
                 <FlatList
@@ -494,13 +533,13 @@ const EventsScreen = () => {
                     ListHeaderComponent={renderHeader}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#4F46E5']} />
+                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
                     }
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
-                            <Ionicons name="calendar-clear-outline" size={64} color="#CBD5E1" />
-                            <Text style={styles.emptyTitle}>No events found</Text>
-                            <Text style={styles.emptySubtitle}>
+                            <Ionicons name="calendar-clear-outline" size={64} color={colors.textSecondary} />
+                            <Text style={[styles.emptyTitle, { color: colors.text }]}>No events found</Text>
+                            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                                 {activeSubFilter !== 'All'
                                     ? `No events found for ${activeSubFilter}`
                                     : "Try adjusting your preferences."}
@@ -518,25 +557,25 @@ const EventsScreen = () => {
                 onRequestClose={() => setModalVisible(false)}
             >
                 <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Customize Your Feed</Text>
+                    <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+                        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>Customize Your Feed</Text>
                             <TouchableOpacity onPress={() => setModalVisible(false)}>
-                                <Ionicons name="close" size={24} color="#333" />
+                                <Ionicons name="close" size={24} color={colors.text} />
                             </TouchableOpacity>
                         </View>
 
                         <ScrollView contentContainerStyle={styles.modalScrollContent}>
                             {/* Recommendations Toggle */}
-                            <View style={styles.toggleSection}>
+                            <View style={[styles.toggleSection, { borderBottomColor: colors.border }]}>
                                 <View style={styles.toggleRow}>
                                     <View style={styles.toggleLabelContainer}>
-                                        <Text style={styles.toggleLabel}>Show Recommendations</Text>
-                                        <Text style={styles.toggleSubLabel}>Hide to reduce distractions</Text>
+                                        <Text style={[styles.toggleLabel, { color: colors.text }]}>Show Recommendations</Text>
+                                        <Text style={[styles.toggleSubLabel, { color: colors.textSecondary }]}>Hide to reduce distractions</Text>
                                     </View>
                                     <TouchableOpacity
                                         onPress={() => setShowRecommendations(!showRecommendations)}
-                                        style={[styles.toggleSwitch, showRecommendations && styles.toggleSwitchActive]}
+                                        style={[styles.toggleSwitch, { backgroundColor: showRecommendations ? colors.primary : colors.border }]}
                                     >
                                         <View style={[styles.toggleThumb, showRecommendations && styles.toggleThumbActive]} />
                                     </TouchableOpacity>
@@ -545,20 +584,22 @@ const EventsScreen = () => {
 
                             {CATEGORY_GROUPS.map((group, index) => (
                                 <View key={index} style={styles.groupContainer}>
-                                    <Text style={styles.modalSectionHeader}>{group.title}</Text>
+                                    <Text style={[styles.modalSectionHeader, { color: colors.textSecondary }]}>{group.title}</Text>
                                     <View style={styles.gridContainer}>
                                         {group.data.map((item) => (
                                             <TouchableOpacity
                                                 key={item}
                                                 style={[
                                                     styles.gridItem,
-                                                    tempPreferences.includes(item) && styles.gridItemSelected
+                                                    { backgroundColor: colors.card, borderColor: colors.border },
+                                                    tempPreferences.includes(item) && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
                                                 ]}
                                                 onPress={() => togglePreference(item)}
                                             >
                                                 <Text style={[
                                                     styles.gridItemText,
-                                                    tempPreferences.includes(item) && styles.gridItemTextSelected
+                                                    { color: colors.textSecondary },
+                                                    tempPreferences.includes(item) && { color: colors.primary, fontWeight: '600' }
                                                 ]}>
                                                     {item}
                                                 </Text>
@@ -569,15 +610,15 @@ const EventsScreen = () => {
                             ))}
                         </ScrollView>
 
-                        <View style={styles.modalFooter}>
+                        <View style={[styles.modalFooter, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
+                                style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                                 onPress={() => setModalVisible(false)}
                             >
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                                <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.saveButton]}
+                                style={[styles.modalButton, styles.saveButton, { backgroundColor: colors.primary }]}
                                 onPress={savePreferences}
                             >
                                 <Text style={styles.saveButtonText}>Save Changes</Text>
@@ -595,20 +636,20 @@ const EventsScreen = () => {
                 onRequestClose={() => setShowFilterModal(false)}
             >
                 <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+                        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>
                                 Filter {activeSubFilter}
                             </Text>
                             <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-                                <Ionicons name="close" size={24} color="#333" />
+                                <Ionicons name="close" size={24} color={colors.text} />
                             </TouchableOpacity>
                         </View>
 
                         <ScrollView contentContainerStyle={styles.modalScrollContent}>
                             {getCurrentFilters().map((filterGroup, index) => (
                                 <View key={index} style={styles.filterGroupContainer}>
-                                    <Text style={styles.filterGroupTitle}>{filterGroup.title}</Text>
+                                    <Text style={[styles.filterGroupTitle, { color: colors.text }]}>{filterGroup.title}</Text>
                                     <View style={styles.filterOptionsContainer}>
                                         {filterGroup.options.map((option) => {
                                             const isSelected = (activeFilters[filterGroup.type] || []).includes(option.value);
@@ -617,18 +658,20 @@ const EventsScreen = () => {
                                                     key={option.value}
                                                     style={[
                                                         styles.filterOption,
-                                                        isSelected && styles.filterOptionSelected
+                                                        { backgroundColor: colors.card, borderColor: colors.border },
+                                                        isSelected && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
                                                     ]}
                                                     onPress={() => toggleFilter(filterGroup.type, option.value)}
                                                 >
                                                     <Text style={[
                                                         styles.filterOptionText,
-                                                        isSelected && styles.filterOptionTextSelected
+                                                        { color: colors.textSecondary },
+                                                        isSelected && { color: colors.primary, fontWeight: '600' }
                                                     ]}>
                                                         {option.label}
                                                     </Text>
                                                     {isSelected && (
-                                                        <Ionicons name="checkmark-circle" size={18} color="#4F46E5" />
+                                                        <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
                                                     )}
                                                 </TouchableOpacity>
                                             );
@@ -639,27 +682,28 @@ const EventsScreen = () => {
 
                             {getCurrentFilters().length === 0 && (
                                 <View style={styles.noFiltersContainer}>
-                                    <Ionicons name="options-outline" size={48} color="#CBD5E1" />
-                                    <Text style={styles.noFiltersText}>No filters available for this category</Text>
+                                    <Ionicons name="options-outline" size={48} color={colors.textSecondary} />
+                                    <Text style={[styles.noFiltersText, { color: colors.textSecondary }]}>No filters available for this category</Text>
                                 </View>
                             )}
                         </ScrollView>
 
-                        <View style={styles.modalFooter}>
+                        <View style={[styles.modalFooter, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
+                                style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                                 onPress={clearAllFilters}
                                 disabled={getActiveFilterCount() === 0}
                             >
                                 <Text style={[
                                     styles.cancelButtonText,
+                                    { color: colors.text },
                                     getActiveFilterCount() === 0 && styles.disabledButtonText
                                 ]}>
                                     Clear All
                                 </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.saveButton]}
+                                style={[styles.modalButton, styles.saveButton, { backgroundColor: colors.primary }]}
                                 onPress={() => setShowFilterModal(false)}
                             >
                                 <Text style={styles.saveButtonText}>Apply Filters</Text>
@@ -671,7 +715,7 @@ const EventsScreen = () => {
 
             {/* Create Event FAB */}
             <TouchableOpacity
-                style={styles.fab}
+                style={[styles.fab, { backgroundColor: colors.primary }]}
                 onPress={() => router.push('/post-event')}
             >
                 <Ionicons name="add" size={32} color="#FFF" />

@@ -1,4 +1,3 @@
-// Library Screen - Students can browse and upload PDFs
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 import UploadResourceModal from '../../src/components/UploadResourceModal';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { getAllResources, LibraryResource } from '../../src/services/libraryService';
 
 type FilterType = 'all' | 'pdf' | 'notes' | 'formula';
@@ -24,6 +24,7 @@ type SubjectFilter = 'All' | 'Physics' | 'Chemistry' | 'Maths' | 'Biology';
 
 const LibraryScreen = () => {
   // const { user } = useAuth(); // Removed duplicate
+  const { colors, isDark } = useTheme();
   const [resources, setResources] = useState<LibraryResource[]>([]);
   const [filteredResources, setFilteredResources] = useState<LibraryResource[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -180,12 +181,12 @@ const LibraryScreen = () => {
 
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, { backgroundColor: colors.card }]}
         onPress={() => router.push({ pathname: '/document-detail', params: { id: item.id } })}
         activeOpacity={0.7}
       >
         {/* Cover Image Area */}
-        <View style={styles.cardCover}>
+        <View style={[styles.cardCover, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
           {thumbnailUrl ? (
             <Image
               source={{ uri: thumbnailUrl }}
@@ -193,7 +194,7 @@ const LibraryScreen = () => {
               resizeMode="cover"
             />
           ) : (
-            <View style={[styles.placeholderCover, { backgroundColor: item.type === 'pdf' ? '#F3E8FF' : '#E0F2FE' }]}>
+            <View style={[styles.placeholderCover, { backgroundColor: item.type === 'pdf' ? (isDark ? 'rgba(147, 51, 234, 0.2)' : '#F3E8FF') : (isDark ? 'rgba(2, 132, 199, 0.2)' : '#E0F2FE') }]}>
               <Ionicons
                 name={item.type === 'pdf' ? 'document-text' : 'create'}
                 size={32}
@@ -204,8 +205,8 @@ const LibraryScreen = () => {
 
           {/* Badges Overlay */}
           <View style={styles.badgeOverlay}>
-            <View style={styles.examBadge}>
-              <Text style={styles.examBadgeText}>{item.exam}</Text>
+            <View style={[styles.examBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255, 255, 255, 0.9)' }]}>
+              <Text style={[styles.examBadgeText, { color: isDark ? '#FFF' : '#0F172A' }]}>{item.exam}</Text>
             </View>
             {item.type === 'pdf' && (
               <View style={styles.typeBadgeOverlay}>
@@ -217,36 +218,36 @@ const LibraryScreen = () => {
 
         {/* Content */}
         <View style={styles.cardContent}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
 
           {/* Description */}
           {item.description ? (
-            <Text style={styles.cardDescription} numberOfLines={2}>
+            <Text style={[styles.cardDescription, { color: colors.textSecondary }]} numberOfLines={2}>
               {item.description}
             </Text>
           ) : null}
 
           <View style={styles.authorRow}>
-            <Ionicons name="person-circle-outline" size={14} color="#64748B" />
-            <Text style={styles.authorName} numberOfLines={1}>{item.uploaderName || 'Unknown'}</Text>
+            <Ionicons name="person-circle-outline" size={14} color={colors.textSecondary} />
+            <Text style={[styles.authorName, { color: colors.textSecondary }]} numberOfLines={1}>{item.uploaderName || 'Unknown'}</Text>
           </View>
 
-          <View style={styles.statsContainer}>
+          <View style={[styles.statsContainer, { borderTopColor: colors.border }]}>
             {/* Rating */}
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={12} color="#EAB308" />
-              <Text style={styles.ratingValue}>{item.rating !== undefined ? `${item.rating.toFixed(1)}/5` : '0.0/5'}</Text>
-              {item.ratingCount ? <Text style={styles.ratingCount}>({item.ratingCount})</Text> : null}
+              <Text style={[styles.ratingValue, { color: colors.text }]}>{item.rating !== undefined ? `${item.rating.toFixed(1)}/5` : '0.0/5'}</Text>
+              {item.ratingCount ? <Text style={[styles.ratingCount, { color: colors.textSecondary }]}>({item.ratingCount})</Text> : null}
             </View>
 
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={styles.viewStat}>
                 <Ionicons name="heart-outline" size={12} color="#EF4444" />
-                <Text style={styles.statText}>{item.likes || 0}</Text>
+                <Text style={[styles.statText, { color: colors.textSecondary }]}>{item.likes || 0}</Text>
               </View>
               <View style={styles.viewStat}>
-                <Ionicons name="eye-outline" size={12} color="#94A3B8" />
-                <Text style={styles.statText}>{item.views}</Text>
+                <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+                <Text style={[styles.statText, { color: colors.textSecondary }]}>{item.views}</Text>
               </View>
             </View>
           </View>
@@ -256,15 +257,15 @@ const LibraryScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.background }]}>
         <View>
-          <Text style={styles.headerTitle}>Library</Text>
-          <Text style={styles.headerSubtitle}>Study Resources</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Library</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Study Resources</Text>
         </View>
         <TouchableOpacity
-          style={styles.uploadButton}
+          style={[styles.uploadButton, { backgroundColor: colors.primary }]}
           onPress={() => setShowUploadModal(true)}
         >
           <Ionicons name="add" size={20} color="#FFF" />
@@ -273,44 +274,44 @@ const LibraryScreen = () => {
       </View>
 
       {/* Search & Filter */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={20} color="#94A3B8" />
+      <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.text }]}
           placeholder="Search resources..."
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
         <TouchableOpacity style={styles.filterButtonIcon} onPress={() => setShowFilterModal(true)}>
-          <Ionicons name="filter" size={20} color={(activeFilter !== 'all' || examFilter !== 'ALL') ? "#4F46E5" : "#64748B"} />
+          <Ionicons name="filter" size={20} color={(activeFilter !== 'all' || examFilter !== 'ALL') ? colors.primary : colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabsContainer}>
+      <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
           onPress={() => setActiveTab('home')}
         >
-          <Text style={[styles.tabText, activeTab === 'home' && styles.tabTextActive]}>Home</Text>
-          {activeTab === 'home' && <View style={styles.activeIndicator} />}
+          <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.primary, fontWeight: '700' }]}>Home</Text>
+          {activeTab === 'home' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'suggested' && styles.tabItemActive]}
           onPress={() => setActiveTab('suggested')}
         >
-          <Text style={[styles.tabText, activeTab === 'suggested' && styles.tabTextActive]}>Suggested</Text>
-          {activeTab === 'suggested' && <View style={styles.activeIndicator} />}
+          <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'suggested' && { color: colors.primary, fontWeight: '700' }]}>Suggested</Text>
+          {activeTab === 'suggested' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'network' && styles.tabItemActive]}
           onPress={() => setActiveTab('network')}
         >
-          <Text style={[styles.tabText, activeTab === 'network' && styles.tabTextActive]}>Your Network</Text>
-          {activeTab === 'network' && <View style={styles.activeIndicator} />}
+          <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'network' && { color: colors.primary, fontWeight: '700' }]}>Your Network</Text>
+          {activeTab === 'network' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
         </TouchableOpacity>
       </View>
 
@@ -325,13 +326,13 @@ const LibraryScreen = () => {
         key={2}
         columnWrapperStyle={{ justifyContent: 'space-between' }}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#4F46E5']} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="folder-open-outline" size={64} color="#CBD5E1" />
-            <Text style={styles.emptyTitle}>No resources found</Text>
-            <Text style={styles.emptySubtitle}>
+            <Ionicons name="folder-open-outline" size={64} color={colors.textSecondary} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No resources found</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
               {searchQuery ? 'Try different keywords' : 'Be the first to upload!'}
             </Text>
           </View>
@@ -346,38 +347,54 @@ const LibraryScreen = () => {
         onRequestClose={() => setShowFilterModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Resources</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Filter Resources</Text>
               <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-                <Ionicons name="close" size={24} color="#64748B" />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.filterLabel}>Resource Type</Text>
+            <Text style={[styles.filterLabel, { color: colors.text }]}>Resource Type</Text>
             <View style={styles.filterOptions}>
               {(['all', 'pdf', 'notes', 'formula'] as FilterType[]).map((filter) => (
                 <TouchableOpacity
                   key={filter}
-                  style={[styles.filterOption, activeFilter === filter && styles.filterOptionActive]}
+                  style={[
+                    styles.filterOption,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    activeFilter === filter && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
+                  ]}
                   onPress={() => setActiveFilter(filter)}
                 >
-                  <Text style={[styles.filterOptionText, activeFilter === filter && styles.filterOptionTextActive]}>
+                  <Text style={[
+                    styles.filterOptionText,
+                    { color: colors.textSecondary },
+                    activeFilter === filter && { color: colors.primary, fontWeight: '600' }
+                  ]}>
                     {filter === 'all' ? 'All' : filter.toUpperCase()}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.filterLabel}>Exam</Text>
+            <Text style={[styles.filterLabel, { color: colors.text }]}>Exam</Text>
             <View style={styles.filterOptions}>
               {(['ALL', 'JEE', 'NEET', 'EAPCET'] as ExamFilter[]).map((exam) => (
                 <TouchableOpacity
                   key={exam}
-                  style={[styles.filterOption, examFilter === exam && styles.filterOptionActive]}
+                  style={[
+                    styles.filterOption,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    examFilter === exam && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
+                  ]}
                   onPress={() => setExamFilter(exam)}
                 >
-                  <Text style={[styles.filterOptionText, examFilter === exam && styles.filterOptionTextActive]}>
+                  <Text style={[
+                    styles.filterOptionText,
+                    { color: colors.textSecondary },
+                    examFilter === exam && { color: colors.primary, fontWeight: '600' }
+                  ]}>
                     {exam}
                   </Text>
                 </TouchableOpacity>
@@ -385,7 +402,7 @@ const LibraryScreen = () => {
             </View>
 
             <TouchableOpacity
-              style={styles.applyButton}
+              style={[styles.applyButton, { backgroundColor: colors.primary }]}
               onPress={() => setShowFilterModal(false)}
             >
               <Text style={styles.applyButtonText}>Apply Filters</Text>
@@ -607,7 +624,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-
   // Modal Styles
   modalOverlay: {
     flex: 1,

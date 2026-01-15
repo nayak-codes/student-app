@@ -9,6 +9,7 @@ import {
     SafeAreaView,
     ScrollView,
     Share,
+    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -17,6 +18,7 @@ import {
 } from 'react-native';
 import DocumentViewer from '../src/components/DocumentViewer';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useTheme } from '../src/contexts/ThemeContext';
 import {
     addReview,
     getResourceById,
@@ -34,6 +36,7 @@ const DocumentDetailScreen = () => {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const { user, userProfile } = useAuth();
+    const { colors, isDark } = useTheme();
 
     const [resource, setResource] = useState<LibraryResource | null>(null);
     const [reviews, setReviews] = useState<ResourceReview[]>([]);
@@ -182,120 +185,132 @@ const DocumentDetailScreen = () => {
 
     if (loading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4F46E5" />
+            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }
 
     if (!resource) {
         return (
-            <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>Document not found</Text>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                    <Text style={styles.backButtonText}>Go Back</Text>
+            <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+                <Text style={[styles.errorText, { color: colors.textSecondary }]}>Document not found</Text>
+                <TouchableOpacity style={[styles.backButton, { backgroundColor: colors.card }]} onPress={() => router.back()}>
+                    <Text style={[styles.backButtonText, { color: colors.text }]}>Go Back</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButtonIcon}>
-                    <Ionicons name="arrow-back" size={24} color="#1E293B" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle} numberOfLines={1}>{resource.title}</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{resource.title}</Text>
                 <TouchableOpacity onPress={handleShare}>
-                    <Ionicons name="share-social-outline" size={24} color="#4F46E5" />
+                    <Ionicons name="share-social-outline" size={24} color={colors.primary} />
                 </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
 
                 {/* Main Info Card */}
-                <View style={styles.mainCard}>
-                    <View style={styles.iconCircle}>
+                <View style={[styles.mainCard, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#64748B' }]}>
+                    <View style={[styles.iconCircle, { backgroundColor: isDark ? '#334155' : '#F3E8FF' }]}>
                         <Ionicons
                             name={resource.type === 'pdf' ? 'document-text' : 'create'}
                             size={40}
                             color={resource.type === 'pdf' ? '#9333EA' : '#0284C7'}
                         />
                     </View>
-                    <Text style={styles.title}>{resource.title}</Text>
+                    <Text style={[styles.title, { color: colors.text }]}>{resource.title}</Text>
 
                     <View style={styles.metaRow}>
-                        <View style={[styles.badge, { backgroundColor: '#F1F5F9' }]}>
-                            <Text style={styles.badgeText}>{resource.exam}</Text>
+                        <View style={[styles.badge, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+                            <Text style={[styles.badgeText, { color: colors.textSecondary }]}>{resource.exam}</Text>
                         </View>
                         <Text style={styles.dot}>•</Text>
-                        <Text style={styles.metaText}>{resource.subject}</Text>
+                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>{resource.subject}</Text>
                         <Text style={styles.dot}>•</Text>
-                        <Text style={styles.metaText}>{resource.type.toUpperCase()}</Text>
+                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>{resource.type.toUpperCase()}</Text>
                     </View>
 
                     {/* Author Chip */}
                     <TouchableOpacity
-                        style={styles.authorChip}
+                        style={[styles.authorChip, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
                         onPress={() => router.push({ pathname: '/full-profile', params: { userId: resource.uploadedBy } })}
                     >
-                        <View style={[styles.authorAvatar, { width: 28, height: 28, borderRadius: 14 }]}>
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#4F46E5' }}>{resource.uploaderName.charAt(0).toUpperCase()}</Text>
+                        <View style={[styles.authorAvatar, { width: 28, height: 28, borderRadius: 14, backgroundColor: isDark ? '#334155' : '#EEF2FF' }]}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{resource.uploaderName.charAt(0).toUpperCase()}</Text>
                         </View>
                         <View>
-                            <Text style={{ fontSize: 10, color: '#64748B', lineHeight: 12 }}>Uploaded by</Text>
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#1E293B', lineHeight: 14 }}>{resource.uploaderName}</Text>
+                            <Text style={{ fontSize: 10, color: colors.textSecondary, lineHeight: 12 }}>Uploaded by</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text, lineHeight: 14 }}>{resource.uploaderName}</Text>
                         </View>
                     </TouchableOpacity>
 
-                    <View style={styles.statsRowBordered}>
+                    <View style={[styles.statsRowBordered, { borderColor: colors.border }]}>
                         <View style={styles.statItemCompact}>
-                            <Text style={styles.statValueBig}>{resource.views}</Text>
+                            <Text style={[styles.statValueBig, { color: colors.text }]}>{resource.views}</Text>
                             <Text style={styles.statLabelSmall}>Views</Text>
                         </View>
-                        <View style={styles.verticalDivider} />
+                        <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
                         <View style={styles.statItemCompact}>
-                            <Text style={styles.statValueBig}>{resource.downloads}</Text>
+                            <Text style={[styles.statValueBig, { color: colors.text }]}>{resource.downloads}</Text>
                             <Text style={styles.statLabelSmall}>Downloads</Text>
                         </View>
-                        <View style={styles.verticalDivider} />
+                        <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
                         <View style={styles.statItemCompact}>
-                            <Text style={styles.statValueBig}>{resource.rating ? resource.rating.toFixed(1) : '-'}<Text style={{ fontSize: 12, color: '#94A3B8' }}>/5</Text></Text>
+                            <Text style={[styles.statValueBig, { color: colors.text }]}>{resource.rating ? resource.rating.toFixed(1) : '-'}<Text style={{ fontSize: 12, color: colors.textSecondary }}>/5</Text></Text>
                             <Text style={styles.statLabelSmall}>Rating</Text>
                         </View>
-                        <View style={styles.verticalDivider} />
+                        <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
                         <View style={styles.statItemCompact}>
-                            <Text style={styles.statValueBig}>{resource.likes || 0}</Text>
+                            <Text style={[styles.statValueBig, { color: colors.text }]}>{resource.likes || 0}</Text>
                             <Text style={styles.statLabelSmall}>Likes</Text>
                         </View>
                     </View>
 
                     <View style={styles.actionButtonsRow}>
                         <TouchableOpacity
-                            style={[styles.actionButton, styles.likeButton, liked && styles.likeButtonActive]}
+                            style={[
+                                styles.actionButton,
+                                styles.likeButton,
+                                liked && styles.likeButtonActive,
+                                { backgroundColor: liked ? (isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2') : (isDark ? '#1E293B' : '#EEF2FF') }
+                            ]}
                             onPress={handleLike}
                         >
-                            <Ionicons name={liked ? "heart" : "heart-outline"} size={20} color={liked ? "#EF4444" : "#4F46E5"} />
-                            <Text style={[styles.actionButtonText, liked && { color: '#EF4444' }]}>
+                            <Ionicons name={liked ? "heart" : "heart-outline"} size={20} color={liked ? "#EF4444" : colors.primary} />
+                            <Text style={[styles.actionButtonText, { color: liked ? '#EF4444' : colors.primary }]}>
                                 {liked ? 'Liked' : 'Like'}
                             </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.actionButton, styles.viewButton]}
+                            style={[styles.actionButton, styles.viewButton, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF' }]}
                             onPress={handleOpenPdf}
                         >
-                            <Ionicons name="eye-outline" size={20} color="#4F46E5" />
-                            <Text style={styles.actionButtonText}>View</Text>
+                            <Ionicons name="eye-outline" size={20} color={colors.primary} />
+                            <Text style={[styles.actionButtonText, { color: colors.primary }]}>View</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.actionButton, styles.downloadButton, isDownloaded && styles.downloadButtonActive]}
+                            style={[
+                                styles.actionButton,
+                                styles.downloadButton,
+                                isDownloaded && styles.downloadButtonActive,
+                                { backgroundColor: isDownloaded ? (isDark ? 'rgba(16, 185, 129, 0.2)' : '#ECFDF5') : (isDark ? '#1E293B' : '#EEF2FF') }
+                            ]}
                             onPress={handleDownload}
                         >
-                            <Ionicons name={isDownloaded ? "checkmark-circle" : "cloud-download-outline"} size={20} color={isDownloaded ? "#10B981" : "#4F46E5"} />
-                            <Text style={[styles.actionButtonText, isDownloaded && { color: '#10B981' }]}>
+                            <Ionicons name={isDownloaded ? "checkmark-circle" : "cloud-download-outline"} size={20} color={isDownloaded ? "#10B981" : colors.primary} />
+                            <Text style={[styles.actionButtonText, isDownloaded && { color: '#10B981' }, !isDownloaded && { color: colors.primary }]}>
                                 {isDownloaded ? 'Saved' : 'Save'}
                             </Text>
                         </TouchableOpacity>
@@ -303,24 +318,24 @@ const DocumentDetailScreen = () => {
                 </View>
 
                 {/* Description */}
-                <View style={styles.descriptionCard}>
-                    <Text style={styles.sectionTitle}>Description</Text>
-                    <Text style={styles.descriptionText}>{resource.description}</Text>
+                <View style={[styles.descriptionCard, { backgroundColor: colors.card }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Description</Text>
+                    <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{resource.description}</Text>
                 </View>
 
                 {/* Reviews Section */}
                 <View style={styles.reviewsSection}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Reviews ({reviews.length})</Text>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Reviews ({reviews.length})</Text>
                         <TouchableOpacity onPress={() => setShowReviewInput(!showReviewInput)}>
-                            <Text style={styles.writeReviewButton}>{showReviewInput ? 'Cancel' : 'Write a Review'}</Text>
+                            <Text style={[styles.writeReviewButton, { color: colors.primary }]}>{showReviewInput ? 'Cancel' : 'Write a Review'}</Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* Add Review Box */}
                     {showReviewInput && (
-                        <View style={styles.addReviewBox}>
-                            <Text style={styles.addReviewTitle}>Rate and Review</Text>
+                        <View style={[styles.addReviewBox, { backgroundColor: colors.card }]}>
+                            <Text style={[styles.addReviewTitle, { color: colors.text }]}>Rate and Review</Text>
                             <View style={styles.ratingInput}>
                                 {[1, 2, 3, 4, 5].map(star => (
                                     <TouchableOpacity key={star} onPress={() => setNewRating(star)}>
@@ -333,14 +348,15 @@ const DocumentDetailScreen = () => {
                                 ))}
                             </View>
                             <TextInput
-                                style={styles.reviewInput}
+                                style={[styles.reviewInput, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', color: colors.text, borderColor: colors.border }]}
                                 placeholder="Ask a question or share your feedback..."
+                                placeholderTextColor={colors.textSecondary}
                                 multiline
                                 value={newReviewComment}
                                 onChangeText={setNewReviewComment}
                             />
                             <TouchableOpacity
-                                style={[styles.submitButton, isSubmittingReview && { opacity: 0.7 }]}
+                                style={[styles.submitButton, isSubmittingReview && { opacity: 0.7 }, { backgroundColor: colors.primary }]}
                                 onPress={handleSubmitReview}
                                 disabled={isSubmittingReview}
                             >
@@ -356,8 +372,8 @@ const DocumentDetailScreen = () => {
                     {/* Review List */}
                     {reviews.length > 0 ? (
                         reviews.map(review => (
-                            <View key={review.id} style={styles.reviewCard}>
-                                <TouchableOpacity style={styles.reviewUserAvatar} onPress={() => router.push({ pathname: '/full-profile', params: { userId: review.userId } })}>
+                            <View key={review.id} style={[styles.reviewCard, { backgroundColor: colors.card }]}>
+                                <TouchableOpacity style={[styles.reviewUserAvatar, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]} onPress={() => router.push({ pathname: '/full-profile', params: { userId: review.userId } })}>
                                     {review.userAvatar ? (
                                         <Image source={{ uri: review.userAvatar }} style={styles.avatarImage} />
                                     ) : (
@@ -366,7 +382,7 @@ const DocumentDetailScreen = () => {
                                 </TouchableOpacity>
                                 <View style={styles.reviewContent}>
                                     <View style={styles.reviewHeader}>
-                                        <Text style={styles.reviewUserName}>{review.userName}</Text>
+                                        <Text style={[styles.reviewUserName, { color: colors.text }]}>{review.userName}</Text>
                                         <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString()}</Text>
                                     </View>
                                     <View style={styles.ratingRow}>
@@ -379,13 +395,13 @@ const DocumentDetailScreen = () => {
                                             />
                                         ))}
                                     </View>
-                                    <Text style={styles.reviewText}>{review.comment}</Text>
+                                    <Text style={[styles.reviewText, { color: colors.textSecondary }]}>{review.comment}</Text>
                                 </View>
                             </View>
                         ))
                     ) : (
                         <View style={styles.emptyReviews}>
-                            <Text style={styles.emptyReviewsText}>No reviews yet. Be the first to review!</Text>
+                            <Text style={[styles.emptyReviewsText, { color: colors.textSecondary }]}>No reviews yet. Be the first to review!</Text>
                         </View>
                     )}
                 </View>
@@ -409,7 +425,6 @@ const DocumentDetailScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
     },
     header: {
         flexDirection: 'row',
@@ -417,7 +432,6 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#FFF',
     },
     backButtonIcon: {
         padding: 4,
@@ -425,7 +439,6 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#1E293B',
         flex: 1,
         textAlign: 'center',
         marginHorizontal: 16,
@@ -435,11 +448,9 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
     },
     mainCard: {
-        backgroundColor: '#FFF',
         borderRadius: 16,
         padding: 24,
         alignItems: 'center',
-        shadowColor: '#64748B',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 12,
@@ -450,7 +461,6 @@ const styles = StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: '#F3E8FF',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 16,
@@ -458,7 +468,6 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 22,
         fontWeight: '800',
-        color: '#1E293B',
         textAlign: 'center',
         marginBottom: 12,
         lineHeight: 28,
@@ -470,7 +479,6 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     badge: {
-        backgroundColor: '#F1F5F9',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
@@ -478,7 +486,6 @@ const styles = StyleSheet.create({
     badgeText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#475569',
     },
     dot: {
         color: '#94A3B8',
@@ -486,12 +493,10 @@ const styles = StyleSheet.create({
     },
     metaText: {
         fontSize: 14,
-        color: '#64748B',
     },
     authorChip: { // Renamed from authorContainer to avoid conflict
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F8FAFC',
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 12,
@@ -499,7 +504,6 @@ const styles = StyleSheet.create({
         marginBottom: 24,
         width: '100%',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
     },
     authorContainer: { // Keeping for backward compat if needed, but authorChip is used
         flexDirection: 'row',
@@ -516,7 +520,6 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#EEF2FF',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -544,7 +547,6 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         borderTopWidth: 1,
         borderBottomWidth: 1,
-        borderColor: '#F1F5F9',
         marginBottom: 24,
     },
     statItemCompact: {
@@ -554,7 +556,6 @@ const styles = StyleSheet.create({
     statValueBig: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#1E293B',
     },
     statLabelSmall: {
         fontSize: 11,
@@ -565,7 +566,6 @@ const styles = StyleSheet.create({
     verticalDivider: {
         width: 1,
         height: 24,
-        backgroundColor: '#E2E8F0',
     },
     actionButtonsRow: {
         flexDirection: 'row',
@@ -579,31 +579,28 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingVertical: 12,
         borderRadius: 14,
-        backgroundColor: '#EEF2FF',
         gap: 6,
     },
     likeButton: {
-        backgroundColor: '#FEF2F2',
+        // backgroundColor: '#FEF2F2', // Set dynamically
     },
     likeButtonActive: {
-        backgroundColor: '#FEF2F2',
+        // backgroundColor: '#FEF2F2',
     },
     viewButton: {
-        backgroundColor: '#EEF2FF',
+        // backgroundColor: '#EEF2FF',
     },
     downloadButton: {
-        backgroundColor: '#ECFDF5',
+        // backgroundColor: '#ECFDF5',
     },
     downloadButtonActive: {
-        backgroundColor: '#ECFDF5',
+        // backgroundColor: '#ECFDF5',
     },
     actionButtonText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#4F46E5',
     },
     descriptionCard: {
-        backgroundColor: '#FFF',
         borderRadius: 20,
         padding: 20,
         marginBottom: 20,
@@ -616,12 +613,10 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#1E293B',
         marginBottom: 12,
     },
     descriptionText: {
         fontSize: 14,
-        color: '#475569',
         lineHeight: 22,
     },
     reviewsSection: {
@@ -635,11 +630,9 @@ const styles = StyleSheet.create({
     },
     writeReviewButton: {
         fontSize: 14,
-        color: '#4F46E5',
         fontWeight: '600',
     },
     reviewCard: {
-        backgroundColor: '#FFF',
         borderRadius: 16,
         padding: 16,
         marginBottom: 12,
@@ -655,7 +648,6 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#F1F5F9',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -670,7 +662,6 @@ const styles = StyleSheet.create({
     reviewUserName: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#1E293B',
     },
     reviewDate: {
         fontSize: 12,
@@ -678,7 +669,6 @@ const styles = StyleSheet.create({
     },
     reviewText: {
         fontSize: 14,
-        color: '#475569',
         lineHeight: 20,
         marginTop: 4,
     },
@@ -688,7 +678,6 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F8FAFC',
     },
     errorContainer: {
         flex: 1,
@@ -704,15 +693,12 @@ const styles = StyleSheet.create({
     backButton: {
         paddingHorizontal: 20,
         paddingVertical: 10,
-        backgroundColor: '#E2E8F0',
         borderRadius: 8,
     },
     backButtonText: {
-        color: '#475569',
         fontWeight: '600',
     },
     addReviewBox: {
-        backgroundColor: '#FFF',
         padding: 16,
         borderRadius: 12,
         marginBottom: 16,
@@ -720,7 +706,6 @@ const styles = StyleSheet.create({
     addReviewTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#1E293B',
         marginBottom: 12,
     },
     ratingInput: {
@@ -730,19 +715,15 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     reviewInput: {
-        backgroundColor: '#F8FAFC',
         borderRadius: 8,
         padding: 12,
         minHeight: 80,
         textAlignVertical: 'top',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
         marginBottom: 12,
         fontSize: 14,
-        color: '#1E293B',
     },
     submitButton: {
-        backgroundColor: '#1E293B',
         paddingVertical: 12,
         borderRadius: 8,
         alignItems: 'center',
@@ -757,7 +738,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     emptyReviewsText: {
-        color: '#94A3B8',
         fontSize: 14,
     },
     ratingRow: {

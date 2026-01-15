@@ -1,12 +1,13 @@
 import { User } from 'firebase/auth';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import { getUserProfile, onAuthChange, UserProfile } from '../services/authService';
+import { getUserProfile, logout as logoutUser, onAuthChange, UserProfile } from '../services/authService';
 
 interface AuthContextType {
     user: User | null;
     userProfile: UserProfile | null;
     loading: boolean;
     refreshProfile: () => Promise<void>;
+    logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -14,6 +15,7 @@ const AuthContext = createContext<AuthContextType>({
     userProfile: null,
     loading: true,
     refreshProfile: async () => { },
+    logout: async () => { },
 });
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -30,6 +32,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 console.error('Error refreshing user profile:', error);
             }
         }
+    };
+
+    const logout = async () => {
+        await logoutUser();
     };
 
     useEffect(() => {
@@ -58,7 +64,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, userProfile, loading, refreshProfile }}>
+        <AuthContext.Provider value={{ user, userProfile, loading, refreshProfile, logout }}>
             {children}
         </AuthContext.Provider>
     );

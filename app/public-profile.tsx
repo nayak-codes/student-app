@@ -25,6 +25,7 @@ import AddEducationModal from '../src/components/AddEducationModal';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { Education } from '../src/services/authService';
 import {
     acceptFriendRequest,
@@ -50,6 +51,7 @@ const EditPostModal: React.FC<{
     onClose: () => void;
     onSave: (postId: string, newContent: string) => Promise<void>;
 }> = ({ visible, post, onClose, onSave }) => {
+    const { colors, isDark } = useTheme();
     const [content, setContent] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -70,33 +72,35 @@ const EditPostModal: React.FC<{
     return (
         <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={onClose}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-                <View style={[styles.modalContainer, { margin: 20, borderRadius: 16, maxHeight: 400 }]}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Edit Post</Text>
+                <View style={[styles.modalContainer, { margin: 20, borderRadius: 16, maxHeight: 400, backgroundColor: colors.card }]}>
+                    <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                        <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Post</Text>
                         <TouchableOpacity onPress={onClose}>
-                            <Ionicons name="close" size={24} color="#64748B" />
+                            <Ionicons name="close" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
                     </View>
                     <View style={{ padding: 16 }}>
                         <TextInput
                             style={{
                                 borderWidth: 1,
-                                borderColor: '#E2E8F0',
+                                borderColor: colors.border,
                                 borderRadius: 12,
                                 padding: 12,
                                 height: 150,
                                 textAlignVertical: 'top',
                                 fontSize: 16,
-                                color: '#1E293B'
+                                color: colors.text,
+                                backgroundColor: colors.background
                             }}
                             multiline
                             value={content}
                             onChangeText={setContent}
                             placeholder="What's on your mind?"
+                            placeholderTextColor={colors.textSecondary}
                         />
                         <TouchableOpacity
                             style={{
-                                backgroundColor: '#4F46E5',
+                                backgroundColor: colors.primary,
                                 paddingVertical: 12,
                                 borderRadius: 12,
                                 marginTop: 16,
@@ -128,6 +132,7 @@ const PostCard: React.FC<{
     onDelete?: (post: Post) => void;
     onEdit?: (post: Post) => void;
 }> = ({ post, onImagePress, onVideoPress, onPress, onDelete, onEdit }) => {
+    const { colors, isDark } = useTheme();
     const [imageError, setImageError] = React.useState(false);
 
     const handleOptionsPress = () => {
@@ -151,18 +156,18 @@ const PostCard: React.FC<{
     };
 
     const Content = (
-        <View style={styles.postCard}>
+        <View style={[styles.postCard, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#000' }]}>
             <View style={[styles.postHeader, { padding: 0, borderBottomWidth: 0, paddingBottom: 8 }]}>
                 <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{post.userName}</Text>
-                    <Text style={styles.postType}>{post.type}</Text>
+                    <Text style={[styles.userName, { color: colors.text }]}>{post.userName}</Text>
+                    <Text style={[styles.postType, { color: colors.textSecondary }]}>{post.type}</Text>
                 </View>
                 <TouchableOpacity
                     onPress={handleOptionsPress}
                     style={{ padding: 8 }}
                     hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                 >
-                    <Ionicons name="ellipsis-vertical" size={20} color="#64748B" />
+                    <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
             </View>
 
@@ -171,13 +176,13 @@ const PostCard: React.FC<{
                     {!imageError ? (
                         <Image
                             source={{ uri: post.imageUrl }}
-                            style={styles.postImage}
+                            style={[styles.postImage, { backgroundColor: colors.border }]}
                             onError={() => setImageError(true)}
                         />
                     ) : (
-                        <View style={[styles.postImage, styles.imageFallback]}>
-                            <Ionicons name="image-outline" size={36} color="#CBD5E1" />
-                            <Text style={{ color: '#94A3B8', marginTop: 8 }}>Image unavailable</Text>
+                        <View style={[styles.postImage, styles.imageFallback, { backgroundColor: colors.border }]}>
+                            <Ionicons name="image-outline" size={36} color={colors.textSecondary} />
+                            <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Image unavailable</Text>
                         </View>
                     )}
                 </TouchableOpacity>
@@ -185,35 +190,35 @@ const PostCard: React.FC<{
 
             {post.videoLink && (
                 <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!)}>
-                    <View style={styles.videoContainer}>
-                        <Ionicons name="play-circle" size={48} color="#6D28D9" />
-                        <Text style={styles.videoText}>Video Post</Text>
+                    <View style={[styles.videoContainer, { backgroundColor: colors.border }]}>
+                        <Ionicons name="play-circle" size={48} color={colors.primary} />
+                        <Text style={[styles.videoText, { color: colors.text }]}>Video Post</Text>
                     </View>
                 </TouchableOpacity>
             )}
 
             <View style={styles.postContent}>
-                <Text style={styles.postText} numberOfLines={3}>{post.content}</Text>
+                <Text style={[styles.postText, { color: colors.text }]} numberOfLines={3}>{post.content}</Text>
 
                 {post.tags && post.tags.length > 0 && (
                     <View style={styles.tagsContainer}>
                         {post.tags.slice(0, 3).map((tag, index) => (
-                            <View key={index} style={styles.tag}>
-                                <Text style={styles.tagText}>#{tag}</Text>
+                            <View key={index} style={[styles.tag, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+                                <Text style={[styles.tagText, { color: colors.textSecondary }]}>#{tag}</Text>
                             </View>
                         ))}
                     </View>
                 )}
             </View>
 
-            <View style={styles.postFooter}>
+            <View style={[styles.postFooter, { borderTopColor: colors.border }]}>
                 <View style={styles.footerItem}>
                     <Ionicons name="heart" size={18} color="#EF4444" />
-                    <Text style={styles.footerText}>{post.likes}</Text>
+                    <Text style={[styles.footerText, { color: colors.textSecondary }]}>{post.likes}</Text>
                 </View>
                 <View style={styles.footerItem}>
-                    <Ionicons name="chatbubble" size={18} color="#64748B" />
-                    <Text style={styles.footerText}>{post.comments}</Text>
+                    <Ionicons name="chatbubble" size={18} color={colors.textSecondary} />
+                    <Text style={[styles.footerText, { color: colors.textSecondary }]}>{post.comments}</Text>
                 </View>
             </View>
         </View>
@@ -234,9 +239,10 @@ const PostCard: React.FC<{
 
 // Video List Item Component - YouTube Style
 const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({ post, onPress }) => {
+    const { colors, isDark } = useTheme();
     return (
         <TouchableOpacity
-            style={styles.videoListItem}
+            style={[styles.videoListItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
             activeOpacity={0.9}
             onPress={() => onPress(post)}
         >
@@ -257,12 +263,12 @@ const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = (
             {/* Details */}
             <View style={styles.videoListDetails}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={styles.videoListTitle} numberOfLines={2}>{post.content || 'Untitled Video'}</Text>
+                    <Text style={[styles.videoListTitle, { color: colors.text }]} numberOfLines={2}>{post.content || 'Untitled Video'}</Text>
                     <TouchableOpacity style={{ paddingLeft: 8 }}>
-                        <Ionicons name="ellipsis-vertical" size={16} color="#0F172A" />
+                        <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
-                <Text style={styles.videoListMeta}>
+                <Text style={[styles.videoListMeta, { color: colors.textSecondary }]}>
                     {post.userName} • {post.likes || 0} views • 2 hours ago
                 </Text>
             </View>
@@ -272,15 +278,21 @@ const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = (
 
 // Resource Grid Item Component - Professional Card Style
 const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource: LibraryResource) => void }> = ({ resource, onPress }) => {
+    const { colors, isDark } = useTheme();
     return (
         <Pressable
             style={({ pressed }) => [
                 styles.pdfCard,
-                { opacity: pressed ? 0.95 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }
+                {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.95 : 1,
+                    transform: [{ scale: pressed ? 0.98 : 1 }]
+                }
             ]}
             onPress={() => onPress(resource)}
         >
-            <View style={styles.pdfIconContainer}>
+            <View style={[styles.pdfIconContainer, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF' }]}>
                 <Ionicons name="document-text" size={40} color="#EF4444" />
                 <View style={styles.pdfBadge}>
                     <Text style={styles.pdfBadgeText}>PDF</Text>
@@ -288,23 +300,23 @@ const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource
             </View>
 
             <View style={styles.pdfInfoContainer}>
-                <Text style={styles.pdfTitle} numberOfLines={2}>
+                <Text style={[styles.pdfTitle, { color: colors.text }]} numberOfLines={2}>
                     {resource.title}
                 </Text>
 
                 <View style={styles.pdfMetaRow}>
                     <View style={styles.pdfMetaItem}>
-                        <Ionicons name="eye-outline" size={12} color="#64748B" />
-                        <Text style={styles.pdfMetaText}>{resource.views || 0}</Text>
+                        <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+                        <Text style={[styles.pdfMetaText, { color: colors.textSecondary }]}>{resource.views || 0}</Text>
                     </View>
-                    <View style={styles.pdfDividerSmall} />
+                    <View style={[styles.pdfDividerSmall, { backgroundColor: colors.border }]} />
                     <View style={styles.pdfMetaItem}>
-                        <Ionicons name="download-outline" size={12} color="#64748B" />
-                        <Text style={styles.pdfMetaText}>{resource.downloads || 0}</Text>
+                        <Ionicons name="download-outline" size={12} color={colors.textSecondary} />
+                        <Text style={[styles.pdfMetaText, { color: colors.textSecondary }]}>{resource.downloads || 0}</Text>
                     </View>
                     {/* Mock file size if not available */}
-                    <View style={styles.pdfDividerSmall} />
-                    <Text style={styles.pdfMetaText}>2.4 MB</Text>
+                    <View style={[styles.pdfDividerSmall, { backgroundColor: colors.border }]} />
+                    <Text style={[styles.pdfMetaText, { color: colors.textSecondary }]}>2.4 MB</Text>
                 </View>
             </View>
         </Pressable>
@@ -313,11 +325,12 @@ const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource
 
 // ... (existing components)
 const PostGridItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({ post, onPress }) => {
+    const { colors } = useTheme();
     return (
         <Pressable
             style={({ pressed }) => [
                 styles.gridItem,
-                { opacity: pressed ? 0.9 : 1 }
+                { opacity: pressed ? 0.9 : 1, backgroundColor: colors.border }
             ]}
             onPress={() => onPress(post)}
         >
@@ -328,9 +341,9 @@ const PostGridItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({
                     <Ionicons name="play" size={24} color="#FFF" />
                 </View>
             ) : (
-                <View style={[styles.gridImage, styles.gridPlaceholder, { backgroundColor: '#F1F5F9' }]}>
-                    <Ionicons name="text" size={24} color="#64748B" />
-                    <Text style={styles.gridTextPreview} numberOfLines={2}>{post.content}</Text>
+                <View style={[styles.gridImage, styles.gridPlaceholder, { backgroundColor: colors.cardBorder }]}>
+                    <Ionicons name="text" size={24} color={colors.textSecondary} />
+                    <Text style={[styles.gridTextPreview, { color: colors.textSecondary }]} numberOfLines={2}>{post.content}</Text>
                 </View>
             )}
             {post.type === 'video' && (
@@ -357,16 +370,18 @@ const PostDetailModal: React.FC<{
     onDelete?: (post: Post) => void | Promise<void>;
     onEdit?: (post: Post) => void | Promise<void>;
 }> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit }) => {
+    const { colors, isDark } = useTheme();
+
     if (!post) return null;
 
     return (
         <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-            <SafeAreaView style={styles.modalContainer}>
-                <View style={styles.modalHeader}>
+            <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+                <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <Ionicons name="close" size={28} color="#1E293B" />
+                        <Ionicons name="close" size={28} color={colors.text} />
                     </TouchableOpacity>
-                    <Text style={styles.modalTitle}>Post</Text>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>Post</Text>
                     <View style={{ width: 40 }} />
                 </View>
                 <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
@@ -390,6 +405,7 @@ const ProfileScreen = () => {
 
     // 2. Auth Context (Current User)
     const { user: authUser, userProfile: authUserProfile, refreshProfile } = useAuth();
+    const { colors, isDark } = useTheme();
 
     // 3. Derived State (Who are we viewing?)
     const isOwnProfile = false; // Always public view
@@ -790,20 +806,21 @@ const ProfileScreen = () => {
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScrollView
                 refreshControl={
-                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
                 }
+                contentContainerStyle={{ paddingBottom: 100 }}
             >
                 {/* Banner & Header */}
-                <View style={styles.headerContainer}>
-                    <View style={styles.channelBanner}>
+                <View style={[styles.headerContainer, { backgroundColor: colors.background }]}>
+                    <View style={[styles.channelBanner, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
                         {coverPhoto ? (
                             <Image source={{ uri: coverPhoto }} style={styles.bannerImage} resizeMode="cover" />
                         ) : (
                             <LinearGradient
-                                colors={['#6366f1', '#8b5cf6', '#d946ef']}
+                                colors={isDark ? ['#4c1d95', '#5b21b6', '#7c3aed'] : ['#6366f1', '#8b5cf6', '#d946ef']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={styles.bannerPlaceholder}
@@ -842,9 +859,9 @@ const ProfileScreen = () => {
                     <View style={styles.profileInfoContainer}>
                         <View style={styles.ytAvatarContainer}>
                             {photoURL ? (
-                                <Image source={{ uri: photoURL }} style={styles.ytAvatar} />
+                                <Image source={{ uri: photoURL }} style={[styles.ytAvatar, { borderColor: colors.background }]} />
                             ) : (
-                                <View style={[styles.ytAvatar, { backgroundColor: '#6366f1', justifyContent: 'center', alignItems: 'center' }]}>
+                                <View style={[styles.ytAvatar, { backgroundColor: colors.primary, borderColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
                                     <Text style={{ color: '#FFF', fontSize: 24, fontWeight: 'bold' }}>
                                         {displayName.charAt(0).toUpperCase()}
                                     </Text>
@@ -853,33 +870,33 @@ const ProfileScreen = () => {
                         </View>
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                            <Text style={styles.ytName}>{displayName}</Text>
-                            <View style={styles.roleBadge}>
-                                <Text style={styles.roleBadgeText}>{role}</Text>
+                            <Text style={[styles.ytName, { color: colors.text }]}>{displayName}</Text>
+                            <View style={[styles.roleBadge, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF', borderColor: isDark ? '#334155' : '#E0E7FF' }]}>
+                                <Text style={[styles.roleBadgeText, { color: colors.primary }]}>{role}</Text>
                             </View>
                         </View>
                         {/* Handle & Stats Combined Row */}
                         <View style={styles.ytHandleRow}>
-                            <Text style={styles.ytHandleText}>@{username}</Text>
-                            <Text style={styles.ytHandleSeparator}>•</Text>
-                            <Text style={styles.ytHandleText}>{stats.followers} Followers</Text>
-                            <Text style={styles.ytHandleSeparator}>•</Text>
-                            <Text style={styles.ytHandleText}>{stats.posts} Posts</Text>
+                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>@{username}</Text>
+                            <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
+                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Followers</Text>
+                            <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
+                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.posts} Posts</Text>
                         </View>
 
                         {/* Bio - Left align */}
                         {about && (
                             <View style={styles.ytBioContainer}>
-                                <Text style={styles.ytBioText} numberOfLines={3}>
+                                <Text style={[styles.ytBioText, { color: colors.textSecondary }]} numberOfLines={3}>
                                     {about}
-                                    <Text style={{ color: '#4F46E5', fontWeight: '600' }} onPress={() => router.push({ pathname: '/profile-details', params: { userId: targetUserId } })}>
+                                    <Text style={{ color: colors.primary, fontWeight: '600' }} onPress={() => router.push({ pathname: '/profile-details', params: { userId: targetUserId } })}>
                                         {' '}...more
                                     </Text>
                                 </Text>
                                 {institution && (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, opacity: 0.8 }}>
-                                        <Ionicons name="school-outline" size={14} color="#475569" />
-                                        <Text style={[styles.ytLinkText, { marginLeft: 4, marginTop: 0 }]}>{institution}</Text>
+                                        <Ionicons name="school-outline" size={14} color={colors.textSecondary} />
+                                        <Text style={[styles.ytLinkText, { marginLeft: 4, marginTop: 0, color: colors.primary }]}>{institution}</Text>
                                     </View>
                                 )}
                             </View>
@@ -892,7 +909,7 @@ const ProfileScreen = () => {
                             <View style={styles.actionButtonsContainer}>
                                 {/* Follow Button */}
                                 <TouchableOpacity
-                                    style={[styles.ytPrimaryButton, { flex: 1, backgroundColor: '#4F46E5', paddingHorizontal: 4 }]}
+                                    style={[styles.ytPrimaryButton, { flex: 1, backgroundColor: colors.primary, paddingHorizontal: 4 }]}
                                     onPress={handleFollow}
                                     disabled={loadingConnection}
                                 >
@@ -914,7 +931,7 @@ const ProfileScreen = () => {
 
                                 {/* Message Button */}
                                 <TouchableOpacity
-                                    style={[styles.ytSecondaryButton, { flex: 1, backgroundColor: '#EFF6FF', paddingHorizontal: 4 }]}
+                                    style={[styles.ytSecondaryButton, { flex: 1, backgroundColor: isDark ? '#334155' : '#EFF6FF', borderColor: colors.border, paddingHorizontal: 4 }]}
                                     onPress={async () => {
                                         if (!targetUserId || !authUser) {
                                             Alert.alert('Error', 'Please log in to send messages');
@@ -948,8 +965,8 @@ const ProfileScreen = () => {
                                         }
                                     }}
                                 >
-                                    <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4F46E5" />
-                                    <Text style={[styles.ytSecondaryButtonText, { color: '#4F46E5', marginLeft: 4, fontSize: 13 }]}>Message</Text>
+                                    <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+                                    <Text style={[styles.ytSecondaryButtonText, { color: colors.primary, marginLeft: 4, fontSize: 13 }]}>Message</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -957,48 +974,48 @@ const ProfileScreen = () => {
                 </View>
 
                 {/* Tabs */}
-                <View style={styles.ytTabsContainer}>
+                <View style={[styles.ytTabsContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ytTabsContent}>
                         <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'home' && styles.ytTabActive]}
+                            style={[styles.ytTab, activeTab === 'home' && styles.ytTabActive, { borderBottomColor: activeTab === 'home' ? colors.text : 'transparent' }]}
                             onPress={() => setActiveTab('home')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'home' && styles.ytTabTextActive]}>Home</Text>
+                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.text }]}>Home</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'posts' && styles.ytTabActive]}
+                            style={[styles.ytTab, activeTab === 'posts' && styles.ytTabActive, { borderBottomColor: activeTab === 'posts' ? colors.text : 'transparent' }]}
                             onPress={() => setActiveTab('posts')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'posts' && styles.ytTabTextActive]}>Posts</Text>
+                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'posts' && { color: colors.text }]}>Posts</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive]}
+                            style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive, { borderBottomColor: activeTab === 'videos' ? colors.text : 'transparent' }]}
                             onPress={() => setActiveTab('videos')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'videos' && styles.ytTabTextActive]}>Videos</Text>
+                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'videos' && { color: colors.text }]}>Videos</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'clips' && styles.ytTabActive]}
+                            style={[styles.ytTab, activeTab === 'clips' && styles.ytTabActive, { borderBottomColor: activeTab === 'clips' ? colors.text : 'transparent' }]}
                             onPress={() => setActiveTab('clips')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'clips' && styles.ytTabTextActive]}>Clips</Text>
+                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'clips' && { color: colors.text }]}>Clips</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'events' && styles.ytTabActive]}
+                            style={[styles.ytTab, activeTab === 'events' && styles.ytTabActive, { borderBottomColor: activeTab === 'events' ? colors.text : 'transparent' }]}
                             onPress={() => setActiveTab('events')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'events' && styles.ytTabTextActive]}>Events</Text>
+                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'events' && { color: colors.text }]}>Events</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'docs' && styles.ytTabActive]}
+                            style={[styles.ytTab, activeTab === 'docs' && styles.ytTabActive, { borderBottomColor: activeTab === 'docs' ? colors.text : 'transparent' }]}
                             onPress={() => setActiveTab('docs')}
                         >
-                            <Text style={[styles.ytTabText, activeTab === 'docs' && styles.ytTabTextActive]}>Docs</Text>
+                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'docs' && { color: colors.text }]}>Docs</Text>
                         </TouchableOpacity>
 
 
@@ -1012,10 +1029,18 @@ const ProfileScreen = () => {
                             {['recent', 'old', 'popular'].map((type) => (
                                 <TouchableOpacity
                                     key={type}
-                                    style={[styles.subFilterChip, filterType === type && styles.subFilterChipActive]}
+                                    style={[
+                                        styles.subFilterChip,
+                                        { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: colors.border },
+                                        filterType === type && { backgroundColor: isDark ? '#334155' : '#E2E8F0', borderColor: colors.text }
+                                    ]}
                                     onPress={() => setFilterType(type as any)}
                                 >
-                                    <Text style={[styles.subFilterText, filterType === type && styles.subFilterTextActive]}>
+                                    <Text style={[
+                                        styles.subFilterText,
+                                        { color: colors.textSecondary },
+                                        filterType === type && { color: colors.text }
+                                    ]}>
                                         {type.charAt(0).toUpperCase() + type.slice(1)}
                                     </Text>
                                 </TouchableOpacity>
@@ -1031,7 +1056,7 @@ const ProfileScreen = () => {
                                 <Ionicons
                                     name={viewMode === 'grid' ? "list" : "grid-outline"}
                                     size={20}
-                                    color="#64748B"
+                                    color={colors.textSecondary}
                                 />
                             </TouchableOpacity>
                         )}
@@ -1043,9 +1068,9 @@ const ProfileScreen = () => {
                     <View style={styles.postsGrid}>
                         {!hasContent ? (
                             <View style={styles.emptyPostsState}>
-                                <Ionicons name={activeTab === 'docs' ? "document-text-outline" : "school-outline"} size={48} color="#CBD5E1" />
-                                <Text style={styles.emptyTitle}>{isOwnProfile ? 'Share your knowledge' : 'No content yet'}</Text>
-                                {isOwnProfile && <Text style={{ color: '#94A3B8', marginTop: 4, fontSize: 13 }}>Upload {activeTab === 'docs' ? 'documents' : 'posts'} to inspire others.</Text>}
+                                <Ionicons name={activeTab === 'docs' ? "document-text-outline" : "school-outline"} size={48} color={colors.border} />
+                                <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>{isOwnProfile ? 'Share your knowledge' : 'No content yet'}</Text>
+                                {isOwnProfile && <Text style={{ color: colors.textSecondary, marginTop: 4, fontSize: 13 }}>Upload {activeTab === 'docs' ? 'documents' : 'posts'} to inspire others.</Text>}
                             </View>
                         ) : (
                             <View style={[
@@ -1056,9 +1081,9 @@ const ProfileScreen = () => {
                                     <View>
                                         {/* Latest Posts Section */}
                                         <View style={styles.homeSectionHeader}>
-                                            <Text style={styles.homeSectionTitle}>Latest Posts</Text>
+                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Latest Posts</Text>
                                             <TouchableOpacity onPress={() => setActiveTab('posts')}>
-                                                <Text style={styles.seeAllText}>See All</Text>
+                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
                                             </TouchableOpacity>
                                         </View>
                                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
@@ -1074,15 +1099,15 @@ const ProfileScreen = () => {
                                                 </View>
                                             ))}
                                             {posts.filter(p => !p.videoLink && p.type !== 'video').length === 0 && (
-                                                <Text style={{ color: '#94A3B8', fontStyle: 'italic' }}>No recent posts</Text>
+                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic' }}>No recent posts</Text>
                                             )}
                                         </ScrollView>
 
                                         {/* Videos Section */}
                                         <View style={styles.homeSectionHeader}>
-                                            <Text style={styles.homeSectionTitle}>Videos</Text>
+                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Videos</Text>
                                             <TouchableOpacity onPress={() => setActiveTab('videos')}>
-                                                <Text style={styles.seeAllText}>See All</Text>
+                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
                                             </TouchableOpacity>
                                         </View>
                                         <View>
@@ -1090,15 +1115,15 @@ const ProfileScreen = () => {
                                                 <VideoListItem key={item.id} post={item} onPress={openPostModal} />
                                             ))}
                                             {posts.filter(p => p.type === 'video' || !!p.videoLink).length === 0 && (
-                                                <Text style={{ color: '#94A3B8', fontStyle: 'italic', marginBottom: 16 }}>No videos yet</Text>
+                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic', marginBottom: 16 }}>No videos yet</Text>
                                             )}
                                         </View>
 
                                         {/* Docs Section */}
                                         <View style={styles.homeSectionHeader}>
-                                            <Text style={styles.homeSectionTitle}>Documents</Text>
+                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Documents</Text>
                                             <TouchableOpacity onPress={() => setActiveTab('docs')}>
-                                                <Text style={styles.seeAllText}>See All</Text>
+                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
                                             </TouchableOpacity>
                                         </View>
                                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
@@ -1108,7 +1133,7 @@ const ProfileScreen = () => {
                                                 </View>
                                             ))}
                                             {resources.length === 0 && (
-                                                <Text style={{ color: '#94A3B8', fontStyle: 'italic' }}>No documents</Text>
+                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic' }}>No documents</Text>
                                             )}
                                         </ScrollView>
                                     </View>
@@ -1133,7 +1158,7 @@ const ProfileScreen = () => {
                                         {getFilteredAndSortedContent().map((item: any) => (
                                             <Pressable
                                                 key={item.id}
-                                                style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: '#FFF' }]}
+                                                style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: colors.background }]}
                                                 onPress={() => openPostModal(item)}
                                             >
                                                 <Image
@@ -1145,24 +1170,24 @@ const ProfileScreen = () => {
                                         ))}
                                         {getFilteredAndSortedContent().length === 0 && (
                                             <View style={{ padding: 40, alignItems: 'center', width: '100%' }}>
-                                                <Ionicons name="videocam-outline" size={48} color="#CBD5E1" />
-                                                <Text style={{ marginTop: 12, color: '#64748B' }}>No clips yet</Text>
+                                                <Ionicons name="videocam-outline" size={48} color={colors.textSecondary} />
+                                                <Text style={{ marginTop: 12, color: colors.textSecondary }}>No clips yet</Text>
                                             </View>
                                         )}
                                     </View>
                                 ) : activeTab === 'events' ? (
                                     <View style={{ padding: 16 }}>
                                         {events.map(event => (
-                                            <View key={event.id} style={{ padding: 16, backgroundColor: '#FFF', marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 4 }}>{event.title}</Text>
-                                                <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 8 }}>{event.category} • {new Date(event.date).toLocaleDateString()}</Text>
-                                                <Text style={{ fontSize: 14, color: '#334155' }} numberOfLines={2}>{event.description}</Text>
+                                            <View key={event.id} style={{ padding: 16, backgroundColor: colors.card, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 }}>{event.title}</Text>
+                                                <Text style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 8 }}>{event.category} • {new Date(event.date).toLocaleDateString()}</Text>
+                                                <Text style={{ fontSize: 14, color: colors.text }} numberOfLines={2}>{event.description}</Text>
                                             </View>
                                         ))}
                                         {events.length === 0 && (
                                             <View style={{ padding: 40, alignItems: 'center' }}>
-                                                <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
-                                                <Text style={{ marginTop: 12, color: '#64748B' }}>No events yet</Text>
+                                                <Ionicons name="calendar-outline" size={48} color={colors.textSecondary} />
+                                                <Text style={{ marginTop: 12, color: colors.textSecondary }}>No events yet</Text>
                                             </View>
                                         )}
                                     </View>
@@ -1260,17 +1285,17 @@ const ProfileScreen = () => {
             >
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
                     <View style={{
-                        backgroundColor: '#FFF',
+                        backgroundColor: colors.card,
                         borderTopLeftRadius: 20,
                         borderTopRightRadius: 20,
                         maxHeight: '80%',
                         paddingTop: 20
                     }}>
                         {/* Header */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                            <Text style={{ fontSize: 20, fontWeight: '700', color: '#1E293B' }}>Friend Requests</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>Friend Requests</Text>
                             <TouchableOpacity onPress={() => setShowNotifications(false)}>
-                                <Ionicons name="close" size={24} color="#64748B" />
+                                <Ionicons name="close" size={24} color={colors.textSecondary} />
                             </TouchableOpacity>
                         </View>
 
@@ -1278,8 +1303,8 @@ const ProfileScreen = () => {
                         <ScrollView style={{ maxHeight: '100%' }}>
                             {pendingRequests.length === 0 ? (
                                 <View style={{ padding: 40, alignItems: 'center' }}>
-                                    <Ionicons name="mail-outline" size={64} color="#CBD5E1" />
-                                    <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '600', color: '#64748B' }}>
+                                    <Ionicons name="mail-outline" size={64} color={colors.border} />
+                                    <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '600', color: colors.textSecondary }}>
                                         No pending requests
                                     </Text>
                                 </View>
@@ -1289,14 +1314,14 @@ const ProfileScreen = () => {
                                         flexDirection: 'row',
                                         padding: 16,
                                         borderBottomWidth: 1,
-                                        borderBottomColor: '#F1F5F9',
+                                        borderBottomColor: colors.border,
                                         alignItems: 'center'
                                     }}>
                                         {/* Avatar */}
                                         {request.photoURL ? (
                                             <Image source={{ uri: request.photoURL }} style={{ width: 56, height: 56, borderRadius: 28 }} />
                                         ) : (
-                                            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#4F46E5', justifyContent: 'center', alignItems: 'center' }}>
+                                            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' }}>
                                                 <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '700' }}>
                                                     {request.name?.charAt(0).toUpperCase() || 'U'}
                                                 </Text>
@@ -1305,14 +1330,14 @@ const ProfileScreen = () => {
 
                                         {/* Info */}
                                         <View style={{ flex: 1, marginLeft: 12 }}>
-                                            <Text style={{ fontSize: 16, fontWeight: '600', color: '#1E293B' }}>{request.name || 'Unknown'}</Text>
-                                            <Text style={{ fontSize: 14, color: '#64748B', marginTop: 2 }}>{request.exam || 'Student'}</Text>
+                                            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{request.name || 'Unknown'}</Text>
+                                            <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 2 }}>{request.exam || 'Student'}</Text>
                                         </View>
 
                                         {/* Actions */}
                                         <View style={{ flexDirection: 'row', gap: 8 }}>
                                             <TouchableOpacity
-                                                style={{ backgroundColor: '#4F46E5', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+                                                style={{ backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
                                                 onPress={() => {
                                                     handleAcceptRequest(request.id);
                                                     setShowNotifications(false);
@@ -1321,10 +1346,10 @@ const ProfileScreen = () => {
                                                 <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '600' }}>Accept</Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity
-                                                style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+                                                style={{ backgroundColor: isDark ? '#334155' : '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
                                                 onPress={() => handleRejectRequest(request.id)}
                                             >
-                                                <Text style={{ color: '#64748B', fontSize: 14, fontWeight: '600' }}>Reject</Text>
+                                                <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>Reject</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </View>

@@ -7,16 +7,19 @@ import {
     Linking,
     ScrollView,
     Share,
+    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
     View
 } from 'react-native';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { EventItem } from '../src/services/eventService';
 
 export default function EventDetailScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
+    const { colors, isDark } = useTheme();
     const [event, setEvent] = useState<EventItem | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -53,17 +56,17 @@ export default function EventDetailScreen() {
 
     if (loading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4F46E5" />
+            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }
 
     if (!event) {
         return (
-            <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>Event not found</Text>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+                <Text style={[styles.errorText, { color: colors.textSecondary }]}>Event not found</Text>
+                <TouchableOpacity style={[styles.backButton, { backgroundColor: colors.primary }]} onPress={() => router.back()}>
                     <Text style={styles.backButtonText}>Go Back</Text>
                 </TouchableOpacity>
             </View>
@@ -71,52 +74,54 @@ export default function EventDetailScreen() {
     }
 
     return (
-        <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+
+            // Header
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1F2937" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Event Details</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Event Details</Text>
                 <TouchableOpacity onPress={handleShare} style={styles.headerButton}>
-                    <Ionicons name="share-outline" size={24} color="#1F2937" />
+                    <Ionicons name="share-outline" size={24} color={colors.text} />
                 </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Event Image */}
+                // Event Image
                 {event.image && (
                     <Image source={{ uri: event.image }} style={styles.eventImage} resizeMode="cover" />
                 )}
 
-                {/* Category Badge */}
-                <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{event.category}</Text>
+                // Category Badge
+                <View style={[styles.categoryBadge, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF', borderColor: isDark ? '#334155' : '#C7D2FE' }]}>
+                    <Text style={[styles.categoryText, { color: isDark ? '#818CF8' : '#4F46E5' }]}>{event.category}</Text>
                 </View>
 
-                {/* Event Title */}
-                <Text style={styles.eventTitle}>{event.title}</Text>
+                // Event Title
+                <Text style={[styles.eventTitle, { color: colors.text }]}>{event.title}</Text>
 
-                {/* Organization */}
+                // Organization
                 <View style={styles.infoRow}>
-                    <Ionicons name="business-outline" size={20} color="#6B7280" />
-                    <Text style={styles.infoText}>{event.organization}</Text>
+                    <Ionicons name="business-outline" size={20} color={colors.textSecondary} />
+                    <Text style={[styles.infoText, { color: colors.text }]}>{event.organization}</Text>
                 </View>
 
-                {/* Date & Time */}
+                // Date & Time
                 <View style={styles.infoRow}>
-                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                    <Text style={styles.infoText}>{event.date}</Text>
+                    <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+                    <Text style={[styles.infoText, { color: colors.text }]}>{event.date}</Text>
                 </View>
 
-                {/* Location */}
+                // Location
                 <View style={styles.infoRow}>
                     <Ionicons
                         name={event.isOnline ? "globe-outline" : "location-outline"}
                         size={20}
-                        color="#6B7280"
+                        color={colors.textSecondary}
                     />
-                    <Text style={styles.infoText}>{event.location}</Text>
+                    <Text style={[styles.infoText, { color: colors.text }]}>{event.location}</Text>
                     {event.isOnline && (
                         <View style={styles.onlineBadge}>
                             <Text style={styles.onlineBadgeText}>ONLINE</Text>
@@ -124,31 +129,49 @@ export default function EventDetailScreen() {
                     )}
                 </View>
 
-                {/* Description */}
+                // Description
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>About This Event</Text>
-                    <Text style={styles.description}>{event.description}</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>About This Event</Text>
+                    <Text style={[styles.description, { color: colors.textSecondary }]}>{event.description}</Text>
                 </View>
 
-                {/* Registration Link */}
+                // Registration Link
                 {event.link && (
-                    <TouchableOpacity style={styles.linkButton} onPress={handleOpenLink}>
-                        <Ionicons name="link-outline" size={20} color="#4F46E5" />
-                        <Text style={styles.linkButtonText}>Visit Event Website</Text>
-                        <Ionicons name="open-outline" size={16} color="#4F46E5" />
+                    <TouchableOpacity
+                        style={[
+                            styles.linkButton,
+                            {
+                                backgroundColor: isDark ? '#1E293B' : '#EEF2FF',
+                                borderColor: isDark ? '#334155' : '#C7D2FE'
+                            }
+                        ]}
+                        onPress={handleOpenLink}
+                    >
+                        <Ionicons name="link-outline" size={20} color={isDark ? '#818CF8' : '#4F46E5'} />
+                        <Text style={[styles.linkButtonText, { color: isDark ? '#818CF8' : '#4F46E5' }]}>Visit Event Website</Text>
+                        <Ionicons name="open-outline" size={16} color={isDark ? '#818CF8' : '#4F46E5'} />
                     </TouchableOpacity>
                 )}
 
-                {/* Action Buttons */}
+                // Action Buttons
                 <View style={styles.actionButtons}>
-                    <TouchableOpacity style={styles.primaryButton}>
+                    <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary }]}>
                         <Ionicons name="bookmark-outline" size={20} color="#FFF" />
                         <Text style={styles.primaryButtonText}>Save Event</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.secondaryButton} onPress={handleShare}>
-                        <Ionicons name="share-social-outline" size={20} color="#4F46E5" />
-                        <Text style={styles.secondaryButtonText}>Share</Text>
+                    <TouchableOpacity
+                        style={[
+                            styles.secondaryButton,
+                            {
+                                backgroundColor: 'transparent',
+                                borderColor: colors.primary
+                            }
+                        ]}
+                        onPress={handleShare}
+                    >
+                        <Ionicons name="share-social-outline" size={20} color={colors.primary} />
+                        <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>Share</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -161,28 +184,23 @@ export default function EventDetailScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9FAFB',
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F9FAFB',
     },
     errorContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F9FAFB',
         padding: 20,
     },
     errorText: {
         fontSize: 18,
-        color: '#6B7280',
         marginBottom: 20,
     },
     backButton: {
-        backgroundColor: '#4F46E5',
         paddingHorizontal: 24,
         paddingVertical: 12,
         borderRadius: 8,
@@ -199,9 +217,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 60,
         paddingBottom: 16,
-        backgroundColor: '#FFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
     },
     headerButton: {
         padding: 8,
@@ -209,7 +225,6 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#111827',
     },
     content: {
         flex: 1,
@@ -221,23 +236,19 @@ const styles = StyleSheet.create({
     },
     categoryBadge: {
         alignSelf: 'flex-start',
-        backgroundColor: '#EEF2FF',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 16,
         margin: 16,
         borderWidth: 1,
-        borderColor: '#C7D2FE',
     },
     categoryText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#4F46E5',
     },
     eventTitle: {
         fontSize: 24,
         fontWeight: '700',
-        color: '#111827',
         paddingHorizontal: 16,
         marginBottom: 20,
         lineHeight: 32,
@@ -250,7 +261,6 @@ const styles = StyleSheet.create({
     },
     infoText: {
         fontSize: 16,
-        color: '#374151',
         marginLeft: 12,
         flex: 1,
     },
@@ -272,30 +282,25 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#111827',
         marginBottom: 12,
     },
     description: {
         fontSize: 16,
-        color: '#4B5563',
         lineHeight: 24,
     },
     linkButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#EEF2FF',
         marginHorizontal: 16,
         marginTop: 20,
         paddingVertical: 14,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#C7D2FE',
     },
     linkButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#4F46E5',
         marginLeft: 8,
         marginRight: 8,
     },
@@ -310,7 +315,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#4F46E5',
         paddingVertical: 14,
         borderRadius: 12,
         gap: 8,
@@ -325,16 +329,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FFF',
         paddingVertical: 14,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: '#4F46E5',
         gap: 8,
     },
     secondaryButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#4F46E5',
     },
 });

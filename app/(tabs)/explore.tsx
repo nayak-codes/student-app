@@ -20,6 +20,7 @@ import {
 import CreatePostModal from '../../src/components/CreatePostModal';
 import YouTubePlayer from '../../src/components/YouTubePlayer';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { getAllPosts, likePost, Post, unlikePost } from '../../src/services/postsService';
 
 // Type definitions
@@ -108,6 +109,7 @@ function convertToFeedItem(post: Post): FeedItem | null {
 
 const ExploreScreen: React.FC = () => {
   const { user } = useAuth();
+  const { colors, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState<ContentType>('video');
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
   const [feedData, setFeedData] = useState<FeedItem[]>(sampleVideoPosts);
@@ -225,7 +227,7 @@ const ExploreScreen: React.FC = () => {
     const hasLiked = user && item.likedBy?.includes(user.uid);
 
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.card }]}>
         {item.image && (
           <Image
             source={item.image}
@@ -299,44 +301,50 @@ const ExploreScreen: React.FC = () => {
         })()}
 
         <View style={styles.cardContent}>
-          <Text style={styles.cardTitle} numberOfLines={2}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>
             {item.title}
           </Text>
 
           <View style={styles.cardMeta}>
-            <Text style={styles.author}>{item.author}</Text>
+            <Text style={[styles.author, { color: colors.primary }]}>{item.author}</Text>
             <Text style={styles.metaSeparator}>•</Text>
-            <Text style={styles.timeAgo}>{item.timeAgo}</Text>
+            <Text style={[styles.timeAgo, { color: colors.textSecondary }]}>{item.timeAgo}</Text>
           </View>
 
           {item.tags && item.tags.length > 0 && (
             <View style={styles.tagsRow}>
               {item.tags.slice(0, 3).map((tag, idx) => (
-                <Text key={idx} style={styles.tagBadge}>#{tag}</Text>
+                <Text key={idx} style={[
+                  styles.tagBadge,
+                  {
+                    backgroundColor: isDark ? colors.background : '#F1F5F9',
+                    color: colors.textSecondary
+                  }
+                ]}>#{tag}</Text>
               ))}
             </View>
           )}
 
-          <View style={styles.cardActions}>
+          <View style={[styles.cardActions, { borderTopColor: colors.border }]}>
             <TouchableOpacity style={styles.action} onPress={() => handleLike(item)}>
               <Ionicons
                 name={hasLiked ? "heart" : "heart-outline"}
                 size={20}
-                color={hasLiked ? "#EF4444" : "#64748B"}
+                color={hasLiked ? "#EF4444" : colors.textSecondary}
               />
-              <Text style={[styles.actionText, hasLiked && { color: '#EF4444' }]}>
+              <Text style={[styles.actionText, { color: colors.textSecondary }, hasLiked && { color: '#EF4444' }]}>
                 {item.likes > 1000 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.action}>
-              <Ionicons name="chatbubble-outline" size={20} color="#64748B" />
-              <Text style={styles.actionText}>{item.comments}</Text>
+              <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
+              <Text style={[styles.actionText, { color: colors.textSecondary }]}>{item.comments}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.action} onPress={() => handleShare(item)}>
-              <MaterialCommunityIcons name="share-outline" size={20} color="#64748B" />
-              <Text style={styles.actionText}>Share</Text>
+              <MaterialCommunityIcons name="share-outline" size={20} color={colors.textSecondary} />
+              <Text style={[styles.actionText, { color: colors.textSecondary }]}>Share</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -346,7 +354,7 @@ const ExploreScreen: React.FC = () => {
               <Ionicons
                 name={savedItems.has(item.id) ? "bookmark" : "bookmark-outline"}
                 size={20}
-                color={savedItems.has(item.id) ? "#4F46E5" : "#64748B"}
+                color={savedItems.has(item.id) ? colors.primary : colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
@@ -356,23 +364,23 @@ const ExploreScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View>
-          <Text style={styles.headerTitle}>Chitki</Text>
-          <Text style={styles.headerSubtitle}>Student Community</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Chitki</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Student Community</Text>
         </View>
 
-        <TouchableOpacity style={styles.headerIconButton}>
-          <Ionicons name="search-outline" size={24} color="#334155" />
+        <TouchableOpacity style={[styles.headerIconButton, { backgroundColor: isDark ? colors.card : '#F1F5F9' }]}>
+          <Ionicons name="search-outline" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabs}>
+      <View style={[styles.tabs, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TabButton icon="videocam-outline" label="Videos" active={activeTab === 'video'} onPress={() => setActiveTab('video')} />
         <TabButton icon="film-outline" label="Clips (Shots)" active={activeTab === 'clip'} onPress={() => setActiveTab('clip')} />
       </View>
@@ -385,12 +393,12 @@ const ExploreScreen: React.FC = () => {
         contentContainerStyle={styles.feed}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#4F46E5']} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
         }
       />
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setShowCreateModal(true)}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]} onPress={() => setShowCreateModal(true)}>
         <Ionicons name="add" size={24} color="#FFF" />
       </TouchableOpacity>
 
@@ -426,21 +434,32 @@ interface TabButtonProps {
   onPress: () => void;
 }
 
-const TabButton: React.FC<TabButtonProps> = ({ icon, label, active, onPress }) => (
-  <TouchableOpacity
-    style={[styles.tab, active && styles.activeTab]}
-    onPress={onPress}
-  >
-    <Ionicons
-      name={icon as any}
-      size={16}
-      color={active ? "#4F46E5" : "#64748B"}
-    />
-    <Text style={[styles.tabText, active && styles.activeTabText]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
+const TabButton: React.FC<TabButtonProps> = ({ icon, label, active, onPress }) => {
+  const { colors, isDark } = useTheme();
+  return (
+    <TouchableOpacity
+      style={[
+        styles.tab,
+        { backgroundColor: isDark ? colors.card : '#F1F5F9' },
+        active && { backgroundColor: colors.primary }
+      ]}
+      onPress={onPress}
+    >
+      <Ionicons
+        name={icon as any}
+        size={16}
+        color={active ? "#FFF" : colors.textSecondary}
+      />
+      <Text style={[
+        styles.tabText,
+        { color: colors.textSecondary },
+        active && { color: '#FFF' }
+      ]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 // Styles
 const styles = StyleSheet.create({
@@ -493,6 +512,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#F1F5F9',
   },
+  // activeTab and activeTabText functionality moved to inline styles
   activeTab: {
     backgroundColor: '#4F46E5',
   },

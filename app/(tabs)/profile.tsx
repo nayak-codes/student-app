@@ -15,20 +15,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NotificationsModal } from '../../src/components/NotificationsModal';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import {
     acceptFriendRequest,
     getPendingFriendRequests,
     rejectFriendRequest
 } from '../../src/services/connectionService';
 import { getHistory, HistoryItem } from '../../src/services/historyService';
+import { Playlist } from '../../src/services/playlistService';
 
 const ProfileMenuScreen = () => {
     const router = useRouter();
     const { userProfile, user } = useAuth(); // Need user for ID
+    const { colors, isDark } = useTheme();
 
     const [recentHistory, setRecentHistory] = useState<HistoryItem[]>([]);
     const [notificationsVisible, setNotificationsVisible] = useState(false);
     const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+    const [customPlaylists, setCustomPlaylists] = useState<Playlist[]>([]);
 
     useFocusEffect(
         useCallback(() => {
@@ -59,28 +63,34 @@ const ProfileMenuScreen = () => {
         loadPendingRequests(); // Refresh
     };
 
-    const MenuOption = ({ icon, label, subLabel, onPress, iconBg = "#F1F5F9", iconColor = "#334155" }: any) => (
-        <TouchableOpacity style={styles.menuOption} onPress={onPress} activeOpacity={0.7}>
-            <View style={[styles.menuIconContainer, { backgroundColor: iconBg }]}>
-                {React.cloneElement(icon, { size: 22, color: iconColor })}
-            </View>
-            <View style={styles.menuTextContainer}>
-                <Text style={styles.menuLabel}>{label}</Text>
-                {subLabel && <Text style={styles.menuSubLabel}>{subLabel}</Text>}
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-        </TouchableOpacity>
-    );
+    const MenuOption = ({ icon, label, subLabel, onPress, iconBg, iconColor }: any) => {
+        // Default colors if not provided, respecting dark mode
+        const finalIconBg = iconBg || colors.iconBox;
+        const finalIconColor = iconColor || colors.textSecondary;
+
+        return (
+            <TouchableOpacity style={styles.menuOption} onPress={onPress} activeOpacity={0.7}>
+                <View style={[styles.menuIconContainer, { backgroundColor: finalIconBg }]}>
+                    {React.cloneElement(icon, { size: 22, color: finalIconColor })}
+                </View>
+                <View style={styles.menuTextContainer}>
+                    <Text style={[styles.menuLabel, { color: colors.text }]}>{label}</Text>
+                    {subLabel && <Text style={styles.menuSubLabel}>{subLabel}</Text>}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+        );
+    };
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
             {/* App Header (Matches Home Screen) */}
-            <SafeAreaView edges={['top']} style={styles.safeHeader}>
+            <SafeAreaView edges={['top']} style={[styles.safeHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
                 <View style={styles.headerContent}>
                     <View style={styles.brandContainer}>
-                        <Text style={styles.brandText}>Vidhyarthi</Text>
+                        <Text style={[styles.brandText]}>Vidhyarthi</Text>
                     </View>
 
                     <View style={styles.headerActions}>
@@ -88,19 +98,19 @@ const ProfileMenuScreen = () => {
                             style={styles.actionButton}
                             onPress={() => router.push('/screens/universal-search')}
                         >
-                            <Ionicons name="search-outline" size={26} color="#0F172A" />
+                            <Ionicons name="search-outline" size={26} color={colors.text} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.actionButton}
                             onPress={() => setNotificationsVisible(true)}
                         >
                             <View>
-                                <Ionicons name="notifications-outline" size={26} color="#0F172A" />
+                                <Ionicons name="notifications-outline" size={26} color={colors.text} />
                                 {pendingRequests.length > 0 && <View style={styles.notificationDot} />}
                             </View>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => router.push('/conversations')}>
-                            <Ionicons name="chatbubble-ellipses-outline" size={26} color="#0F172A" />
+                            <Ionicons name="chatbubble-ellipses-outline" size={26} color={colors.text} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -118,7 +128,7 @@ const ProfileMenuScreen = () => {
                         {userProfile?.photoURL ? (
                             <Image source={{ uri: userProfile.photoURL }} style={styles.avatar} />
                         ) : (
-                            <View style={styles.avatarPlaceholder}>
+                            <View style={[styles.avatarPlaceholder, { backgroundColor: colors.iconBox }]}>
                                 <Text style={styles.avatarText}>
                                     {userProfile?.name?.charAt(0).toUpperCase() || 'S'}
                                 </Text>
@@ -126,22 +136,22 @@ const ProfileMenuScreen = () => {
                         )}
                     </View>
                     <View style={styles.userInfo}>
-                        <Text style={styles.userName}>{userProfile?.name || 'Student Name'}</Text>
+                        <Text style={[styles.userName, { color: colors.text }]}>{userProfile?.name || 'Student Name'}</Text>
                         <Text style={styles.userHandle}>@{userProfile?.username || 'student'}</Text>
                     </View>
                 </TouchableOpacity>
 
-                <View style={styles.sectionDivider} />
+                <View style={[styles.sectionDivider, { backgroundColor: colors.cardBorder }]} />
 
                 {/* History Section */}
                 <View style={styles.section}>
                     <View style={[styles.sectionHeader, { justifyContent: 'flex-end' }]}>
                         <TouchableOpacity
                             onPress={() => router.push('/history')}
-                            style={styles.historyButtonBox}
+                            style={[styles.historyButtonBox, { backgroundColor: colors.cardBorder }]}
                         >
-                            <Text style={styles.sectionTitle}>History</Text>
-                            <Ionicons name="arrow-forward" size={20} color="#0F172A" style={{ marginLeft: 8 }} />
+                            <Text style={[styles.sectionTitle, { color: colors.text }]}>History</Text>
+                            <Ionicons name="arrow-forward" size={20} color={colors.text} style={{ marginLeft: 8 }} />
                         </TouchableOpacity>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.historyList}>
@@ -150,7 +160,7 @@ const ProfileMenuScreen = () => {
                                 {item.image ? (
                                     <Image source={{ uri: item.image }} style={styles.historyImage} />
                                 ) : (
-                                    <View style={[styles.historyImage, { justifyContent: 'center', alignItems: 'center' }]}>
+                                    <View style={[styles.historyImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.cardBorder }]}>
                                         <Ionicons
                                             name={item.type === 'pdf' ? 'document-text' : 'newspaper'}
                                             size={32}
@@ -163,46 +173,48 @@ const ProfileMenuScreen = () => {
                                         <Text style={styles.historyTime}>{item.type === 'clip' ? 'Short' : 'Video'}</Text>
                                     </View>
                                 )}
-                                <Text style={styles.historyTitle} numberOfLines={2}>{item.title}</Text>
+                                <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
                                 <Text style={styles.historyMeta} numberOfLines={1}>{item.subtitle || 'Viewed'}</Text>
                             </TouchableOpacity>
                         )) : (
                             <View style={{ padding: 20, alignItems: 'center' }}>
-                                <Text style={{ color: '#94A3B8' }}>No recent history</Text>
+                                <Text style={{ color: colors.textSecondary }}>No recent history</Text>
                             </View>
                         )}
                     </ScrollView>
                 </View>
 
-                {/* Create Section (Moved & Polished) */}
-                <View style={[styles.menuGroup, { marginBottom: 32 }]}>
+                {/* VISUAL SEPARATOR */}
+                <View style={[styles.sectionDivider, { backgroundColor: colors.cardBorder }]} />
+
+                {/* Create Section (Polished - Clean & Professional) */}
+                <View style={styles.menuGroup}>
                     <TouchableOpacity
-                        style={styles.createCard}
+                        style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: isDark ? '#000' : '#64748B' }]}
                         onPress={() => router.push('/create-post')}
-                        activeOpacity={0.9}
+                        activeOpacity={0.7}
                     >
                         <View style={styles.createCardContent}>
-                            <View style={styles.createIconBox}>
-                                <Ionicons name="add" size={32} color="#FFF" />
+                            <View style={[styles.createIconBox, { backgroundColor: colors.primary }]}>
+                                <Ionicons name="add" size={28} color="#FFF" />
                             </View>
                             <View style={styles.createTextContent}>
-                                <Text style={styles.createTitle}>Create New</Text>
+                                <Text style={[styles.createTitle, { color: colors.text }]}>Create New</Text>
                                 <Text style={styles.createSubtitle}>Post, Video, Event, or Resource</Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={24} color="#FFF" style={{ opacity: 0.8 }} />
+                            <View style={[styles.arrowBox, { backgroundColor: colors.iconBox }]}>
+                                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                            </View>
                         </View>
                     </TouchableOpacity>
                 </View>
 
+                {/* VISUAL SEPARATOR */}
+                <View style={[styles.sectionDivider, { backgroundColor: colors.cardBorder }]} />
+
                 {/* Library Section */}
                 <View style={styles.menuGroup}>
                     <Text style={styles.groupTitle}>Library</Text>
-
-                    <MenuOption
-                        icon={<Ionicons name="play-circle" />}
-                        label="Your videos"
-                        onPress={() => router.push('/full-profile')}
-                    />
 
                     <MenuOption
                         icon={<Ionicons name="cloud-download" />}
@@ -219,42 +231,58 @@ const ProfileMenuScreen = () => {
                     />
                 </View>
 
-
-
                 {/* Playlists */}
                 <View style={styles.menuGroup}>
-                    <Text style={styles.groupTitle}>Playlists</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 16 }}>
+                        <Text style={styles.groupTitle}>Playlists</Text>
+                        <TouchableOpacity onPress={() => router.push('/create-playlist')}>
+                            <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 13 }}>+ New</Text>
+                        </TouchableOpacity>
+                    </View>
+
                     <MenuOption
                         icon={<Ionicons name="heart" />}
-                        label="Liked videos"
-                        subLabel="226 videos"
+                        label="Liked "
+                        subLabel="Your favorites"
+                        onPress={() => router.push('/playlists/liked')}
                     />
                     <MenuOption
-                        icon={<Ionicons name="save" />}
-                        label="saved"
-                        subLabel="226 videos"
+                        icon={<Ionicons name="bookmark" />}
+                        label="Saved"
+                        subLabel="Read for later"
+                        onPress={() => router.push('/playlists/saved')}
                     />
                     <MenuOption
                         icon={<Ionicons name="time" />}
                         label="Watch Later"
                         subLabel="Unwatched videos"
+                        onPress={() => router.push('/playlists/watch-later')}
+                    />
+
+                    <MenuOption
+                        icon={<Ionicons name="albums" />}
+                        label="Your Playlists"
+                        subLabel="Manage your collections"
+                        onPress={() => router.push('/playlists')}
                     />
                 </View>
 
-                <View style={styles.sectionDivider} />
+                <View style={[styles.sectionDivider, { backgroundColor: colors.cardBorder }]} />
 
                 <View style={styles.menuGroup}>
                     <MenuOption
                         icon={<Feather name="settings" />}
                         label="Settings"
+                        onPress={() => router.push('/settings')}
                     />
                     <MenuOption
                         icon={<Feather name="help-circle" />}
                         label="Help & feedback"
+                        onPress={() => router.push('/help')}
                     />
                 </View>
 
-            </ScrollView>
+            </ScrollView >
 
             <NotificationsModal
                 visible={notificationsVisible}
@@ -263,19 +291,19 @@ const ProfileMenuScreen = () => {
                 onAccept={handleAcceptRequest}
                 onReject={handleRejectRequest}
             />
-        </View>
+        </View >
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        // backgroundColor: '#FFFFFF', // Dynamic
     },
     safeHeader: {
-        backgroundColor: '#FFFFFF',
+        // backgroundColor: '#FFFFFF', // Dynamic
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        // borderBottomColor: '#F1F5F9', // Dynamic
     },
     headerContent: {
         flexDirection: 'row',
@@ -291,7 +319,7 @@ const styles = StyleSheet.create({
     brandText: {
         fontSize: 24,
         fontWeight: '800',
-        color: '#3F51B5', // Matches Home Screen
+        color: '#3F51B5', // Kept brand color
     },
     headerActions: {
         flexDirection: 'row',
@@ -347,7 +375,7 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: 32,
-        backgroundColor: '#EEF2FF',
+        // backgroundColor: '#EEF2FF', // Dynamic
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -362,7 +390,7 @@ const styles = StyleSheet.create({
     userName: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#0F172A',
+        // color: '#0F172A', // Dynamic
         marginBottom: 4,
     },
     userHandle: {
@@ -372,7 +400,7 @@ const styles = StyleSheet.create({
     },
     sectionDivider: {
         height: 8,
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC', // Dynamic
         marginBottom: 20,
     },
     section: {
@@ -388,12 +416,12 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#0F172A',
+        // color: '#0F172A', // Dynamic
     },
     historyButtonBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        // backgroundColor: '#F1F5F9', // Dynamic
         paddingVertical: 8,
         paddingHorizontal: 16,
         borderRadius: 12,
@@ -421,7 +449,7 @@ const styles = StyleSheet.create({
         height: 80,
         borderRadius: 12,
         marginBottom: 8,
-        backgroundColor: '#F1F5F9',
+        // backgroundColor: '#F1F5F9', // Dynamic
     },
     historyOverlay: {
         position: 'absolute',
@@ -440,7 +468,7 @@ const styles = StyleSheet.create({
     historyTitle: {
         fontSize: 13,
         fontWeight: '600',
-        color: '#1E293B',
+        // color: '#1E293B', // Dynamic
         marginBottom: 2,
     },
     historyMeta: {
@@ -479,34 +507,37 @@ const styles = StyleSheet.create({
     menuLabel: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#0F172A',
+        // color: '#0F172A', // Dynamic
         marginBottom: 2,
     },
     menuSubLabel: {
         fontSize: 13,
         color: '#64748B',
     },
-    // Premium Create Card Styles
+    // Premium Create Card Styles (Clean & Professional)
     createCard: {
-        backgroundColor: '#4F46E5',
-        borderRadius: 20,
-        padding: 6,
-        shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 8,
+        // backgroundColor: '#FFFFFF', // Dynamic
+        borderRadius: 16,
+        borderWidth: 1,
+        // borderColor: '#E2E8F0', // Dynamic
+        padding: 5,
+        // Using subtle shadow for "lifted" feel but not heavy
+        // shadowColor: '#64748B', // Dynamic
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 4,
     },
     createCardContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        padding: 12,
     },
     createIconBox: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        // backgroundColor: '#4F46E5', // Dynamic but likely brand constant
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
@@ -515,15 +546,23 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     createTitle: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '700',
-        color: '#FFF',
-        marginBottom: 4,
+        // color: '#0F172A', // Dynamic
+        marginBottom: 2,
     },
     createSubtitle: {
-        fontSize: 13,
-        color: '#E0E7FF',
+        fontSize: 12,
+        color: '#64748B',
         fontWeight: '500',
+    },
+    arrowBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        // backgroundColor: '#F1F5F9', // Dynamic
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });
 

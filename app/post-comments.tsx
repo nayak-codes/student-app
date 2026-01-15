@@ -15,6 +15,7 @@ import {
     View
 } from 'react-native';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { addComment, Comment, deleteComment, getComments } from '../src/services/postsService';
 
 const PostCommentsScreen = () => {
@@ -22,6 +23,7 @@ const PostCommentsScreen = () => {
     const params = useLocalSearchParams();
     const { postId } = params;
     const { user } = useAuth();
+    const { colors, isDark } = useTheme();
 
     const [comments, setComments] = useState<Comment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -98,16 +100,16 @@ const PostCommentsScreen = () => {
         const isOwnComment = user && item.userId === user.uid;
 
         return (
-            <View style={styles.commentCard}>
+            <View style={[styles.commentCard, { backgroundColor: colors.card }]}>
                 <View style={styles.commentAvatar}>
                     {item.userPhoto ? (
-                        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
                             <Text style={styles.avatarText}>
                                 {item.userName.charAt(0).toUpperCase()}
                             </Text>
                         </View>
                     ) : (
-                        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
                             <Text style={styles.avatarText}>
                                 {item.userName.charAt(0).toUpperCase()}
                             </Text>
@@ -116,12 +118,12 @@ const PostCommentsScreen = () => {
                 </View>
                 <View style={styles.commentContent}>
                     <View style={styles.commentHeader}>
-                        <Text style={styles.commentUserName}>{item.userName}</Text>
-                        <Text style={styles.commentTime}>
+                        <Text style={[styles.commentUserName, { color: colors.text }]}>{item.userName}</Text>
+                        <Text style={[styles.commentTime, { color: colors.textSecondary }]}>
                             {formatTime(item.createdAt)}
                         </Text>
                     </View>
-                    <Text style={styles.commentText}>{item.text}</Text>
+                    <Text style={[styles.commentText, { color: isDark ? colors.textSecondary : '#334155' }]}>{item.text}</Text>
                 </View>
                 {isOwnComment && (
                     <TouchableOpacity
@@ -150,13 +152,13 @@ const PostCommentsScreen = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1E293B" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Comments</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Comments</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -168,7 +170,7 @@ const PostCommentsScreen = () => {
             >
                 {loading ? (
                     <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#4F46E5" />
+                        <ActivityIndicator size="large" color={colors.primary} />
                     </View>
                 ) : (
                     <FlatList
@@ -179,9 +181,9 @@ const PostCommentsScreen = () => {
                         showsVerticalScrollIndicator={false}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
-                                <Ionicons name="chatbubble-outline" size={64} color="#CBD5E1" />
-                                <Text style={styles.emptyTitle}>No comments yet</Text>
-                                <Text style={styles.emptySubtitle}>
+                                <Ionicons name="chatbubble-outline" size={64} color={colors.border} />
+                                <Text style={[styles.emptyTitle, { color: colors.text }]}>No comments yet</Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                                     Be the first to comment!
                                 </Text>
                             </View>
@@ -190,11 +192,11 @@ const PostCommentsScreen = () => {
                 )}
 
                 {/* Input Area */}
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
                     <TextInput
-                        style={styles.input}
+                        style={[styles.input, { backgroundColor: isDark ? '#334155' : '#F8FAFC', color: colors.text, borderColor: colors.border }]}
                         placeholder="Add a comment..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={colors.textSecondary}
                         value={inputText}
                         onChangeText={setInputText}
                         multiline
@@ -203,6 +205,7 @@ const PostCommentsScreen = () => {
                     <TouchableOpacity
                         style={[
                             styles.sendButton,
+                            { backgroundColor: colors.primary },
                             (!inputText.trim() || sending) && styles.sendButtonDisabled,
                         ]}
                         onPress={handleSendComment}

@@ -1,6 +1,7 @@
 import {
     createUserWithEmailAndPassword,
     onAuthStateChanged,
+    sendPasswordResetEmail,
     signInWithEmailAndPassword,
     signOut,
     User
@@ -252,6 +253,19 @@ export const logout = async (): Promise<void> => {
         console.log('✅ User signed out');
     } catch (error: any) {
         console.error('❌ Logout error:', error.message);
+        throw new Error(error.message);
+    }
+};
+
+/**
+ * Send password reset email
+ */
+export const resetPassword = async (email: string): Promise<void> => {
+    try {
+        await sendPasswordResetEmail(auth, email);
+        console.log('✅ Password reset email sent to:', email);
+    } catch (error: any) {
+        console.error('❌ Reset password error:', error.message);
         throw new Error(error.message);
     }
 };

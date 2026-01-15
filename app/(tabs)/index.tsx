@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import FeedList from '../../src/components/feed/FeedList';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { getTotalUnreadCount } from '../../src/services/chatService';
 import { testFirebaseConnection } from '../../src/utils/testFirebase';
 
@@ -17,6 +18,7 @@ import { useFriendRequests } from '../../src/hooks/useFriendRequests';
 export default function HomeScreen() {
   const router = useRouter();
   const { user, userProfile, loading } = useAuth();
+  const { colors, isDark } = useTheme();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -57,13 +59,13 @@ export default function HomeScreen() {
   }, [user]);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       {/* Standard App Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.brandContainer}>
-          <Text style={styles.brandText}>Vidhyardhi</Text>
+          <Text style={styles.brandText}>Vidhyardi</Text>
         </View>
 
         <View style={styles.headerActions}>
@@ -71,14 +73,14 @@ export default function HomeScreen() {
             style={styles.actionButton}
             onPress={() => router.push('/screens/universal-search')}
           >
-            <Ionicons name="search-outline" size={26} color="#0F172A" />
+            <Ionicons name="search-outline" size={26} color={colors.text} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => setShowNotifications(true)}
           >
-            <Ionicons name="notifications-outline" size={26} color="#0F172A" />
+            <Ionicons name="notifications-outline" size={26} color={colors.text} />
             {requestCount > 0 && <View style={styles.notificationDot} />}
           </TouchableOpacity>
 
@@ -86,9 +88,9 @@ export default function HomeScreen() {
             style={styles.actionButton}
             onPress={() => router.push('/conversations')}
           >
-            <Ionicons name="chatbubble-outline" size={26} color="#0F172A" />
+            <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
             {unreadCount > 0 && (
-              <View style={styles.chatBadge}>
+              <View style={[styles.chatBadge, { borderColor: isDark ? colors.background : '#FFF' }]}>
                 <Text style={styles.chatBadgeText}>
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </Text>
@@ -116,7 +118,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    // backgroundColor: '#fff', // Dynamic
   },
   header: {
     flexDirection: 'row',
@@ -125,8 +127,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#fff',
+    // borderBottomColor: '#F1F5F9', // Dynamic
+    // backgroundColor: '#fff', // Dynamic
   },
   brandContainer: {
     flexDirection: 'row',
@@ -135,7 +137,7 @@ const styles = StyleSheet.create({
   brandText: {
     fontSize: 24, // Larger for brand
     fontWeight: '800', // Extra bold
-    color: '#3F51B5', // Primary brand color
+    color: '#3F51B5', // Primary brand color - Keep consistent
     fontFamily: 'System', // Use default system font or custom if available
     letterSpacing: -0.5,
   },
@@ -169,7 +171,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: '#FFF',
+    // borderColor: '#FFF', // Dynamic
   },
   chatBadgeText: {
     fontSize: 10,

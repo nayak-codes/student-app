@@ -24,7 +24,7 @@ export interface Post {
     userName: string;
     userExam: string;
     content: string;
-    type: 'image' | 'video' | 'note' | 'news';
+    type: 'image' | 'video' | 'note' | 'news' | 'clip';
     imageUrl?: string;
     videoLink?: string;
     tags: string[];
@@ -478,6 +478,49 @@ export const unsavePost = async (postId: string, userId: string): Promise<void> 
         console.log('Post unsaved');
     } catch (error) {
         console.error('Error unsaving post:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get liked posts for a user
+ */
+export const getLikedPosts = async (userId: string): Promise<Post[]> => {
+    try {
+        const q = query(
+            collection(db, POSTS_COLLECTION),
+            where('likedBy', 'array-contains', userId)
+        );
+
+        const querySnapshot = await getDocs(q);
+        const posts: Post[] = [];
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            posts.push({
+                id: doc.id,
+                userId: data.userId,
+                userName: data.userName,
+                userExam: data.userExam,
+                content: data.content,
+                type: data.type,
+                imageUrl: data.imageUrl,
+                videoLink: data.videoLink,
+                tags: data.tags || [],
+                likes: data.likes || 0,
+                likedBy: data.likedBy || [],
+                comments: data.comments || 0,
+                savedBy: data.savedBy || [],
+                createdAt: data.createdAt?.toDate() || new Date(),
+            });
+        });
+
+        // Sort by date (client-side as Firestore array-contains + orderBy requires specific index usually)
+        posts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+        return posts;
+    } catch (error) {
+        console.error('Error getting liked posts:', error);
         throw error;
     }
 };
