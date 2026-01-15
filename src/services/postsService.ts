@@ -50,7 +50,7 @@ const POSTS_COLLECTION = 'posts';
 /**
  * Create a new post
  */
-export const createPost = async (postData: Omit<Post, 'id' | 'createdAt' | 'likes' | 'comments' | 'likedBy'>): Promise<string> => {
+export const createPost = async (postData: Omit<Post, 'id' | 'createdAt' | 'likes' | 'comments' | 'likedBy' | 'savedBy'>): Promise<string> => {
     try {
         // Build clean data object without undefined fields
         const cleanData: any = {

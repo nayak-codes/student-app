@@ -13,24 +13,50 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NotificationsModal } from '../../src/components/NotificationsModal';
 import { useAuth } from '../../src/contexts/AuthContext';
+import {
+    acceptFriendRequest,
+    getPendingFriendRequests,
+    rejectFriendRequest
+} from '../../src/services/connectionService';
 import { getHistory, HistoryItem } from '../../src/services/historyService';
 
 const ProfileMenuScreen = () => {
     const router = useRouter();
-    const { userProfile } = useAuth();
+    const { userProfile, user } = useAuth(); // Need user for ID
 
     const [recentHistory, setRecentHistory] = useState<HistoryItem[]>([]);
+    const [notificationsVisible, setNotificationsVisible] = useState(false);
+    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
     useFocusEffect(
         useCallback(() => {
             loadRecentHistory();
-        }, [])
+            loadPendingRequests();
+        }, [user?.uid])
     );
 
     const loadRecentHistory = async () => {
         const history = await getHistory();
         setRecentHistory(history.slice(0, 5));
+    };
+
+    const loadPendingRequests = async () => {
+        if (user?.uid) {
+            const requests = await getPendingFriendRequests(user.uid);
+            setPendingRequests(requests);
+        }
+    };
+
+    const handleAcceptRequest = async (requestId: string) => {
+        await acceptFriendRequest(requestId);
+        loadPendingRequests(); // Refresh
+    };
+
+    const handleRejectRequest = async (requestId: string) => {
+        await rejectFriendRequest(requestId);
+        loadPendingRequests(); // Refresh
     };
 
     const MenuOption = ({ icon, label, subLabel, onPress, iconBg = "#F1F5F9", iconColor = "#334155" }: any) => (
@@ -58,23 +84,23 @@ const ProfileMenuScreen = () => {
                     </View>
 
                     <View style={styles.headerActions}>
-                        <TouchableOpacity style={styles.actionButton}>
+                        <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => router.push('/screens/universal-search')}
+                        >
                             <Ionicons name="search-outline" size={26} color="#0F172A" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionButton}>
+                        <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => setNotificationsVisible(true)}
+                        >
                             <View>
                                 <Ionicons name="notifications-outline" size={26} color="#0F172A" />
-                                <View style={styles.notificationDot} />
+                                {pendingRequests.length > 0 && <View style={styles.notificationDot} />}
                             </View>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => router.push('/full-profile')}>
-                            {userProfile?.photoURL ? (
-                                <Image source={{ uri: userProfile.photoURL }} style={styles.headerAvatar} />
-                            ) : (
-                                <View style={styles.headerAvatarPlaceholder}>
-                                    <Text style={styles.headerAvatarText}>{userProfile?.name?.charAt(0).toUpperCase() || 'S'}</Text>
-                                </View>
-                            )}
+                        <TouchableOpacity onPress={() => router.push('/conversations')}>
+                            <Ionicons name="chatbubble-ellipses-outline" size={26} color="#0F172A" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -101,22 +127,21 @@ const ProfileMenuScreen = () => {
                     </View>
                     <View style={styles.userInfo}>
                         <Text style={styles.userName}>{userProfile?.name || 'Student Name'}</Text>
-                        <Text style={styles.userHandle}>@{userProfile?.username || 'student'} • View channel</Text>
+                        <Text style={styles.userHandle}>@{userProfile?.username || 'student'}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
                 </TouchableOpacity>
 
                 <View style={styles.sectionDivider} />
 
                 {/* History Section */}
                 <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>History</Text>
+                    <View style={[styles.sectionHeader, { justifyContent: 'flex-end' }]}>
                         <TouchableOpacity
-                            style={styles.viewAllButton}
                             onPress={() => router.push('/history')}
+                            style={styles.historyButtonBox}
                         >
-                            <Text style={styles.viewAllText}>View all</Text>
+                            <Text style={styles.sectionTitle}>History</Text>
+                            <Ionicons name="arrow-forward" size={20} color="#0F172A" style={{ marginLeft: 8 }} />
                         </TouchableOpacity>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.historyList}>
@@ -149,6 +174,26 @@ const ProfileMenuScreen = () => {
                     </ScrollView>
                 </View>
 
+                {/* Create Section (Moved & Polished) */}
+                <View style={[styles.menuGroup, { marginBottom: 32 }]}>
+                    <TouchableOpacity
+                        style={styles.createCard}
+                        onPress={() => router.push('/create-post')}
+                        activeOpacity={0.9}
+                    >
+                        <View style={styles.createCardContent}>
+                            <View style={styles.createIconBox}>
+                                <Ionicons name="add" size={32} color="#FFF" />
+                            </View>
+                            <View style={styles.createTextContent}>
+                                <Text style={styles.createTitle}>Create New</Text>
+                                <Text style={styles.createSubtitle}>Post, Video, Event, or Resource</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={24} color="#FFF" style={{ opacity: 0.8 }} />
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
                 {/* Library Section */}
                 <View style={styles.menuGroup}>
                     <Text style={styles.groupTitle}>Library</Text>
@@ -174,18 +219,7 @@ const ProfileMenuScreen = () => {
                     />
                 </View>
 
-                {/* Create Section */}
-                <View style={styles.menuGroup}>
-                    <Text style={styles.groupTitle}>Create</Text>
-                    <MenuOption
-                        icon={<Ionicons name="add-circle" />}
-                        label="Add Post / Video"
-                        subLabel="Share knowledge with the community"
-                        iconBg="#EEF2FF"
-                        iconColor="#4F46E5"
-                        onPress={() => router.push('/create-post')}
-                    />
-                </View>
+
 
                 {/* Playlists */}
                 <View style={styles.menuGroup}>
@@ -221,6 +255,14 @@ const ProfileMenuScreen = () => {
                 </View>
 
             </ScrollView>
+
+            <NotificationsModal
+                visible={notificationsVisible}
+                onClose={() => setNotificationsVisible(false)}
+                pendingRequests={pendingRequests}
+                onAccept={handleAcceptRequest}
+                onReject={handleRejectRequest}
+            />
         </View>
     );
 };
@@ -348,6 +390,14 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#0F172A',
     },
+    historyButtonBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+    },
     viewAllButton: {
         paddingVertical: 6,
         paddingHorizontal: 12,
@@ -435,6 +485,45 @@ const styles = StyleSheet.create({
     menuSubLabel: {
         fontSize: 13,
         color: '#64748B',
+    },
+    // Premium Create Card Styles
+    createCard: {
+        backgroundColor: '#4F46E5',
+        borderRadius: 20,
+        padding: 6,
+        shadowColor: '#4F46E5',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    createCardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+    },
+    createIconBox: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    createTextContent: {
+        flex: 1,
+    },
+    createTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#FFF',
+        marginBottom: 4,
+    },
+    createSubtitle: {
+        fontSize: 13,
+        color: '#E0E7FF',
+        fontWeight: '500',
     },
 });
 
