@@ -36,11 +36,12 @@ import {
     subscribeToNetworkStats,
     unfollowUser
 } from '../src/services/connectionService';
+import { EventItem } from '../src/services/eventService';
 import { getUserResources, LibraryResource } from '../src/services/libraryService';
 import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'more';
+type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
 
 // Edit Post Modal
 const EditPostModal: React.FC<{
@@ -429,7 +430,9 @@ const ProfileScreen = () => {
 
     // Data State
     const [posts, setPosts] = useState<Post[]>([]);
+
     const [resources, setResources] = useState<LibraryResource[]>([]);
+    const [events, setEvents] = useState<EventItem[]>([]);
 
     // Stats State
     const [stats, setStats] = useState({
@@ -484,15 +487,18 @@ const ProfileScreen = () => {
             }
 
             // B. Fetch Posts & Resources
-            const [allPosts, userResources] = await Promise.all([
+            const [allPosts, userResources, userEvents] = await Promise.all([
                 getAllPosts(),
-                getUserResources(targetUserId)
+                getUserResources(targetUserId),
+                import('../src/services/eventService').then(m => m.getUserEvents(targetUserId))
             ]);
 
             // Filter posts for this user
             const userPosts = allPosts.filter(p => p.userId === targetUserId);
             setPosts(userPosts);
+
             setResources(userResources);
+            setEvents(userEvents);
 
             // C. Calculate Stats
             const totalLikes = userPosts.reduce((sum, post) => sum + post.likes, 0) +
@@ -502,7 +508,7 @@ const ProfileScreen = () => {
             setStats({
                 posts: userPosts.length + userResources.length,
                 likes: totalLikes,
-                followers: (displayProfile as any)?.networkStats?.followersCount || (displayProfile as any)?.connections?.length || Math.floor(totalLikes / 5) + Math.floor(totalHelpful / 2),
+                followers: (displayProfile as any)?.networkStats?.followersCount || (displayProfile as any)?.connections?.length || 0,
                 friends: (displayProfile as any)?.networkStats?.friendsCount || 0,
                 streak: (displayProfile as any)?.progress?.studyStreak || 5,
             });
@@ -728,12 +734,16 @@ const ProfileScreen = () => {
             case 'videos':
                 content = posts.filter(p => p.type === 'video' || !!p.videoLink);
                 break;
+            case 'clips':
+                content = posts.filter(p => p.type === 'video' || !!p.videoLink);
+                break;
+            case 'events':
+                content = [...events];
+                break;
             case 'docs':
                 content = [...resources];
                 break;
-            case 'more':
-                content = []; // Placeholder for now
-                break;
+
             default:
                 content = [...posts];
         }
@@ -962,18 +972,27 @@ const ProfileScreen = () => {
                         </TouchableOpacity>
 
                         <TouchableOpacity
+                            style={[styles.ytTab, activeTab === 'clips' && styles.ytTabActive]}
+                            onPress={() => setActiveTab('clips')}
+                        >
+                            <Text style={[styles.ytTabText, activeTab === 'clips' && styles.ytTabTextActive]}>Clips</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.ytTab, activeTab === 'events' && styles.ytTabActive]}
+                            onPress={() => setActiveTab('events')}
+                        >
+                            <Text style={[styles.ytTabText, activeTab === 'events' && styles.ytTabTextActive]}>Events</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
                             style={[styles.ytTab, activeTab === 'docs' && styles.ytTabActive]}
                             onPress={() => setActiveTab('docs')}
                         >
                             <Text style={[styles.ytTabText, activeTab === 'docs' && styles.ytTabTextActive]}>Docs</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'more' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('more')}
-                        >
-                            <Text style={[styles.ytTabText, activeTab === 'more' && styles.ytTabTextActive]}>More</Text>
-                        </TouchableOpacity>
+
                     </ScrollView>
                 </View>
 
@@ -1100,6 +1119,44 @@ const ProfileScreen = () => {
                                             onPress={openPostModal}
                                         />
                                     ))
+                                ) : activeTab === 'clips' ? (
+                                    <View style={styles.gridContainer}>
+                                        {getFilteredAndSortedContent().map((item: any) => (
+                                            <Pressable
+                                                key={item.id}
+                                                style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: '#FFF' }]}
+                                                onPress={() => openPostModal(item)}
+                                            >
+                                                <Image
+                                                    source={{ uri: item.imageUrl || item.videoLink || 'https://via.placeholder.com/300' }}
+                                                    style={[styles.gridImage, { resizeMode: 'cover' }]}
+                                                />
+                                                <View style={styles.videoDurationBadge}><Ionicons name="play" size={10} color="#FFF" /></View>
+                                            </Pressable>
+                                        ))}
+                                        {getFilteredAndSortedContent().length === 0 && (
+                                            <View style={{ padding: 40, alignItems: 'center', width: '100%' }}>
+                                                <Ionicons name="videocam-outline" size={48} color="#CBD5E1" />
+                                                <Text style={{ marginTop: 12, color: '#64748B' }}>No clips yet</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                ) : activeTab === 'events' ? (
+                                    <View style={{ padding: 16 }}>
+                                        {events.map(event => (
+                                            <View key={event.id} style={{ padding: 16, backgroundColor: '#FFF', marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 4 }}>{event.title}</Text>
+                                                <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 8 }}>{event.category} • {new Date(event.date).toLocaleDateString()}</Text>
+                                                <Text style={{ fontSize: 14, color: '#334155' }} numberOfLines={2}>{event.description}</Text>
+                                            </View>
+                                        ))}
+                                        {events.length === 0 && (
+                                            <View style={{ padding: 40, alignItems: 'center' }}>
+                                                <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
+                                                <Text style={{ marginTop: 12, color: '#64748B' }}>No events yet</Text>
+                                            </View>
+                                        )}
+                                    </View>
                                 ) : activeTab === 'posts' ? (
                                     viewMode === 'list' ? (
                                         getFilteredAndSortedContent().map((item: any) => (
@@ -1460,21 +1517,22 @@ const styles = StyleSheet.create({
         flexGrow: 1,
     },
     ytTab: {
-        flex: 1,
+        // flex: 1, // Removed to allow scrolling
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
+        paddingVertical: 16, // Increased height
+        paddingHorizontal: 20, // Horizontal padding for scroll
         marginRight: 0,
         backgroundColor: 'transparent',
         borderRadius: 0,
     },
     ytTabActive: {
-        borderBottomWidth: 2,
+        borderBottomWidth: 3, // Thicker indicator
         borderBottomColor: '#0F172A',
         backgroundColor: 'transparent',
     },
     ytTabText: {
-        fontSize: 14,
+        fontSize: 16, // Increased font size
         fontWeight: '600',
         color: '#64748B',
     },

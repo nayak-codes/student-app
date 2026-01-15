@@ -24,6 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AddEducationModal from '../src/components/AddEducationModal';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
+import { EventCard } from '../src/components/EventCard';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Education } from '../src/services/authService';
 import {
@@ -36,11 +37,12 @@ import {
     subscribeToNetworkStats,
     unfollowUser
 } from '../src/services/connectionService';
+import { EventItem, getUserEvents } from '../src/services/eventService';
 import { getUserResources, LibraryResource } from '../src/services/libraryService';
 import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'more';
+type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
 
 // Edit Post Modal
 const EditPostModal: React.FC<{
@@ -430,6 +432,8 @@ const ProfileScreen = () => {
     // Data State
     const [posts, setPosts] = useState<Post[]>([]);
     const [resources, setResources] = useState<LibraryResource[]>([]);
+    const [events, setEvents] = useState<EventItem[]>([]);
+    const [eventFilter, setEventFilter] = useState<string>('All');
 
     // Stats State
     const [stats, setStats] = useState({
@@ -484,20 +488,22 @@ const ProfileScreen = () => {
             }
 
             // B. Fetch Posts & Resources
-            const [allPosts, userResources] = await Promise.all([
+            const [allPosts, userResources, userEvents] = await Promise.all([
                 getAllPosts(),
-                getUserResources(targetUserId)
-            ]);
+                getUserResources(targetUserId),
+                getUserEvents(targetUserId)
+            ]) as [Post[], LibraryResource[], EventItem[]];
 
             // Filter posts for this user
             const userPosts = allPosts.filter(p => p.userId === targetUserId);
             setPosts(userPosts);
             setResources(userResources);
+            setEvents(userEvents);
 
             // C. Calculate Stats
-            const totalLikes = userPosts.reduce((sum, post) => sum + post.likes, 0) +
-                userResources.reduce((sum, doc) => sum + (doc.likes || 0), 0);
-            const totalHelpful = userResources.reduce((sum, doc) => sum + (doc.downloads || 0), 0);
+            const totalLikes = userPosts.reduce((sum: number, post: Post) => sum + post.likes, 0) +
+                userResources.reduce((sum: number, doc: LibraryResource) => sum + (doc.likes || 0), 0);
+            const totalHelpful = userResources.reduce((sum: number, doc: LibraryResource) => sum + (doc.downloads || 0), 0);
 
             setStats({
                 posts: userPosts.length + userResources.length,
@@ -728,11 +734,14 @@ const ProfileScreen = () => {
             case 'videos':
                 content = posts.filter(p => p.type === 'video' || !!p.videoLink);
                 break;
+            case 'clips':
+                content = posts.filter(p => p.type === 'video' || !!p.videoLink);
+                break;
+            case 'events':
+                content = [...events];
+                break;
             case 'docs':
                 content = [...resources];
-                break;
-            case 'more':
-                content = []; // Placeholder for now
                 break;
             default:
                 content = [...posts];
@@ -991,17 +1000,24 @@ const ProfileScreen = () => {
                         </TouchableOpacity>
 
                         <TouchableOpacity
+                            style={[styles.ytTab, activeTab === 'clips' && styles.ytTabActive]}
+                            onPress={() => setActiveTab('clips')}
+                        >
+                            <Text style={[styles.ytTabText, activeTab === 'clips' && styles.ytTabTextActive]}>Clips</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.ytTab, activeTab === 'events' && styles.ytTabActive]}
+                            onPress={() => setActiveTab('events')}
+                        >
+                            <Text style={[styles.ytTabText, activeTab === 'events' && styles.ytTabTextActive]}>Events</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
                             style={[styles.ytTab, activeTab === 'docs' && styles.ytTabActive]}
                             onPress={() => setActiveTab('docs')}
                         >
                             <Text style={[styles.ytTabText, activeTab === 'docs' && styles.ytTabTextActive]}>Docs</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'more' && styles.ytTabActive]}
-                            onPress={() => setActiveTab('more')}
-                        >
-                            <Text style={[styles.ytTabText, activeTab === 'more' && styles.ytTabTextActive]}>More</Text>
                         </TouchableOpacity>
                     </ScrollView>
                 </View>
@@ -1129,6 +1145,62 @@ const ProfileScreen = () => {
                                             onPress={openPostModal}
                                         />
                                     ))
+                                ) : activeTab === 'clips' ? (
+                                    <View style={styles.gridContainer}>
+                                        {getFilteredAndSortedContent().map((item: any) => (
+                                            <Pressable
+                                                key={item.id}
+                                                style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: '#FFF' }]}
+                                                onPress={() => openPostModal(item)}
+                                            >
+                                                <Image
+                                                    source={{ uri: item.imageUrl || item.videoLink || 'https://via.placeholder.com/300' }}
+                                                    style={[styles.gridImage, { resizeMode: 'cover' }]}
+                                                />
+                                                <View style={styles.videoDurationBadge}><Ionicons name="play" size={10} color="#FFF" /></View>
+                                            </Pressable>
+                                        ))}
+                                        {getFilteredAndSortedContent().length === 0 && (
+                                            <View style={{ padding: 40, alignItems: 'center', width: '100%' }}>
+                                                <Ionicons name="videocam-outline" size={48} color="#CBD5E1" />
+                                                <Text style={{ marginTop: 12, color: '#64748B' }}>No clips yet</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                ) : activeTab === 'events' ? (
+                                    <View>
+                                        <ScrollView
+                                            horizontal
+                                            showsHorizontalScrollIndicator={false}
+                                            contentContainerStyle={styles.filterContainer}
+                                            style={{ marginTop: 16 }}
+                                        >
+                                            {['All', ...Array.from(new Set(events.map(e => e.category)))].map(cat => (
+                                                <TouchableOpacity
+                                                    key={cat}
+                                                    style={[styles.filterChip, eventFilter === cat && styles.filterChipActive]}
+                                                    onPress={() => setEventFilter(cat)}
+                                                >
+                                                    <Text style={[styles.filterText, eventFilter === cat && styles.filterTextActive]}>{cat}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                        <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+                                            {events.filter(e => eventFilter === 'All' || e.category === eventFilter).map(event => (
+                                                <EventCard
+                                                    key={event.id}
+                                                    event={event}
+                                                    onPress={(item) => router.push({ pathname: '/event-detail', params: { event: JSON.stringify(item) } })}
+                                                />
+                                            ))}
+                                            {events.filter(e => eventFilter === 'All' || e.category === eventFilter).length === 0 && (
+                                                <View style={{ padding: 40, alignItems: 'center' }}>
+                                                    <Ionicons name="calendar-outline" size={48} color="#CBD5E1" />
+                                                    <Text style={{ marginTop: 12, color: '#64748B' }}>No events found</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    </View>
                                 ) : activeTab === 'posts' ? (
                                     viewMode === 'list' ? (
                                         getFilteredAndSortedContent().map((item: any) => (
@@ -1489,21 +1561,22 @@ const styles = StyleSheet.create({
         flexGrow: 1,
     },
     ytTab: {
-        flex: 1,
+        // flex: 1, // Removed to allow scrolling
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
+        paddingVertical: 16,
+        paddingHorizontal: 20,
         marginRight: 0,
         backgroundColor: 'transparent',
         borderRadius: 0,
     },
     ytTabActive: {
-        borderBottomWidth: 2,
+        borderBottomWidth: 3,
         borderBottomColor: '#0F172A',
         backgroundColor: 'transparent',
     },
     ytTabText: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
         color: '#64748B',
     },
@@ -2061,6 +2134,31 @@ const styles = StyleSheet.create({
     horizontalList: {
         paddingHorizontal: 16,
         paddingBottom: 8,
+    },
+    filterContainer: {
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+    },
+    filterChip: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginRight: 8,
+    },
+    filterChipActive: {
+        backgroundColor: '#EEF2FF',
+        borderColor: '#4F46E5',
+    },
+    filterText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#64748B',
+    },
+    filterTextActive: {
+        color: '#4F46E5',
     },
 });
 

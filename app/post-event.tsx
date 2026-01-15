@@ -299,6 +299,7 @@ export default function PostEventScreen() {
                 location,
                 isOnline: location.toLowerCase().includes('online') || location.toLowerCase().includes('web'),
                 link,
+                userId: user.uid, // Add User ID
             };
 
             // Only add image field if we have a valid URL

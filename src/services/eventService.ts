@@ -140,6 +140,33 @@ export const getRecommendedEvents = async (preferences: EventCategory[]): Promis
 // Alias for getAllEvents (for backwards compatibility)
 export const getEvents = getAllEvents;
 
+// Get events by user ID
+export const getUserEvents = async (userId: string): Promise<EventItem[]> => {
+    try {
+        const q = query(
+            collection(db, 'events'),
+            where('userId', '==', userId)
+            // Removed orderBy to avoid index requirement. Sorting client-side.
+        );
+        const querySnapshot = await getDocs(q);
+        const events = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: convertTimestamp(doc.data().createdAt)
+        })) as EventItem[];
+
+        // Client-side sort: Newest first
+        return events.sort((a, b) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return timeB - timeA;
+        });
+    } catch (error) {
+        console.error('Error fetching user events:', error);
+        return []; // Return empty array instead of throwing to prevent crashing the whole profile load
+    }
+};
+
 // Get user event preferences
 export const getUserEventPreferences = async (): Promise<EventCategory[]> => {
     try {
