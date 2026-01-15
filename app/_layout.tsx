@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Slot } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -29,8 +29,29 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        {/* Expo Router handles screen nesting */}
-        <Slot />
+        <Stack
+          screenOptions={{
+            headerShown: false, // Default to no header as most screens have custom headers
+            animation: 'slide_from_right'
+          }}
+        >
+          {/* Main Tab Navigation */}
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+          {/* Auth Screens */}
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="signup" options={{ headerShown: false }} />
+
+          {/* Feature Screens */}
+          <Stack.Screen name="post-event" options={{ headerShown: false }} />
+          <Stack.Screen name="document-detail" options={{ headerShown: false }} />
+          <Stack.Screen name="document-vault" options={{ headerShown: false }} />
+          <Stack.Screen name="full-profile" options={{ headerShown: false }} />
+          <Stack.Screen name="public-profile" options={{ headerShown: false }} />
+
+          {/* Fallback for other routes */}
+        </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
     </AuthProvider>

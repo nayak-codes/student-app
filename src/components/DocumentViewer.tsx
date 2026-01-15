@@ -93,7 +93,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     };
 
     return (
-        <Modal visible={visible} animationType="fade" transparent={false}>
+        <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
             <View style={styles.container}>
                 {/* Header */}
                 <View style={styles.header}>
