@@ -18,6 +18,7 @@ import {
     View
 } from 'react-native';
 import { auth } from '../src/config/firebase';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { EventCategory, addEvent } from '../src/services/eventService';
 
 const CATEGORIES: EventCategory[] = [
@@ -29,7 +30,6 @@ const CATEGORIES: EventCategory[] = [
     'Govt Jobs', 'Higher Studies', 'Results'
 ];
 
-// Field type definitions
 type FieldType = 'text' | 'number' | 'multiline' | 'toggle';
 
 interface DynamicField {
@@ -41,97 +41,30 @@ interface DynamicField {
     icon?: string;
 }
 
-// Category-specific field configurations
 const CATEGORY_FIELDS: Record<string, DynamicField[]> = {
-    // Tech Events
     'Hackathons': [
         { name: 'teamSize', label: 'Team Size', placeholder: 'e.g., 2-4 members', type: 'text', required: true, icon: 'people-outline' },
         { name: 'prizePool', label: 'Prize Pool', placeholder: 'e.g., ₹50,000', type: 'text', icon: 'trophy-outline' },
         { name: 'themes', label: 'Themes/Tracks', placeholder: 'e.g., Web3, AI/ML, IoT', type: 'multiline', icon: 'bulb-outline' },
         { name: 'deadline', label: 'Registration Deadline', placeholder: 'e.g., March 10, 2026', type: 'text', required: true, icon: 'timer-outline' },
     ],
-    'Workshops': [
-        { name: 'prerequisites', label: 'Prerequisites', placeholder: 'e.g., Basic Python knowledge', type: 'text', icon: 'book-outline' },
-        { name: 'certificate', label: 'Certificate Provided', placeholder: '', type: 'toggle', icon: 'ribbon-outline' },
-        { name: 'instructor', label: 'Instructor Name', placeholder: 'e.g., Dr. John Doe', type: 'text', icon: 'person-outline' },
-        { name: 'duration', label: 'Duration', placeholder: 'e.g., 3 hours or 5 days', type: 'text', required: true, icon: 'time-outline' },
-    ],
-    'Internships': [
-        { name: 'stipend', label: 'Stipend', placeholder: 'e.g., ₹15,000/month', type: 'text', required: true, icon: 'cash-outline' },
-        { name: 'skills', label: 'Skills Required', placeholder: 'e.g., React Native, Firebase', type: 'multiline', icon: 'code-slash-outline' },
-        { name: 'workMode', label: 'Work Mode', placeholder: 'Remote/On-site/Hybrid', type: 'text', icon: 'location-outline' },
-        { name: 'duration', label: 'Duration', placeholder: 'e.g., 3 months', type: 'text', required: true, icon: 'calendar-outline' },
-        { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 20, 2026', type: 'text', required: true, icon: 'timer-outline' },
-    ],
-    'Jobs': [
-        { name: 'salary', label: 'Salary Range', placeholder: 'e.g., ₹4-6 LPA', type: 'text', required: true, icon: 'cash-outline' },
-        { name: 'skills', label: 'Skills Required', placeholder: 'e.g., Java, Spring Boot, MySQL', type: 'multiline', icon: 'code-slash-outline' },
-        { name: 'experience', label: 'Experience Required', placeholder: 'e.g., 0-2 years', type: 'text', icon: 'briefcase-outline' },
-        { name: 'workMode', label: 'Work Mode', placeholder: 'Remote/On-site/Hybrid', type: 'text', icon: 'location-outline' },
-        { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 20, 2026', type: 'text', required: true, icon: 'timer-outline' },
-    ],
-    // Exams
-    'JEE': [
-        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 90 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' },
-        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
-        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 75% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
-        { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' },
-        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,000', type: 'text', icon: 'cash-outline' },
-    ],
-    'NEET': [
-        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 180 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' },
-        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
-        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCB, 50% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
-        { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' },
-        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,500', type: 'text', icon: 'cash-outline' },
-    ],
-    'EAMCET': [
-        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 160 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' },
-        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
-        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 or equivalent', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
-        { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' },
-        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹500', type: 'text', icon: 'cash-outline' },
-    ],
-    'BITSAT': [
-        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 150 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' },
-        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
-        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 75% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
-        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹3,000', type: 'text', icon: 'cash-outline' },
-    ],
-    'VITEEE': [
-        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 125 questions, 2.5 hours', type: 'text', required: true, icon: 'document-text-outline' },
-        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
-        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 60% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
-        { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,150', type: 'text', icon: 'cash-outline' },
-    ],
-    'Board Exams': [
-        { name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., Theory + Practical', type: 'text', required: true, icon: 'document-text-outline' },
-        { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' },
-        { name: 'subjects', label: 'Subjects', placeholder: 'e.g., Math, Science, English', type: 'text', required: true, icon: 'book-outline' },
-    ],
-    // Scholarships
-    'Scholarships': [
-        { name: 'awardAmount', label: 'Award Amount', placeholder: 'e.g., ₹50,000/year', type: 'text', required: true, icon: 'cash-outline' },
-        { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., Family income < ₹6 lakh', type: 'multiline', required: true, icon: 'checkmark-circle-outline' },
-        { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 31, 2026', type: 'text', required: true, icon: 'timer-outline' },
-        { name: 'documents', label: 'Required Documents', placeholder: 'e.g., Income certificate, Mark sheets', type: 'multiline', icon: 'document-outline' },
-    ],
-    // College Events
-    'College Events': [
-        { name: 'eventType', label: 'Event Type', placeholder: 'Cultural/Technical/Sports', type: 'text', required: true, icon: 'star-outline' },
-        { name: 'entryFee', label: 'Entry Fee', placeholder: 'e.g., ₹100 or Free', type: 'text', icon: 'cash-outline' },
-        { name: 'expectedParticipation', label: 'Expected Participation', placeholder: 'e.g., 500+ students', type: 'text', icon: 'people-outline' },
-    ],
-    // Counselling
-    'Counselling': [
-        { name: 'counsellingType', label: 'Counselling Type', placeholder: 'e.g., JOSAA, CSAB, State', type: 'text', required: true, icon: 'school-outline' },
-        { name: 'documents', label: 'Required Documents', placeholder: 'e.g., Rank card, Certificates', type: 'multiline', required: true, icon: 'document-outline' },
-        { name: 'importantDates', label: 'Important Dates', placeholder: 'e.g., Round 1: June 15-20', type: 'multiline', icon: 'calendar-outline' },
-    ],
+    'Workshops': [{ name: 'prerequisites', label: 'Prerequisites', placeholder: 'e.g., Basic Python knowledge', type: 'text', icon: 'book-outline' }, { name: 'certificate', label: 'Certificate Provided', placeholder: '', type: 'toggle', icon: 'ribbon-outline' }, { name: 'instructor', label: 'Instructor Name', placeholder: 'e.g., Dr. John Doe', type: 'text', icon: 'person-outline' }, { name: 'duration', label: 'Duration', placeholder: 'e.g., 3 hours or 5 days', type: 'text', required: true, icon: 'time-outline' }],
+    'Internships': [{ name: 'stipend', label: 'Stipend', placeholder: 'e.g., ₹15,000/month', type: 'text', required: true, icon: 'cash-outline' }, { name: 'skills', label: 'Skills Required', placeholder: 'e.g., React Native, Firebase', type: 'multiline', icon: 'code-slash-outline' }, { name: 'workMode', label: 'Work Mode', placeholder: 'Remote/On-site/Hybrid', type: 'text', icon: 'location-outline' }, { name: 'duration', label: 'Duration', placeholder: 'e.g., 3 months', type: 'text', required: true, icon: 'calendar-outline' }, { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 20, 2026', type: 'text', required: true, icon: 'timer-outline' }],
+    'Jobs': [{ name: 'salary', label: 'Salary Range', placeholder: 'e.g., ₹4-6 LPA', type: 'text', required: true, icon: 'cash-outline' }, { name: 'skills', label: 'Skills Required', placeholder: 'e.g., Java, Spring Boot, MySQL', type: 'multiline', icon: 'code-slash-outline' }, { name: 'experience', label: 'Experience Required', placeholder: 'e.g., 0-2 years', type: 'text', icon: 'briefcase-outline' }, { name: 'workMode', label: 'Work Mode', placeholder: 'Remote/On-site/Hybrid', type: 'text', icon: 'location-outline' }, { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 20, 2026', type: 'text', required: true, icon: 'timer-outline' }],
+    'JEE': [{ name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 90 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' }, { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' }, { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 75% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' }, { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' }, { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,000', type: 'text', icon: 'cash-outline' }],
+    'NEET': [{ name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 180 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' }, { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' }, { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCB, 50% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' }, { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' }, { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,500', type: 'text', icon: 'cash-outline' }],
+    'EAMCET': [{ name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 160 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' }, { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' }, { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 or equivalent', type: 'multiline', required: true, icon: 'checkmark-circle-outline' }, { name: 'examMode', label: 'Exam Mode', placeholder: 'Online/Offline', type: 'text', icon: 'desktop-outline' }, { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹500', type: 'text', icon: 'cash-outline' }],
+    'BITSAT': [{ name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 150 questions, 3 hours', type: 'text', required: true, icon: 'document-text-outline' }, { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' }, { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 75% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' }, { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹3,000', type: 'text', icon: 'cash-outline' }],
+    'VITEEE': [{ name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., 125 questions, 2.5 hours', type: 'text', required: true, icon: 'document-text-outline' }, { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' }, { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., 10+2 with PCM, 60% aggregate', type: 'multiline', required: true, icon: 'checkmark-circle-outline' }, { name: 'applicationFee', label: 'Application Fee', placeholder: 'e.g., ₹1,150', type: 'text', icon: 'cash-outline' }],
+    'Board Exams': [{ name: 'examPattern', label: 'Exam Pattern', placeholder: 'e.g., Theory + Practical', type: 'text', required: true, icon: 'document-text-outline' }, { name: 'syllabusLink', label: 'Syllabus Link', placeholder: 'https://...', type: 'text', icon: 'link-outline' }, { name: 'subjects', label: 'Subjects', placeholder: 'e.g., Math, Science, English', type: 'text', required: true, icon: 'book-outline' }],
+    'Scholarships': [{ name: 'awardAmount', label: 'Award Amount', placeholder: 'e.g., ₹50,000/year', type: 'text', required: true, icon: 'cash-outline' }, { name: 'eligibility', label: 'Eligibility Criteria', placeholder: 'e.g., Family income < ₹6 lakh', type: 'multiline', required: true, icon: 'checkmark-circle-outline' }, { name: 'deadline', label: 'Application Deadline', placeholder: 'e.g., March 31, 2026', type: 'text', required: true, icon: 'timer-outline' }, { name: 'documents', label: 'Required Documents', placeholder: 'e.g., Income certificate, Mark sheets', type: 'multiline', icon: 'document-outline' }],
+    'College Events': [{ name: 'eventType', label: 'Event Type', placeholder: 'Cultural/Technical/Sports', type: 'text', required: true, icon: 'star-outline' }, { name: 'entryFee', label: 'Entry Fee', placeholder: 'e.g., ₹100 or Free', type: 'text', icon: 'cash-outline' }, { name: 'expectedParticipation', label: 'Expected Participation', placeholder: 'e.g., 500+ students', type: 'text', icon: 'people-outline' }],
+    'Counselling': [{ name: 'counsellingType', label: 'Counselling Type', placeholder: 'e.g., JOSAA, CSAB, State', type: 'text', required: true, icon: 'school-outline' }, { name: 'documents', label: 'Required Documents', placeholder: 'e.g., Rank card, Certificates', type: 'multiline', required: true, icon: 'document-outline' }, { name: 'importantDates', label: 'Important Dates', placeholder: 'e.g., Round 1: June 15-20', type: 'multiline', icon: 'calendar-outline' }],
 };
 
 export default function PostEventScreen() {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     const [loading, setLoading] = useState(false);
     const [title, setTitle] = useState('');
     const [organization, setOrganization] = useState('');
@@ -329,13 +262,13 @@ export default function PostEventScreen() {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1F2937" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Post New Event</Text>
-                <TouchableOpacity onPress={handlePost} disabled={loading} style={styles.postButton}>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Post New Event</Text>
+                <TouchableOpacity onPress={handlePost} disabled={loading} style={[styles.postButton, { backgroundColor: colors.primary }]}>
                     {loading ? (
                         <ActivityIndicator color="#FFF" size="small" />
                     ) : (
@@ -351,67 +284,72 @@ export default function PostEventScreen() {
                 <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
                     {/* Image Upload */}
-                    <TouchableOpacity style={styles.imageUpload} onPress={pickImage}>
+                    <TouchableOpacity style={[styles.imageUpload, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={pickImage}>
                         {image ? (
                             <Image source={{ uri: image }} style={styles.uploadedImage} />
                         ) : (
                             <View style={styles.imagePlaceholder}>
-                                <Ionicons name="image-outline" size={40} color="#6B7280" />
-                                <Text style={styles.uploadText}>Add Event Banner</Text>
+                                <Ionicons name="image-outline" size={40} color={colors.textSecondary} />
+                                <Text style={[styles.uploadText, { color: colors.textSecondary }]}>Add Event Banner</Text>
                             </View>
                         )}
                     </TouchableOpacity>
 
                     {/* Form Fields */}
                     <View style={styles.formSection}>
-                        <Text style={styles.label}>Event Title *</Text>
+                        <Text style={[styles.label, { color: colors.text }]}>Event Title *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                             placeholder="Ex: Tech Fest 2k26"
+                            placeholderTextColor={colors.textSecondary}
                             value={title}
                             onChangeText={setTitle}
                             maxLength={100}
                         />
 
-                        <Text style={styles.label}>Category *</Text>
+                        <Text style={[styles.label, { color: colors.text }]}>Category *</Text>
                         <TouchableOpacity
-                            style={styles.selector}
+                            style={[styles.selector, { backgroundColor: colors.card, borderColor: colors.border }]}
                             onPress={() => setShowCategoryModal(true)}
                         >
-                            <Text style={[styles.selectorText, !selectedCategory && styles.placeholderText]}>
+                            <Text style={[styles.selectorText, { color: selectedCategory ? colors.text : colors.textSecondary }]}>
                                 {selectedCategory || 'Select Category'}
                             </Text>
-                            <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                            <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
 
-                        <Text style={styles.label}>Organization / College *</Text>
+                        <Text style={[styles.label, { color: colors.text }]}>Organization / College *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                             placeholder="Ex: IIT Hyderabad"
+                            placeholderTextColor={colors.textSecondary}
                             value={organization}
                             onChangeText={setOrganization}
                         />
 
-                        <Text style={styles.label}>Date / Time *</Text>
+                        <Text style={[styles.label, { color: colors.text }]}>Date / Time *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                             placeholder="Ex: March 15, 2026 • 10:00 AM"
+                            placeholderTextColor={colors.textSecondary}
                             value={date}
                             onChangeText={setDate}
                         />
 
-                        <Text style={styles.label}>Location *</Text>
+                        <Text style={[styles.label, { color: colors.text }]}>Location *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                             placeholder="Ex: Main Auditorium or 'Online'"
+                            placeholderTextColor={colors.textSecondary}
                             value={location}
                             onChangeText={setLocation}
                         />
 
-                        <Text style={styles.label}>Description *</Text>
+                        <Text style={[styles.label, { color: colors.text }]}>Description *</Text>
                         <TextInput
-                            style={[styles.input, styles.textArea]}
+                            style={[styles.input, styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                             placeholder="Event details, eligibility, etc."
+                            placeholderTextColor={colors.textSecondary}
                             value={description}
                             onChangeText={setDescription}
                             multiline
@@ -419,10 +357,11 @@ export default function PostEventScreen() {
                             textAlignVertical="top"
                         />
 
-                        <Text style={styles.label}>Registration Link / Website</Text>
+                        <Text style={[styles.label, { color: colors.text }]}>Registration Link / Website</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                             placeholder="https://..."
+                            placeholderTextColor={colors.textSecondary}
                             value={link}
                             onChangeText={setLink}
                             autoCapitalize="none"
@@ -430,33 +369,33 @@ export default function PostEventScreen() {
 
                         {/* Dynamic Category-Specific Fields */}
                         {selectedCategory && getCategoryFields().length > 0 && (
-                            <View style={styles.dynamicFieldsSection}>
-                                <Text style={styles.sectionTitle}>📋 {selectedCategory}-Specific Details</Text>
+                            <View style={[styles.dynamicFieldsSection, { borderTopColor: colors.border }]}>
+                                <Text style={[styles.sectionTitle, { color: colors.text }]}>📋 {selectedCategory}-Specific Details</Text>
                                 {getCategoryFields().map((field) => (
                                     <View key={field.name}>
                                         <View style={styles.labelRow}>
-                                            <Text style={styles.label}>
+                                            <Text style={[styles.label, { color: colors.text }]}>
                                                 {field.label}
                                                 {field.required && <Text style={styles.required}> *</Text>}
                                             </Text>
                                             {field.icon && (
-                                                <Ionicons name={field.icon as any} size={16} color="#6B7280" />
+                                                <Ionicons name={field.icon as any} size={16} color={colors.textSecondary} />
                                             )}
                                         </View>
                                         {field.type === 'toggle' ? (
                                             <TouchableOpacity
-                                                style={styles.toggleContainer}
+                                                style={[styles.toggleContainer, { backgroundColor: colors.card, borderColor: colors.border }]}
                                                 onPress={() => handleDynamicFieldChange(
                                                     field.name,
                                                     !dynamicFieldValues[field.name]
                                                 )}
                                             >
-                                                <Text style={styles.toggleLabel}>
+                                                <Text style={[styles.toggleLabel, { color: colors.text }]}>
                                                     {dynamicFieldValues[field.name] ? 'Yes' : 'No'}
                                                 </Text>
                                                 <View style={[
                                                     styles.toggleSwitch,
-                                                    dynamicFieldValues[field.name] && styles.toggleSwitchActive
+                                                    dynamicFieldValues[field.name] && { backgroundColor: colors.primary },
                                                 ]}>
                                                     <View style={[
                                                         styles.toggleThumb,
@@ -468,9 +407,11 @@ export default function PostEventScreen() {
                                             <TextInput
                                                 style={[
                                                     styles.input,
-                                                    field.type === 'multiline' && styles.textArea
+                                                    field.type === 'multiline' && styles.textArea,
+                                                    { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }
                                                 ]}
                                                 placeholder={field.placeholder}
+                                                placeholderTextColor={colors.textSecondary}
                                                 value={dynamicFieldValues[field.name] || ''}
                                                 onChangeText={(val) => handleDynamicFieldChange(field.name, val)}
                                                 multiline={field.type === 'multiline'}

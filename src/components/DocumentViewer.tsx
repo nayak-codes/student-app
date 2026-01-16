@@ -167,7 +167,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
                             {Platform.OS === 'web' ? (
                                 <iframe
                                     src={documentUrl}
-                                    style={iframeStyle}
+                                    style={styles.iframe as any}
                                     title="PDF Viewer"
                                 />
                             ) : (
@@ -201,12 +201,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
             </View>
         </Modal>
     );
-};
-
-const iframeStyle = {
-    width: '100%',
-    height: '100%',
-    borderWidth: 0,
 };
 
 const styles = StyleSheet.create({
@@ -280,6 +274,11 @@ const styles = StyleSheet.create({
     webView: {
         flex: 1,
         backgroundColor: '#FFF',
+    },
+    iframe: {
+        width: '100%',
+        height: '100%',
+        borderWidth: 0,
     },
     loadingContainer: {
         position: 'absolute',

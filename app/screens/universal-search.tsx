@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { getAllUsers, UserProfile } from '../../src/services/authService';
 import { College, getAllColleges } from '../../src/services/collegeService';
 import { getAllResources, LibraryResource } from '../../src/services/libraryService';
@@ -37,6 +38,7 @@ const SEARCH_HISTORY_KEY = 'studentverse_search_history';
 
 const SearchScreen = () => {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     const [searchQuery, setSearchQuery] = useState('');
     const [activeCategory, setActiveCategory] = useState<SearchCategory>('all');
     const [results, setResults] = useState<SearchResult[]>([]);
@@ -272,10 +274,10 @@ const SearchScreen = () => {
 
     const renderResult = ({ item }: { item: SearchResult }) => (
         <TouchableOpacity
-            style={styles.resultCard}
+            style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => handleResultClick(item)}
         >
-            <View style={styles.resultIcon}>
+            <View style={[styles.resultIcon, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#EEF2FF' }]}>
                 {item.type === 'user' && item.image ? (
                     <Image source={{ uri: item.image }} style={{ width: 48, height: 48, borderRadius: 24 }} />
                 ) : (
@@ -287,70 +289,70 @@ const SearchScreen = () => {
                                         'document-text'
                         }
                         size={24}
-                        color="#4F46E5"
+                        color={colors.primary}
                     />
                 )}
             </View>
 
             <View style={styles.resultContent}>
                 <View style={styles.resultHeader}>
-                    <Text style={styles.resultTitle} numberOfLines={1}>
+                    <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={1}>
                         {item.title}
                     </Text>
                     {item.badge && (
                         <View style={[
                             styles.badge,
-                            item.type === 'college' && styles.badgeCollege,
-                            item.type === 'post' && styles.badgePost,
-                            item.type === 'resource' && styles.badgeResource,
-                            item.type === 'user' && styles.badgeUser,
+                            item.type === 'college' && { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#DBEAFE' },
+                            item.type === 'post' && { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7' },
+                            item.type === 'resource' && { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5' },
+                            item.type === 'user' && { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : '#E0E7FF' },
                         ]}>
-                            <Text style={styles.badgeText}>{item.badge}</Text>
+                            <Text style={[styles.badgeText, { color: colors.text }]}>{item.badge}</Text>
                         </View>
                     )}
                 </View>
 
-                <Text style={styles.resultSubtitle}>{item.subtitle}</Text>
+                <Text style={[styles.resultSubtitle, { color: colors.textSecondary }]}>{item.subtitle}</Text>
                 {item.description && (
-                    <Text style={styles.resultDescription} numberOfLines={1}>
+                    <Text style={[styles.resultDescription, { color: colors.textSecondary }]} numberOfLines={1}>
                         {item.description}
                     </Text>
                 )}
             </View>
 
-            <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
     );
 
     const renderTrending = ({ item }: { item: { term: string; count: string } }) => (
         <TouchableOpacity
-            style={styles.trendingCard}
+            style={[styles.trendingCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => handleSearch(item.term)}
         >
-            <View style={styles.trendingIcon}>
+            <View style={[styles.trendingIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEE2E2' }]}>
                 <Ionicons name="trending-up" size={20} color="#EF4444" />
             </View>
             <View style={styles.trendingContent}>
-                <Text style={styles.trendingTerm}>{item.term}</Text>
-                <Text style={styles.trendingCount}>{item.count} searches</Text>
+                <Text style={[styles.trendingTerm, { color: colors.text }]}>{item.term}</Text>
+                <Text style={[styles.trendingCount, { color: colors.textSecondary }]}>{item.count} searches</Text>
             </View>
         </TouchableOpacity>
     );
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Expanded Search Bar Container with integrated Back button */}
-            <View style={styles.topContainer}>
+            <View style={[styles.topContainer, { backgroundColor: colors.card }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1E293B" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
 
-                <View style={styles.searchContainer}>
-                    <Ionicons name="search-outline" size={20} color="#64748B" />
+                <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(51, 65, 85, 0.5)' : '#F1F5F9' }]}>
+                    <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
                     <TextInput
-                        style={styles.searchInput}
+                        style={[styles.searchInput, { color: colors.text }]}
                         placeholder="Search students, colleges, posts..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={colors.textSecondary}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         autoCapitalize="none"
@@ -359,7 +361,7 @@ const SearchScreen = () => {
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={clearSearch}>
-                            <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -371,14 +373,17 @@ const SearchScreen = () => {
                         key={category}
                         style={[
                             styles.categoryChip,
-                            activeCategory === category && styles.categoryChipActive,
+                            {
+                                backgroundColor: activeCategory === category ? colors.primary : colors.card,
+                                borderColor: activeCategory === category ? colors.primary : colors.border
+                            }
                         ]}
                         onPress={() => setActiveCategory(category)}
                     >
                         <Text
                             style={[
                                 styles.categoryText,
-                                activeCategory === category && styles.categoryTextActive,
+                                { color: activeCategory === category ? '#FFF' : colors.textSecondary }
                             ]}
                         >
                             {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -389,7 +394,7 @@ const SearchScreen = () => {
 
             {searchQuery.trim() ? (
                 <View style={styles.resultsContainer}>
-                    <Text style={styles.resultsCount}>
+                    <Text style={[styles.resultsCount, { color: colors.textSecondary }]}>
                         {results.length} result{results.length !== 1 ? 's' : ''} found
                     </Text>
                     <FlatList
@@ -400,9 +405,9 @@ const SearchScreen = () => {
                         contentContainerStyle={styles.resultsList}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
-                                <Ionicons name="search-outline" size={64} color="#CBD5E1" />
-                                <Text style={styles.emptyTitle}>No results found</Text>
-                                <Text style={styles.emptySubtitle}>
+                                <Ionicons name="search-outline" size={64} color={colors.textSecondary} />
+                                <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No results found</Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                                     Try different keywords
                                 </Text>
                             </View>
@@ -414,17 +419,17 @@ const SearchScreen = () => {
                     {recentSearches.length > 0 && (
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
-                                <Ionicons name="time-outline" size={20} color="#64748B" />
-                                <Text style={styles.sectionTitle}>Recent Searches</Text>
+                                <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+                                <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Searches</Text>
                             </View>
                             {recentSearches.map((term, index) => (
                                 <TouchableOpacity
                                     key={index}
-                                    style={styles.recentItem}
+                                    style={[styles.recentItem, { backgroundColor: colors.card, borderColor: colors.border }]}
                                     onPress={() => handleSearch(term)}
                                 >
-                                    <Ionicons name="search-outline" size={18} color="#64748B" />
-                                    <Text style={styles.recentText}>{term}</Text>
+                                    <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+                                    <Text style={[styles.recentText, { color: colors.text }]}>{term}</Text>
                                     <TouchableOpacity
                                         onPress={(e) => {
                                             e.stopPropagation();
@@ -432,7 +437,7 @@ const SearchScreen = () => {
                                         }}
                                         style={styles.removeButton}
                                     >
-                                        <Ionicons name="close" size={16} color="#94A3B8" />
+                                        <Ionicons name="close" size={16} color={colors.textSecondary} />
                                     </TouchableOpacity>
                                 </TouchableOpacity>
                             ))}
@@ -442,7 +447,7 @@ const SearchScreen = () => {
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
                             <Ionicons name="flame" size={20} color="#EF4444" />
-                            <Text style={styles.sectionTitle}>Trending Now</Text>
+                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Trending Now</Text>
                         </View>
                         <FlatList
                             data={trendingSearches}
@@ -455,45 +460,45 @@ const SearchScreen = () => {
                     </View>
 
                     <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Quick Actions</Text>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
 
-                        <TouchableOpacity style={styles.quickAction}>
-                            <View style={styles.quickActionIcon}>
-                                <Ionicons name="school-outline" size={24} color="#4F46E5" />
+                        <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                            <View style={[styles.quickActionIcon, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#F8FAFC' }]}>
+                                <Ionicons name="school-outline" size={24} color={colors.primary} />
                             </View>
                             <View style={styles.quickActionContent}>
-                                <Text style={styles.quickActionTitle}>Browse All Colleges</Text>
-                                <Text style={styles.quickActionSubtitle}>
+                                <Text style={[styles.quickActionTitle, { color: colors.text }]}>Browse All Colleges</Text>
+                                <Text style={[styles.quickActionSubtitle, { color: colors.textSecondary }]}>
                                     {allData.colleges.length} colleges available
                                 </Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.quickAction}>
-                            <View style={styles.quickActionIcon}>
+                        <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                            <View style={[styles.quickActionIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#F8FAFC' }]}>
                                 <Ionicons name="library-outline" size={24} color="#10B981" />
                             </View>
                             <View style={styles.quickActionContent}>
-                                <Text style={styles.quickActionTitle}>Explore Library</Text>
-                                <Text style={styles.quickActionSubtitle}>
+                                <Text style={[styles.quickActionTitle, { color: colors.text }]}>Explore Library</Text>
+                                <Text style={[styles.quickActionSubtitle, { color: colors.textSecondary }]}>
                                     {allData.resources.length} resources available
                                 </Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.quickAction}>
-                            <View style={styles.quickActionIcon}>
+                        <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                            <View style={[styles.quickActionIcon, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : '#F8FAFC' }]}>
                                 <Ionicons name="chatbubbles-outline" size={24} color="#F59E0B" />
                             </View>
                             <View style={styles.quickActionContent}>
-                                <Text style={styles.quickActionTitle}>Community Posts</Text>
-                                <Text style={styles.quickActionSubtitle}>
+                                <Text style={[styles.quickActionTitle, { color: colors.text }]}>Community Posts</Text>
+                                <Text style={[styles.quickActionSubtitle, { color: colors.textSecondary }]}>
                                     {allData.posts.length} posts from students
                                 </Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
@@ -501,7 +506,7 @@ const SearchScreen = () => {
 
             {isLoading && (
                 <View style={styles.loadingOverlay}>
-                    <ActivityIndicator size="large" color="#4F46E5" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             )}
         </SafeAreaView>

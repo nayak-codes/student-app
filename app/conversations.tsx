@@ -15,6 +15,7 @@ import {
     View
 } from 'react-native';
 import { auth } from '../src/config/firebase';
+import { useTheme } from '../src/contexts/ThemeContext';
 import {
     Conversation,
     subscribeToConversations
@@ -22,6 +23,7 @@ import {
 
 const ConversationsScreen = () => {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -104,7 +106,7 @@ const ConversationsScreen = () => {
 
         return (
             <TouchableOpacity
-                style={styles.conversationItem}
+                style={[styles.conversationItem, { backgroundColor: colors.card, borderBottomColor: isDark ? colors.border : '#F8FAFC' }]}
                 onPress={() => {
                     router.push({
                         pathname: '/chat-screen',
@@ -125,24 +127,24 @@ const ConversationsScreen = () => {
                             style={styles.avatar}
                         />
                     ) : (
-                        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
                             <Text style={styles.avatarText}>
                                 {otherUser.name.charAt(0).toUpperCase()}
                             </Text>
                         </View>
                     )}
                     {unreadCount > 0 && (
-                        <View style={styles.onlineBadge} />
+                        <View style={[styles.onlineBadge, { borderColor: colors.card }]} />
                     )}
                 </View>
 
                 <View style={styles.conversationContent}>
                     <View style={styles.conversationHeader}>
-                        <Text style={styles.userName} numberOfLines={1}>
+                        <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
                             {otherUser.name}
                         </Text>
                         {item.lastMessage && (
-                            <Text style={styles.timestamp}>
+                            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
                                 {formatTimestamp(item.lastMessage.timestamp)}
                             </Text>
                         )}
@@ -152,6 +154,7 @@ const ConversationsScreen = () => {
                         <Text
                             style={[
                                 styles.lastMessage,
+                                { color: unreadCount > 0 ? colors.text : colors.textSecondary },
                                 unreadCount > 0 && styles.unreadMessage,
                             ]}
                             numberOfLines={1}
@@ -159,7 +162,7 @@ const ConversationsScreen = () => {
                             {item.lastMessage?.text || 'Start a conversation'}
                         </Text>
                         {unreadCount > 0 && (
-                            <View style={styles.unreadBadge}>
+                            <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
                                 <Text style={styles.unreadBadgeText}>
                                     {unreadCount > 9 ? '9+' : unreadCount}
                                 </Text>
@@ -172,36 +175,36 @@ const ConversationsScreen = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity
                         onPress={() => router.back()}
                         style={styles.backButton}
                     >
-                        <Ionicons name="arrow-back" size={24} color="#1E293B" />
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Messages</Text>
+                    <Text style={[styles.headerTitle, { color: colors.text }]}>Messages</Text>
                 </View>
             </View>
 
             {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <View style={styles.searchInputWrapper}>
-                    <Ionicons name="search-outline" size={20} color="#94A3B8" style={styles.searchIcon} />
+            <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.background : '#F8FAFC', borderColor: colors.border }]}>
+                    <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
                     <TextInput
-                        style={styles.searchInput}
+                        style={[styles.searchInput, { color: colors.text }]}
                         placeholder="Search conversations..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={colors.textSecondary}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                            <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -210,7 +213,7 @@ const ConversationsScreen = () => {
             {/* Conversations List */}
             {loading ? (
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#4F46E5" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             ) : (
                 <FlatList
@@ -223,14 +226,15 @@ const ConversationsScreen = () => {
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={handleRefresh}
-                            colors={['#4F46E5']}
+                            colors={[colors.primary]}
+                            tintColor={colors.primary}
                         />
                     }
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
-                            <Ionicons name="chatbubbles-outline" size={64} color="#CBD5E1" />
-                            <Text style={styles.emptyTitle}>No conversations yet</Text>
-                            <Text style={styles.emptySubtitle}>
+                            <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
+                            <Text style={[styles.emptyTitle, { color: colors.text }]}>No conversations yet</Text>
+                            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                                 Start chatting by visiting a user's profile
                             </Text>
                         </View>

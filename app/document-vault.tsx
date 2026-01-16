@@ -10,6 +10,7 @@ import {
     Image,
     RefreshControl,
     ScrollView,
+    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -21,6 +22,7 @@ import EnterVaultPasswordModal from '../src/components/EnterVaultPasswordModal';
 import SetupVaultPasswordModal from '../src/components/SetupVaultPasswordModal';
 import UploadDocumentModal from '../src/components/UploadDocumentModal';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useTheme } from '../src/contexts/ThemeContext';
 import {
     deleteDocument,
     Document,
@@ -36,6 +38,7 @@ import { hasVaultPassword } from '../src/services/vaultSecurityService';
 
 const DocumentVault = () => {
     const { user } = useAuth();
+    const { colors, isDark } = useTheme();
     const router = useRouter();
     const [documents, setDocuments] = useState<Document[]>([]);
     const [storageUsed, setStorageUsed] = useState(0);
@@ -206,7 +209,7 @@ const DocumentVault = () => {
 
         return (
             <TouchableOpacity
-                style={styles.documentCard}
+                style={[styles.documentCard, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#000' }]}
                 onPress={() => handleViewDocument(item)}
                 activeOpacity={0.7}
             >
@@ -218,7 +221,7 @@ const DocumentVault = () => {
                                 style={styles.thumbnail}
                                 resizeMode="cover"
                             />
-                            <View style={styles.imageBadge}>
+                            <View style={[styles.imageBadge, { backgroundColor: colors.primary }]}>
                                 <Ionicons name="image" size={12} color="#FFF" />
                             </View>
                         </View>
@@ -234,7 +237,7 @@ const DocumentVault = () => {
                 </View>
 
                 <View style={styles.documentInfo}>
-                    <Text style={styles.documentName} numberOfLines={1}>
+                    <Text style={[styles.documentName, { color: colors.text }]} numberOfLines={1}>
                         {item.name}
                     </Text>
                     <View style={styles.documentMeta}>
@@ -248,25 +251,25 @@ const DocumentVault = () => {
                                 {item.category}
                             </Text>
                         </View>
-                        <Text style={styles.documentSize}>{formatFileSize(item.fileSize)}</Text>
+                        <Text style={[styles.documentSize, { color: colors.textSecondary }]}>{formatFileSize(item.fileSize)}</Text>
                     </View>
-                    <Text style={styles.documentDate}>
+                    <Text style={[styles.documentDate, { color: colors.textSecondary }]}>
                         {new Date(item.uploadDate).toLocaleDateString()}
                     </Text>
                 </View>
 
                 <View style={styles.documentActions}>
                     <TouchableOpacity
-                        style={[styles.actionButton, styles.viewButton]}
+                        style={[styles.actionButton, styles.viewButton, { backgroundColor: isDark ? colors.background : '#EEF2FF' }]}
                         onPress={() => handleViewDocument(item)}
                     >
-                        <Ionicons name="eye-outline" size={20} color="#4F46E5" />
+                        <Ionicons name="eye-outline" size={20} color={colors.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.actionButton, styles.deleteButton]}
+                        style={[styles.actionButton, styles.deleteButton, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEE2E2' }]}
                         onPress={() => handleDelete(item)}
                     >
-                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                        <Ionicons name="trash-outline" size={20} color={colors.danger} />
                     </TouchableOpacity>
                 </View>
             </TouchableOpacity>
@@ -275,13 +278,13 @@ const DocumentVault = () => {
 
     const renderEmptyState = () => (
         <View style={styles.emptyState}>
-            <Ionicons name="folder-open-outline" size={80} color="#CBD5E1" />
-            <Text style={styles.emptyTitle}>No Documents Yet</Text>
-            <Text style={styles.emptySubtitle}>
+            <Ionicons name="folder-open-outline" size={80} color={colors.textSecondary} />
+            <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No Documents Yet</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                 Start by uploading your important documents
             </Text>
             <TouchableOpacity
-                style={styles.emptyButton}
+                style={[styles.emptyButton, { backgroundColor: colors.primary }]}
                 onPress={() => setShowUploadModal(true)}
             >
                 <Ionicons name="add-circle" size={20} color="#FFF" />
@@ -299,38 +302,40 @@ const DocumentVault = () => {
     ];
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={22} color="#1E293B" />
+                    <Ionicons name="arrow-back" size={22} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>My Documents</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>My Documents</Text>
                 <View style={styles.headerActions}>
                     {isAuthenticated && (
                         <TouchableOpacity
                             onPress={handleLockVault}
                             style={styles.headerButton}
                         >
-                            <Ionicons name="lock-closed" size={22} color="#64748B" />
+                            <Ionicons name="lock-closed" size={22} color={colors.textSecondary} />
                         </TouchableOpacity>
                     )}
                     <TouchableOpacity onPress={() => setShowUploadModal(true)}>
-                        <Ionicons name="add-circle" size={24} color="#4F46E5" />
+                        <Ionicons name="add-circle" size={24} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
             </View>
 
             {/* Storage Info */}
-            <View style={styles.storageCard}>
-                <View style={styles.storageIcon}>
-                    <Ionicons name="cloud" size={20} color="#4F46E5" />
+            <View style={[styles.storageCard, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#000' }]}>
+                <View style={[styles.storageIcon, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#EEF2FF' }]}>
+                    <Ionicons name="cloud" size={20} color={colors.primary} />
                 </View>
                 <View style={styles.storageInfo}>
-                    <Text style={styles.storageLabel}>Cloud Storage Used</Text>
-                    <Text style={styles.storageValue}>{formatFileSize(storageUsed)}</Text>
+                    <Text style={[styles.storageLabel, { color: colors.textSecondary }]}>Cloud Storage Used</Text>
+                    <Text style={[styles.storageValue, { color: colors.text }]}>{formatFileSize(storageUsed)}</Text>
                 </View>
-                <View style={styles.securityBadge}>
+                <View style={[styles.securityBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#F0FDF4' }]}>
                     <Ionicons name="shield-checkmark" size={14} color="#10B981" />
                     <Text style={styles.securityText}>Secure</Text>
                 </View>
@@ -348,19 +353,23 @@ const DocumentVault = () => {
                         key={cat.value}
                         style={[
                             styles.filterChip,
-                            selectedCategory === cat.value && styles.filterChipActive,
+                            selectedCategory === cat.value ?
+                                [styles.filterChipActive, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#EEF2FF', borderColor: colors.primary }] :
+                                { backgroundColor: colors.card, borderColor: colors.border },
                         ]}
                         onPress={() => setSelectedCategory(cat.value)}
                     >
                         <Ionicons
                             name={cat.icon as any}
                             size={13}
-                            color={selectedCategory === cat.value ? '#4F46E5' : '#64748B'}
+                            color={selectedCategory === cat.value ? colors.primary : colors.textSecondary}
                         />
                         <Text
                             style={[
                                 styles.filterChipText,
-                                selectedCategory === cat.value && styles.filterChipTextActive,
+                                selectedCategory === cat.value ?
+                                    [styles.filterChipTextActive, { color: colors.primary }] :
+                                    { color: colors.textSecondary },
                             ]}
                         >
                             {cat.label}
@@ -377,7 +386,7 @@ const DocumentVault = () => {
                 contentContainerStyle={styles.documentsList}
                 ListEmptyComponent={renderEmptyState}
                 refreshControl={
-                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
                 }
             />
 
@@ -423,7 +432,7 @@ const DocumentVault = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC',
     },
     header: {
         flexDirection: 'row',
@@ -431,14 +440,14 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
+        // borderBottomColor: '#E2E8F0',
     },
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#1E293B',
+        // color: '#1E293B',
     },
     headerActions: {
         flexDirection: 'row',
@@ -455,9 +464,8 @@ const styles = StyleSheet.create({
         marginTop: 12,
         marginBottom: 12,
         padding: 12,
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
         borderRadius: 12,
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 8,
@@ -467,7 +475,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#EEF2FF',
+        // backgroundColor: '#EEF2FF',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 10,
@@ -477,20 +485,20 @@ const styles = StyleSheet.create({
     },
     storageLabel: {
         fontSize: 11,
-        color: '#64748B',
+        // color: '#64748B',
         marginBottom: 2,
     },
     storageValue: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#1E293B',
+        // color: '#1E293B',
     },
     securityBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 10,
         paddingVertical: 5,
-        backgroundColor: '#F0FDF4',
+        // backgroundColor: '#F0FDF4',
         borderRadius: 10,
         gap: 4,
     },
@@ -515,24 +523,18 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 18,
-        backgroundColor: '#FFF',
         borderWidth: 1.5,
-        borderColor: '#E2E8F0',
         gap: 5,
         minHeight: 28,
     },
     filterChipActive: {
-        backgroundColor: '#EEF2FF',
-        borderColor: '#4F46E5',
         borderWidth: 1.5,
     },
     filterChipText: {
         fontSize: 11,
         fontWeight: '500',
-        color: '#64748B',
     },
     filterChipTextActive: {
-        color: '#4F46E5',
         fontWeight: '600',
     },
     documentsList: {
@@ -542,11 +544,9 @@ const styles = StyleSheet.create({
     documentCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF',
         borderRadius: 16,
         padding: 16,
         marginBottom: 12,
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 4,
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
         width: 20,
         height: 20,
         borderRadius: 10,
-        backgroundColor: 'rgba(79, 70, 229, 0.9)',
+        // backgroundColor: 'rgba(79, 70, 229, 0.9)',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC',
         zIndex: 1,
     },
     documentInfo: {
@@ -601,7 +601,6 @@ const styles = StyleSheet.create({
     documentName: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#1E293B',
         marginBottom: 4,
     },
     documentMeta: {
@@ -622,11 +621,9 @@ const styles = StyleSheet.create({
     },
     documentSize: {
         fontSize: 12,
-        color: '#64748B',
     },
     documentDate: {
         fontSize: 11,
-        color: '#94A3B8',
     },
     documentActions: {
         flexDirection: 'row',
@@ -636,15 +633,14 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 8,
-        backgroundColor: '#F8FAFC',
         justifyContent: 'center',
         alignItems: 'center',
     },
     viewButton: {
-        backgroundColor: '#EEF2FF',
+        // backgroundColor: '#EEF2FF',
     },
     deleteButton: {
-        backgroundColor: '#FEE2E2',
+        // backgroundColor: '#FEE2E2',
     },
     emptyState: {
         alignItems: 'center',
@@ -655,13 +651,11 @@ const styles = StyleSheet.create({
     emptyTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#64748B',
         marginTop: 16,
         marginBottom: 8,
     },
     emptySubtitle: {
         fontSize: 14,
-        color: '#94A3B8',
         textAlign: 'center',
         marginBottom: 24,
     },
@@ -670,7 +664,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 24,
         paddingVertical: 12,
-        backgroundColor: '#4F46E5',
         borderRadius: 12,
         gap: 8,
     },

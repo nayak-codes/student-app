@@ -13,10 +13,12 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { getSavedResources, SavedResource } from '../src/services/savedService';
 
 const DownloadsScreen = () => {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     const [downloads, setDownloads] = useState<SavedResource[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -48,10 +50,10 @@ const DownloadsScreen = () => {
 
     const renderItem = ({ item }: { item: SavedResource }) => (
         <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#64748B' }]}
             onPress={() => router.push({ pathname: '/document-detail', params: { id: item.id } })}
         >
-            <View style={styles.iconContainer}>
+            <View style={[styles.iconContainer, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#F8FAFC' }]}>
                 <Ionicons
                     name={item.type === 'pdf' ? 'document-text' : 'create'}
                     size={28}
@@ -59,31 +61,31 @@ const DownloadsScreen = () => {
                 />
             </View>
             <View style={styles.cardContent}>
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
                 <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>{item.subject}</Text>
-                    <Text style={styles.dot}>•</Text>
-                    <Text style={styles.metaText}>{item.exam}</Text>
+                    <Text style={[styles.metaText, { color: colors.textSecondary }]}>{item.subject}</Text>
+                    <Text style={[styles.dot, { color: colors.textSecondary }]}>•</Text>
+                    <Text style={[styles.metaText, { color: colors.textSecondary }]}>{item.exam}</Text>
                 </View>
-                <Text style={styles.savedDate}>Saved {new Date(item.savedAt).toLocaleDateString()}</Text>
+                <Text style={[styles.savedDate, { color: colors.textSecondary }]}>Saved {new Date(item.savedAt).toLocaleDateString()}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
     );
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1E293B" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Downloads</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Downloads</Text>
                 <View style={{ width: 40 }} />
             </View>
 
             {loading && !refreshing ? (
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#4F46E5" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             ) : (
                 <FlatList
@@ -91,12 +93,19 @@ const DownloadsScreen = () => {
                     renderItem={renderItem}
                     keyExtractor={item => item.id}
                     contentContainerStyle={styles.listContent}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={[colors.primary]}
+                            tintColor={colors.primary}
+                        />
+                    }
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
-                            <Ionicons name="cloud-download-outline" size={64} color="#94A3B8" />
-                            <Text style={styles.emptyText}>No downloads yet</Text>
-                            <Text style={styles.emptySubText}>Save resources to access them quickly here.</Text>
+                            <Ionicons name="cloud-download-outline" size={64} color={colors.textSecondary} />
+                            <Text style={[styles.emptyText, { color: colors.text }]}>No downloads yet</Text>
+                            <Text style={[styles.emptySubText, { color: colors.textSecondary }]}>Save resources to access them quickly here.</Text>
                         </View>
                     }
                 />
@@ -108,7 +117,7 @@ const DownloadsScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC',
     },
     header: {
         flexDirection: 'row',
@@ -116,9 +125,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        // borderBottomColor: '#F1F5F9',
     },
     backButton: {
         padding: 8,
@@ -126,7 +135,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#1E293B',
+        // color: '#1E293B',
     },
     loadingContainer: {
         flex: 1,
@@ -139,11 +148,10 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
         padding: 16,
         borderRadius: 16,
         marginBottom: 12,
-        shadowColor: '#64748B',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 8,
@@ -153,7 +161,7 @@ const styles = StyleSheet.create({
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
@@ -164,7 +172,7 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#1E293B',
+        // color: '#1E293B',
         marginBottom: 4,
     },
     metaRow: {
@@ -175,15 +183,15 @@ const styles = StyleSheet.create({
     },
     metaText: {
         fontSize: 12,
-        color: '#64748B',
+        // color: '#64748B',
     },
     dot: {
         fontSize: 12,
-        color: '#CBD5E1',
+        // color: '#CBD5E1',
     },
     savedDate: {
         fontSize: 11,
-        color: '#94A3B8',
+        // color: '#94A3B8',
     },
     emptyContainer: {
         alignItems: 'center',
@@ -193,13 +201,13 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#1E293B',
+        // color: '#1E293B',
         marginTop: 16,
         marginBottom: 8,
     },
     emptySubText: {
         fontSize: 14,
-        color: '#64748B',
+        // color: '#64748B',
         textAlign: 'center',
     },
 });

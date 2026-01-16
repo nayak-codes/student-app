@@ -3,13 +3,15 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { getWatchLaterPlaylist } from '../../src/services/playlistService';
 
 // Note: In real implementation, we would need to fetch the actual post objects for the items in the playlist.
@@ -21,6 +23,7 @@ import { getWatchLaterPlaylist } from '../../src/services/playlistService';
 export default function WatchLaterScreen() {
     const router = useRouter();
     const { user } = useAuth();
+    const { colors, isDark } = useTheme();
     const [loading, setLoading] = useState(true);
     const [itemCount, setItemCount] = useState(0);
 
@@ -44,26 +47,27 @@ export default function WatchLaterScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color="#0F172A" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Watch Later</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Watch Later</Text>
             </View>
 
             {loading ? (
                 <View style={styles.center}>
-                    <ActivityIndicator size="large" color="#4F46E5" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             ) : (
                 <View style={styles.center}>
-                    <View style={styles.iconCircle}>
-                        <Ionicons name="time" size={48} color="#4F46E5" />
+                    <View style={[styles.iconCircle, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#EEF2FF' }]}>
+                        <Ionicons name="time" size={48} color={colors.primary} />
                     </View>
-                    <Text style={styles.title}>Your Watch Later List</Text>
-                    <Text style={styles.subtitle}>{itemCount} videos saved</Text>
-                    <Text style={styles.info}>
+                    <Text style={[styles.title, { color: colors.text }]}>Your Watch Later List</Text>
+                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{itemCount} videos saved</Text>
+                    <Text style={[styles.info, { color: colors.textSecondary }]}>
                         Save videos here to watch them at your convenience.
                     </Text>
                 </View>
@@ -75,14 +79,14 @@ export default function WatchLaterScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        // borderBottomColor: '#F1F5F9',
     },
     backBtn: {
         marginRight: 16,
@@ -90,7 +94,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#0F172A',
+        // color: '#0F172A',
     },
     center: {
         flex: 1,
@@ -102,7 +106,7 @@ const styles = StyleSheet.create({
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: '#EEF2FF',
+        // backgroundColor: '#EEF2FF',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24,
@@ -110,17 +114,17 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#0F172A',
+        // color: '#0F172A',
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 16,
-        color: '#64748B',
+        // color: '#64748B',
         marginBottom: 16,
     },
     info: {
         textAlign: 'center',
-        color: '#94A3B8',
+        // color: '#94A3B8',
         fontSize: 14,
         lineHeight: 20,
     },

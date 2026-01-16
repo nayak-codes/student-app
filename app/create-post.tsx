@@ -7,15 +7,17 @@ import {
     Alert,
     Image,
     ScrollView,
+    StatusBar,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import UploadResourceModal from '../src/components/UploadResourceModal';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { createPost } from '../src/services/postsService';
 import { uploadImageWithProgress } from '../src/utils/imgbbUpload';
 import { YouTubeVideoMetadata, getVideoMetadata, isYouTubeUrl } from '../src/utils/youtubeUtils';
@@ -23,6 +25,7 @@ import { YouTubeVideoMetadata, getVideoMetadata, isYouTubeUrl } from '../src/uti
 export default function CreatePostScreen() {
     const router = useRouter();
     const { user, userProfile } = useAuth();
+    const { colors, isDark } = useTheme();
 
     // UI State
     const [activeTab, setActiveTab] = useState<'post' | 'event' | 'resource'>('post');
@@ -135,18 +138,23 @@ export default function CreatePostScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-                    <Ionicons name="close" size={28} color="#1E293B" />
+                    <Ionicons name="close" size={28} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Create New</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Create New</Text>
                 {activeTab === 'post' && (
                     <TouchableOpacity
                         onPress={handlePostSubmit}
                         disabled={isSubmitting || !content.trim()}
-                        style={[styles.postButton, (!content.trim() || isSubmitting) && styles.postButtonDisabled]}
+                        style={[
+                            styles.postButton,
+                            { backgroundColor: colors.primary },
+                            (!content.trim() || isSubmitting) && styles.postButtonDisabled
+                        ]}
                     >
                         {isSubmitting ? (
                             <ActivityIndicator size="small" color="#FFF" />
@@ -158,27 +166,36 @@ export default function CreatePostScreen() {
             </View>
 
             {/* Tabs */}
-            <View style={styles.tabsContainer}>
+            <View style={[styles.tabsContainer, { backgroundColor: isDark ? colors.card : '#FAFAFA', borderBottomColor: colors.border }]}>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'post' && styles.activeTab]}
+                    style={[
+                        styles.tab,
+                        activeTab === 'post' && [styles.activeTab, { borderBottomColor: colors.primary, backgroundColor: isDark ? colors.background : '#FFF' }]
+                    ]}
                     onPress={() => setActiveTab('post')}
                 >
-                    <Ionicons name="create-outline" size={20} color={activeTab === 'post' ? '#4F46E5' : '#64748B'} />
-                    <Text style={[styles.tabText, activeTab === 'post' && styles.activeTabText]}>Post</Text>
+                    <Ionicons name="create-outline" size={20} color={activeTab === 'post' ? colors.primary : colors.textSecondary} />
+                    <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'post' && { color: colors.primary }]}>Post</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'event' && styles.activeTab]}
+                    style={[
+                        styles.tab,
+                        activeTab === 'event' && [styles.activeTab, { borderBottomColor: colors.primary, backgroundColor: isDark ? colors.background : '#FFF' }]
+                    ]}
                     onPress={() => setActiveTab('event')}
                 >
-                    <Ionicons name="calendar-outline" size={20} color={activeTab === 'event' ? '#4F46E5' : '#64748B'} />
-                    <Text style={[styles.tabText, activeTab === 'event' && styles.activeTabText]}>Event</Text>
+                    <Ionicons name="calendar-outline" size={20} color={activeTab === 'event' ? colors.primary : colors.textSecondary} />
+                    <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'event' && { color: colors.primary }]}>Event</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'resource' && styles.activeTab]}
+                    style={[
+                        styles.tab,
+                        activeTab === 'resource' && [styles.activeTab, { borderBottomColor: colors.primary, backgroundColor: isDark ? colors.background : '#FFF' }]
+                    ]}
                     onPress={() => setActiveTab('resource')}
                 >
-                    <Ionicons name="folder-open-outline" size={20} color={activeTab === 'resource' ? '#4F46E5' : '#64748B'} />
-                    <Text style={[styles.tabText, activeTab === 'resource' && styles.activeTabText]}>Resource</Text>
+                    <Ionicons name="folder-open-outline" size={20} color={activeTab === 'resource' ? colors.primary : colors.textSecondary} />
+                    <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'resource' && { color: colors.primary }]}>Resource</Text>
                 </TouchableOpacity>
             </View>
 
@@ -192,22 +209,22 @@ export default function CreatePostScreen() {
                             {userProfile?.photoURL ? (
                                 <Image source={{ uri: userProfile.photoURL }} style={styles.avatar} />
                             ) : (
-                                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                                    <Text style={styles.avatarText}>{userProfile?.name?.charAt(0) || 'U'}</Text>
+                                <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: isDark ? colors.card : '#F1F5F9' }]}>
+                                    <Text style={[styles.avatarText, { color: colors.primary }]}>{userProfile?.name?.charAt(0) || 'U'}</Text>
                                 </View>
                             )}
                             <View>
-                                <Text style={styles.userName}>{userProfile?.name || 'Student'}</Text>
-                                <View style={styles.badge}>
+                                <Text style={[styles.userName, { color: colors.text }]}>{userProfile?.name || 'Student'}</Text>
+                                <View style={[styles.badge, { backgroundColor: isDark ? colors.card : '#F1F5F9' }]}>
                                     <Text style={styles.badgeText}>Public</Text>
                                 </View>
                             </View>
                         </View>
 
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { color: colors.text }]}
                             placeholder="What's on your mind?"
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={colors.textSecondary}
                             multiline
                             value={content}
                             onChangeText={setContent}
@@ -216,17 +233,17 @@ export default function CreatePostScreen() {
 
                         {/* Media Previews */}
                         {selectedImage && (
-                            <View style={styles.mediaPreview}>
+                            <View style={[styles.mediaPreview, { backgroundColor: isDark ? '#000' : '#F1F5F9' }]}>
                                 <Image source={{ uri: selectedImage }} style={styles.mediaImage} />
                                 <TouchableOpacity onPress={() => setSelectedImage(null)} style={styles.removeMedia}>
-                                    <Ionicons name="close-circle" size={24} color="#EF4444" />
+                                    <Ionicons name="close-circle" size={24} color={colors.danger} />
                                 </TouchableOpacity>
                             </View>
                         )}
 
                         {/* Video Metadata Preview */}
                         {videoMetadata && (
-                            <View style={styles.mediaPreview}>
+                            <View style={[styles.mediaPreview, { backgroundColor: isDark ? '#000' : '#F1F5F9' }]}>
                                 <Image source={{ uri: videoMetadata.thumbnailUrl }} style={styles.mediaImage} />
                                 <View style={styles.videoOverlay}>
                                     <Ionicons name="play-circle" size={40} color="#FFF" />
@@ -236,74 +253,99 @@ export default function CreatePostScreen() {
                         )}
 
                         {/* Post Options Grid */}
-                        <Text style={styles.sectionLabel}>Add to your post</Text>
+                        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Add to your post</Text>
                         <View style={styles.optionsGrid}>
                             <TouchableOpacity
-                                style={[styles.optionCard, postType === 'image' && styles.optionCardActive]}
+                                style={[
+                                    styles.optionCard,
+                                    { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border },
+                                    postType === 'image' && { borderColor: colors.primary, backgroundColor: isDark ? 'rgba(79,70,229,0.1)' : '#EEF2FF' }
+                                ]}
                                 onPress={pickImage}
                             >
-                                <View style={[styles.iconBox, { backgroundColor: '#EEF2FF' }]}>
+                                <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(79,70,229,0.1)' : '#EEF2FF' }]}>
                                     <Ionicons name="image" size={24} color="#4F46E5" />
                                 </View>
-                                <Text style={styles.optionText}>Photo</Text>
+                                <Text style={[styles.optionText, { color: colors.text }]}>Photo</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.optionCard, postType === 'video' && styles.optionCardActive]}
+                                style={[
+                                    styles.optionCard,
+                                    { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border },
+                                    postType === 'video' && { borderColor: colors.danger, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2' }
+                                ]}
                                 onPress={() => setPostType('video')}
                             >
-                                <View style={[styles.iconBox, { backgroundColor: '#FEF2F2' }]}>
+                                <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2' }]}>
                                     <Ionicons name="videocam" size={24} color="#EF4444" />
                                 </View>
-                                <Text style={styles.optionText}>Video</Text>
+                                <Text style={[styles.optionText, { color: colors.text }]}>Video</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.optionCard, postType === 'clip' && styles.optionCardActive]}
+                                style={[
+                                    styles.optionCard,
+                                    { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border },
+                                    postType === 'clip' && { borderColor: '#10B981', backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#F0FDF4' }
+                                ]}
                                 onPress={() => setPostType('clip')}
                             >
-                                <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
+                                <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#F0FDF4' }]}>
                                     <Ionicons name="film" size={24} color="#10B981" />
                                 </View>
-                                <Text style={styles.optionText}>Clip</Text>
+                                <Text style={[styles.optionText, { color: colors.text }]}>Clip</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.optionCard, postType === 'news' && styles.optionCardActive]}
+                                style={[
+                                    styles.optionCard,
+                                    { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border },
+                                    postType === 'news' && { borderColor: '#F59E0B', backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : '#FFF7ED' }
+                                ]}
                                 onPress={() => setPostType('news')}
                             >
-                                <View style={[styles.iconBox, { backgroundColor: '#FFF7ED' }]}>
+                                <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : '#FFF7ED' }]}>
                                     <Ionicons name="newspaper" size={24} color="#F59E0B" />
                                 </View>
-                                <Text style={styles.optionText}>News</Text>
+                                <Text style={[styles.optionText, { color: colors.text }]}>News</Text>
                             </TouchableOpacity>
                         </View>
 
                         {/* Video Link Input */}
                         {(postType === 'video' || postType === 'clip') && (
-                            <View style={styles.videoInputContainer}>
-                                <Ionicons name="link" size={20} color="#64748B" />
+                            <View style={[styles.videoInputContainer, { backgroundColor: isDark ? colors.card : '#F1F5F9' }]}>
+                                <Ionicons name="link" size={20} color={colors.textSecondary} />
                                 <TextInput
-                                    style={styles.linkInput}
+                                    style={[styles.linkInput, { color: colors.text }]}
                                     placeholder="Paste YouTube Link"
+                                    placeholderTextColor={colors.textSecondary}
                                     value={videoLink}
                                     onChangeText={handleVideoLinkChange}
                                     autoCapitalize="none"
                                 />
-                                {isFetchingMetadata && <ActivityIndicator size="small" color="#4F46E5" />}
+                                {isFetchingMetadata && <ActivityIndicator size="small" color={colors.primary} />}
                             </View>
                         )}
 
                         {/* Tags */}
-                        <Text style={styles.sectionLabel}>Tags</Text>
+                        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Tags</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagsRow}>
                             {availableTags.map(tag => (
                                 <TouchableOpacity
                                     key={tag}
-                                    style={[styles.tag, selectedTags.includes(tag) && styles.tagSelected]}
+                                    style={[
+                                        styles.tag,
+                                        { backgroundColor: isDark ? colors.card : '#F1F5F9', borderColor: colors.border },
+                                        selectedTags.includes(tag) && { backgroundColor: colors.primary, borderColor: colors.primary }
+                                    ]}
                                     onPress={() => toggleTag(tag)}
                                 >
-                                    <Text style={[styles.tagText, selectedTags.includes(tag) && styles.tagTextSelected]}>#{tag}</Text>
+                                    <Text style={[
+                                        styles.tagText,
+                                        { color: colors.textSecondary },
+                                        selectedTags.includes(tag) && { color: '#FFF' }
+                                    ]}>#{tag}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -319,11 +361,11 @@ export default function CreatePostScreen() {
                             style={styles.heroImage}
                             resizeMode="contain"
                         />
-                        <Text style={styles.heroTitle}>Host an Event</Text>
-                        <Text style={styles.heroSubtitle}>
+                        <Text style={[styles.heroTitle, { color: colors.text }]}>Host an Event</Text>
+                        <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
                             Organize hackathons, workshops, webinars, or study sessions for the community.
                         </Text>
-                        <TouchableOpacity style={styles.heroButton} onPress={() => router.push('/post-event')}>
+                        <TouchableOpacity style={[styles.heroButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/post-event')}>
                             <Text style={styles.heroButtonText}>Create Event</Text>
                             <Ionicons name="arrow-forward" size={20} color="#FFF" />
                         </TouchableOpacity>
@@ -331,11 +373,11 @@ export default function CreatePostScreen() {
                         <View style={styles.featuresList}>
                             <View style={styles.featureItem}>
                                 <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                                <Text style={styles.featureText}>Reach 10,000+ Students</Text>
+                                <Text style={[styles.featureText, { color: colors.textSecondary }]}>Reach 10,000+ Students</Text>
                             </View>
                             <View style={styles.featureItem}>
                                 <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                                <Text style={styles.featureText}>Easy Registration Management</Text>
+                                <Text style={[styles.featureText, { color: colors.textSecondary }]}>Easy Registration Management</Text>
                             </View>
                         </View>
                     </View>
@@ -349,11 +391,11 @@ export default function CreatePostScreen() {
                             style={styles.heroImage}
                             resizeMode="contain"
                         />
-                        <Text style={styles.heroTitle}>Share Resources</Text>
-                        <Text style={styles.heroSubtitle}>
+                        <Text style={[styles.heroTitle, { color: colors.text }]}>Share Resources</Text>
+                        <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
                             Upload formulas, notes, past papers, or cheat sheets to help others.
                         </Text>
-                        <TouchableOpacity style={styles.heroButton} onPress={() => setShowResourceModal(true)}>
+                        <TouchableOpacity style={[styles.heroButton, { backgroundColor: colors.primary }]} onPress={() => setShowResourceModal(true)}>
                             <Text style={styles.heroButtonText}>Upload File</Text>
                             <Ionicons name="cloud-upload" size={20} color="#FFF" />
                         </TouchableOpacity>
@@ -361,11 +403,11 @@ export default function CreatePostScreen() {
                         <View style={styles.featuresList}>
                             <View style={styles.featureItem}>
                                 <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                                <Text style={styles.featureText}>PDF, Notes, Formulas supported</Text>
+                                <Text style={[styles.featureText, { color: colors.textSecondary }]}>PDF, Notes, Formulas supported</Text>
                             </View>
                             <View style={styles.featureItem}>
                                 <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                                <Text style={styles.featureText}>Earn Reputation Points</Text>
+                                <Text style={[styles.featureText, { color: colors.textSecondary }]}>Earn Reputation Points</Text>
                             </View>
                         </View>
                     </View>
@@ -387,7 +429,7 @@ export default function CreatePostScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
     },
     header: {
         flexDirection: 'row',
@@ -396,7 +438,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        // borderBottomColor: '#F1F5F9',
     },
     closeButton: {
         padding: 4,
@@ -404,7 +446,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#0F172A',
+        // color: '#0F172A',
     },
     postButton: {
         backgroundColor: '#4F46E5',
@@ -414,6 +456,7 @@ const styles = StyleSheet.create({
     },
     postButtonDisabled: {
         backgroundColor: '#94A3B8',
+        opacity: 0.7,
     },
     postButtonText: {
         color: '#FFF',
@@ -422,8 +465,8 @@ const styles = StyleSheet.create({
     tabsContainer: {
         flexDirection: 'row',
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
-        backgroundColor: '#FAFAFA',
+        // borderBottomColor: '#F1F5F9',
+        // backgroundColor: '#FAFAFA',
     },
     tab: {
         flex: 1,
@@ -435,17 +478,17 @@ const styles = StyleSheet.create({
     },
     activeTab: {
         borderBottomWidth: 2,
-        borderBottomColor: '#4F46E5',
-        backgroundColor: '#FFF',
+        // borderBottomColor: '#4F46E5',
+        // backgroundColor: '#FFF',
     },
     tabText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#64748B',
+        // color: '#64748B',
     },
-    activeTabText: {
-        color: '#4F46E5',
-    },
+    // activeTabText: {
+    //     // color: '#4F46E5',
+    // },
     content: {
         flex: 1,
     },
@@ -471,12 +514,12 @@ const styles = StyleSheet.create({
     avatarText: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#4F46E5',
+        // color: '#4F46E5',
     },
     userName: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#0F172A',
+        // color: '#0F172A',
     },
     badge: {
         backgroundColor: '#F1F5F9',
@@ -493,7 +536,7 @@ const styles = StyleSheet.create({
     },
     input: {
         fontSize: 18,
-        color: '#0F172A',
+        // color: '#0F172A',
         minHeight: 100,
         textAlignVertical: 'top',
         marginBottom: 20,
@@ -501,7 +544,7 @@ const styles = StyleSheet.create({
     sectionLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#64748B',
+        // color: '#64748B',
         marginBottom: 12,
         textTransform: 'uppercase',
         marginTop: 12,
@@ -514,19 +557,19 @@ const styles = StyleSheet.create({
     },
     optionCard: {
         width: '48%',
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC',
         padding: 12,
         borderRadius: 12,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#F1F5F9',
+        // borderColor: '#F1F5F9',
         flexDirection: 'row',
         gap: 12,
     },
-    optionCardActive: {
-        borderColor: '#4F46E5',
-        backgroundColor: '#EEF2FF',
-    },
+    // optionCardActive: {
+    //     borderColor: '#4F46E5',
+    //     backgroundColor: '#EEF2FF',
+    // },
     iconBox: {
         width: 40,
         height: 40,
@@ -537,12 +580,12 @@ const styles = StyleSheet.create({
     optionText: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#334155',
+        // color: '#334155',
     },
     videoInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        // backgroundColor: '#F1F5F9',
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
@@ -552,7 +595,7 @@ const styles = StyleSheet.create({
     linkInput: {
         flex: 1,
         fontSize: 14,
-        color: '#0F172A',
+        // color: '#0F172A',
     },
     tagsRow: {
         gap: 8,
@@ -562,22 +605,22 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingVertical: 6,
         borderRadius: 20,
-        backgroundColor: '#F1F5F9',
+        // backgroundColor: '#F1F5F9',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        // borderColor: '#E2E8F0',
     },
-    tagSelected: {
-        backgroundColor: '#4F46E5',
-        borderColor: '#4F46E5',
-    },
+    // tagSelected: {
+    //     backgroundColor: '#4F46E5',
+    //     borderColor: '#4F46E5',
+    // },
     tagText: {
         fontSize: 13,
-        color: '#64748B',
+        // color: '#64748B',
         fontWeight: '500',
     },
-    tagTextSelected: {
-        color: '#FFF',
-    },
+    // tagTextSelected: {
+    //     color: '#FFF',
+    // },
     mediaPreview: {
         width: '100%',
         height: 200,
@@ -624,12 +667,12 @@ const styles = StyleSheet.create({
     heroTitle: {
         fontSize: 24,
         fontWeight: '800',
-        color: '#0F172A',
+        // color: '#0F172A',
         marginBottom: 8,
     },
     heroSubtitle: {
         fontSize: 14,
-        color: '#64748B',
+        // color: '#64748B',
         textAlign: 'center',
         marginBottom: 32,
         lineHeight: 22,
@@ -664,7 +707,7 @@ const styles = StyleSheet.create({
     },
     featureText: {
         fontSize: 14,
-        color: '#475569',
+        // color: '#475569',
         fontWeight: '500',
     },
 });

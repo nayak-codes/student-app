@@ -3,16 +3,19 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
 import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { getAllPosts, likePost, Post, savePost, unlikePost, unsavePost } from '../../services/postsService';
 import FeedPost from './FeedPost';
 
 const FeedList: React.FC = () => {
+    const { colors } = useTheme();
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [shareModalVisible, setShareModalVisible] = useState(false);
     const [shareData, setShareData] = useState<any>(null);
     const { user } = useAuth();
+
 
     const fetchPosts = async () => {
         try {
@@ -172,7 +175,7 @@ const FeedList: React.FC = () => {
     }
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <FlatList
                 data={posts}
                 keyExtractor={(item) => item.id}
@@ -188,12 +191,12 @@ const FeedList: React.FC = () => {
                     />
                 )}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3F51B5']} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
                 }
                 contentContainerStyle={posts.length === 0 ? styles.emptyContainer : styles.listContent}
                 ListEmptyComponent={
                     <View style={styles.emptyView}>
-                        <Text style={styles.emptyText}>No posts yet. Be the first to share!</Text>
+                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No posts yet. Be the first to share!</Text>
                     </View>
                 }
             />

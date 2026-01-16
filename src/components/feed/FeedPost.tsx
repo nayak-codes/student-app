@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Post } from '../../services/postsService';
 
 interface FeedPostProps {
@@ -17,7 +18,8 @@ interface FeedPostProps {
 }
 
 const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, onSave, currentUserLiked, currentUserSaved }) => {
-    const router = useRouter(); // Initialize router
+    const router = useRouter();
+    const { colors, isDark } = useTheme();
     const [aspectRatio, setAspectRatio] = useState(1);
     const [liked, setLiked] = useState(currentUserLiked);
     const [saved, setSaved] = useState(currentUserSaved);
@@ -56,21 +58,21 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity style={styles.userInfo} onPress={handleProfilePress}>
                     {/* Placeholder Avatar - in real app, use user profile image */}
-                    <View style={styles.avatar}>
+                    <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
                         <Text style={styles.avatarText}>{post.userName.charAt(0).toUpperCase()}</Text>
                     </View>
                     <View>
-                        <Text style={styles.userName}>{post.userName}</Text>
-                        <Text style={styles.userExam}>{post.userExam}</Text>
+                        <Text style={[styles.userName, { color: colors.text }]}>{post.userName}</Text>
+                        <Text style={[styles.userExam, { color: colors.textSecondary }]}>{post.userExam}</Text>
                     </View>
                 </TouchableOpacity>
                 <TouchableOpacity>
-                    <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+                    <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
             </View>
 
@@ -79,14 +81,14 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
                 {post.imageUrl ? (
                     <Image
                         source={{ uri: post.imageUrl }}
-                        style={[styles.postImage, { aspectRatio }]}
+                        style={[styles.postImage, { aspectRatio, backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
                         resizeMode="cover"
                     />
                 ) : null}
 
                 {/* Video Placeholder */}
                 {post.type === 'video' && !post.imageUrl && (
-                    <View style={styles.videoPlaceholder}>
+                    <View style={[styles.videoPlaceholder, { backgroundColor: isDark ? '#000' : '#1E293B' }]}>
                         <Ionicons name="play-circle-outline" size={64} color="#fff" />
                         <Text style={{ color: 'white', marginTop: 8 }}>Video Content</Text>
                     </View>
@@ -100,45 +102,45 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
                         <Ionicons
                             name={liked ? "heart" : "heart-outline"}
                             size={28}
-                            color={liked ? "#ff3b30" : "#333"}
+                            color={liked ? "#ff3b30" : colors.text}
                         />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => onComment(post.id)} style={styles.actionButton}>
                         <View style={styles.commentButtonContainer}>
-                            <Ionicons name="chatbubble-outline" size={26} color="#333" />
+                            <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
                             {post.comments > 0 && (
                                 <Text style={styles.commentCount}>{post.comments}</Text>
                             )}
                         </View>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => onShare(post.id)} style={styles.actionButton}>
-                        <Ionicons name="paper-plane-outline" size={26} color="#333" />
+                        <Ionicons name="paper-plane-outline" size={26} color={colors.text} />
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity onPress={handleSave}>
                     <Ionicons
                         name={saved ? "bookmark" : "bookmark-outline"}
                         size={26}
-                        color={saved ? "#4F46E5" : "#333"}
+                        color={saved ? colors.primary : colors.text}
                     />
                 </TouchableOpacity>
             </View>
 
             {/* Footer: Likes, Caption, Time */}
             <View style={styles.footer}>
-                <Text style={styles.likes}>{likeCount} likes</Text>
+                <Text style={[styles.likes, { color: colors.text }]}>{likeCount} likes</Text>
 
                 {/* Caption */}
                 {post.content ? (
                     <View style={styles.captionContainer}>
-                        <Text style={styles.captionText}>
-                            <Text style={styles.captionUsername}>{post.userName} </Text>
+                        <Text style={[styles.captionText, { color: colors.text }]}>
+                            <Text style={[styles.captionUsername, { color: colors.text }]}>{post.userName} </Text>
                             {post.content}
                         </Text>
                     </View>
                 ) : null}
 
-                <Text style={styles.timeAgo}>
+                <Text style={[styles.timeAgo, { color: colors.textSecondary }]}>
                     {post.createdAt ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }) : 'Just now'}
                 </Text>
             </View>
@@ -148,16 +150,14 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#fff',
         paddingBottom: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#efefef', // Subtle separator
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 14, // Standard spacing
+        paddingHorizontal: 14,
         paddingVertical: 10,
     },
     userInfo: {
@@ -168,7 +168,6 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#3F51B5', // Primary color
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 10,
@@ -181,11 +180,9 @@ const styles = StyleSheet.create({
     userName: {
         fontWeight: '700',
         fontSize: 14,
-        color: '#262626',
     },
     userExam: {
         fontSize: 12,
-        color: '#666',
     },
     content: {
         marginBottom: 5,
@@ -195,17 +192,14 @@ const styles = StyleSheet.create({
         paddingBottom: 10,
         fontSize: 15,
         lineHeight: 22,
-        color: '#333',
     },
     postImage: {
         width: '100%',
-        aspectRatio: 1, // Standard Square Post
-        backgroundColor: '#f1f1f1',
+        aspectRatio: 1,
     },
     videoPlaceholder: {
         width: '100%',
         aspectRatio: 1,
-        backgroundColor: '#000',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -230,12 +224,10 @@ const styles = StyleSheet.create({
     likes: {
         fontWeight: '700',
         fontSize: 14,
-        color: '#262626',
         marginBottom: 4,
     },
     timeAgo: {
         fontSize: 12,
-        color: '#8e8e8e',
         marginTop: 4,
     },
     captionContainer: {
@@ -243,7 +235,6 @@ const styles = StyleSheet.create({
     },
     captionText: {
         fontSize: 14,
-        color: '#262626',
         lineHeight: 18,
     },
     captionUsername: {

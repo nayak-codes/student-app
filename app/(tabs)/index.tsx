@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   brandText: {
     fontSize: 24, // Larger for brand
     fontWeight: '800', // Extra bold
-    color: '#3F51B5', // Primary brand color - Keep consistent
+    color: '#4F46E5', // Using similar to primary color for consistency, or we can make it dynamic
     fontFamily: 'System', // Use default system font or custom if available
     letterSpacing: -0.5,
   },

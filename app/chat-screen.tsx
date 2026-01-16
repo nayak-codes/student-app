@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import PostDetailModal from '../src/components/PostDetailModal';
 import { auth } from '../src/config/firebase';
+import { useTheme } from '../src/contexts/ThemeContext';
 import {
     markMessagesAsRead,
     Message,
@@ -26,6 +27,7 @@ import {
 
 const ChatScreen = () => {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     const params = useLocalSearchParams();
     const { conversationId, otherUserId, otherUserName, otherUserPhoto } = params;
 
@@ -112,11 +114,11 @@ const ChatScreen = () => {
             <View>
                 {showDateDivider && (
                     <View style={styles.dateDividerContainer}>
-                        <View style={styles.dateDividerLine} />
-                        <Text style={styles.dateDividerText}>
+                        <View style={[styles.dateDividerLine, { backgroundColor: colors.border }]} />
+                        <Text style={[styles.dateDividerText, { color: colors.textSecondary }]}>
                             {formatMessageTime(item.timestamp)}
                         </Text>
-                        <View style={styles.dateDividerLine} />
+                        <View style={[styles.dateDividerLine, { backgroundColor: colors.border }]} />
                     </View>
                 )}
                 <View
@@ -133,7 +135,7 @@ const ChatScreen = () => {
                                     style={styles.messageAvatar}
                                 />
                             ) : (
-                                <View style={[styles.messageAvatar, styles.avatarPlaceholder]}>
+                                <View style={[styles.messageAvatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
                                     <Text style={styles.avatarText}>
                                         {typeof otherUserName === 'string' ? otherUserName.charAt(0).toUpperCase() : 'U'}
                                     </Text>
@@ -147,7 +149,11 @@ const ChatScreen = () => {
                         <TouchableOpacity
                             style={[
                                 styles.sharedContentCard,
-                                isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard
+                                isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard,
+                                {
+                                    backgroundColor: colors.card,
+                                    borderColor: isOwnMessage ? colors.primary : colors.border
+                                }
                             ]}
                             onPress={() => {
                                 if (item.messageType === 'sharedPost' && item.sharedContent?.contentData) {
@@ -157,13 +163,13 @@ const ChatScreen = () => {
                             }}
                             activeOpacity={0.7}
                         >
-                            <View style={styles.sharedContentHeader}>
+                            <View style={[styles.sharedContentHeader, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC', borderBottomColor: colors.border }]}>
                                 <Ionicons
                                     name={item.messageType === 'sharedPost' ? 'document-text' : 'document'}
                                     size={20}
-                                    color="#4F46E5"
+                                    color={colors.primary}
                                 />
-                                <Text style={styles.sharedContentLabel}>
+                                <Text style={[styles.sharedContentLabel, { color: colors.primary }]}>
                                     {item.messageType === 'sharedPost' ? 'Shared Post' : 'Shared Document'}
                                 </Text>
                             </View>
@@ -182,27 +188,27 @@ const ChatScreen = () => {
                                     {/* Author and content */}
                                     <View style={styles.sharedPostTextContainer}>
                                         <View style={styles.sharedPostMeta}>
-                                            <Text style={styles.sharedPostAuthor}>
+                                            <Text style={[styles.sharedPostAuthor, { color: colors.text }]}>
                                                 {item.sharedContent.contentData.userName}
                                             </Text>
-                                            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+                                            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
                                         </View>
-                                        <Text style={styles.sharedPostText} numberOfLines={2}>
+                                        <Text style={[styles.sharedPostText, { color: colors.textSecondary }]} numberOfLines={2}>
                                             {item.sharedContent.contentData.content}
                                         </Text>
                                     </View>
                                 </View>
                             ) : item.messageType === 'sharedPDF' && item.sharedContent.contentData ? (
                                 <View style={styles.sharedPDFContent}>
-                                    <Ionicons name="document" size={32} color="#4F46E5" />
-                                    <Text style={styles.sharedPDFTitle}>
+                                    <Ionicons name="document" size={32} color={colors.primary} />
+                                    <Text style={[styles.sharedPDFTitle, { color: colors.text }]}>
                                         {item.sharedContent.contentData.title || 'Untitled Document'}
                                     </Text>
-                                    <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+                                    <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                                 </View>
                             ) : null}
 
-                            <Text style={styles.sharedContentTime}>
+                            <Text style={[styles.sharedContentTime, { color: colors.textSecondary }]}>
                                 {formatMessageTime(item.timestamp)}
                             </Text>
                         </TouchableOpacity>
@@ -210,20 +216,20 @@ const ChatScreen = () => {
                         <View
                             style={[
                                 styles.messageBubble,
-                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+                                isOwnMessage ? [styles.ownMessageBubble, { backgroundColor: colors.primary }] : [styles.otherMessageBubble, { backgroundColor: colors.card }],
                             ]}
                         >
                             <Text
                                 style={[
                                     styles.messageText,
-                                    isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                                    isOwnMessage ? styles.ownMessageText : [styles.otherMessageText, { color: colors.text }],
                                 ]}
                             >
                                 {item.text}
                             </Text>
                             <Text style={[
                                 styles.messageTimeInline,
-                                isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline
+                                isOwnMessage ? styles.ownMessageTimeInline : [styles.otherMessageTimeInline, { color: colors.textSecondary }]
                             ]}>
                                 {formatMessageTime(item.timestamp)}
                             </Text>
@@ -235,13 +241,13 @@ const ChatScreen = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1E293B" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
 
                 <View style={styles.headerCenter}>
@@ -252,7 +258,7 @@ const ChatScreen = () => {
                                 style={styles.headerAvatar}
                             />
                         ) : (
-                            <View style={[styles.headerAvatar, styles.avatarPlaceholder]}>
+                            <View style={[styles.headerAvatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
                                 <Text style={styles.headerAvatarText}>
                                     {typeof otherUserName === 'string' ? otherUserName.charAt(0).toUpperCase() : 'U'}
                                 </Text>
@@ -260,15 +266,15 @@ const ChatScreen = () => {
                         )}
                     </View>
                     <View style={styles.headerInfo}>
-                        <Text style={styles.headerName} numberOfLines={1}>
+                        <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
                             {otherUserName}
                         </Text>
                     </View>
                 </View>
 
                 <View style={styles.headerRight}>
-                    <TouchableOpacity style={styles.headerButton}>
-                        <Ionicons name="ellipsis-vertical" size={20} color="#64748B" />
+                    <TouchableOpacity style={[styles.headerButton, { backgroundColor: isDark ? colors.background : '#EEF2FF' }]}>
+                        <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -281,7 +287,7 @@ const ChatScreen = () => {
             >
                 {loading ? (
                     <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#4F46E5" />
+                        <ActivityIndicator size="large" color={colors.primary} />
                     </View>
                 ) : (
                     <FlatList
@@ -294,9 +300,9 @@ const ChatScreen = () => {
                         onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
-                                <Ionicons name="chatbubble-outline" size={64} color="#CBD5E1" />
-                                <Text style={styles.emptyTitle}>Start the conversation</Text>
-                                <Text style={styles.emptySubtitle}>
+                                <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
+                                <Text style={[styles.emptyTitle, { color: colors.text }]}>Start the conversation</Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                                     Send a message to {otherUserName}
                                 </Text>
                             </View>
@@ -305,16 +311,16 @@ const ChatScreen = () => {
                 )}
 
                 {/* Input Area */}
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
                     <TouchableOpacity style={styles.attachButton}>
-                        <Ionicons name="add-circle-outline" size={28} color="#4F46E5" />
+                        <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
                     </TouchableOpacity>
 
-                    <View style={styles.inputWrapper}>
+                    <View style={[styles.inputWrapper, { backgroundColor: isDark ? colors.background : '#F8FAFC', borderColor: colors.border }]}>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { color: colors.text }]}
                             placeholder="Type a message..."
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={colors.textSecondary}
                             value={inputText}
                             onChangeText={setInputText}
                             multiline
@@ -326,6 +332,7 @@ const ChatScreen = () => {
                         style={[
                             styles.sendButton,
                             (!inputText.trim() || sending) && styles.sendButtonDisabled,
+                            { backgroundColor: colors.primary }
                         ]}
                         onPress={handleSend}
                         disabled={!inputText.trim() || sending}

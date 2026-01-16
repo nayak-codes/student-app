@@ -7,6 +7,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -14,9 +15,11 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 export default function HelpFeedbackScreen() {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     const [feedback, setFeedback] = useState('');
     const [sending, setSending] = useState(false);
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
@@ -53,34 +56,35 @@ export default function HelpFeedbackScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color="#0F172A" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Help & Feedback</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Help & Feedback</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Frequently Asked Questions</Text>
                     {faqs.map((faq, index) => (
-                        <View key={index} style={styles.faqItem}>
+                        <View key={index} style={[styles.faqItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
                             <TouchableOpacity
                                 style={styles.faqHeader}
                                 onPress={() => toggleFaq(index)}
                                 activeOpacity={0.7}
                             >
-                                <Text style={styles.faqQuestion}>{faq.question}</Text>
+                                <Text style={[styles.faqQuestion, { color: colors.text }]}>{faq.question}</Text>
                                 <Ionicons
                                     name={expandedFaq === index ? "chevron-up" : "chevron-down"}
                                     size={20}
-                                    color="#64748B"
+                                    color={colors.textSecondary}
                                 />
                             </TouchableOpacity>
                             {expandedFaq === index && (
-                                <View style={styles.faqBody}>
-                                    <Text style={styles.faqAnswer}>{faq.answer}</Text>
+                                <View style={[styles.faqBody, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC' }]}>
+                                    <Text style={[styles.faqAnswer, { color: colors.textSecondary }]}>{faq.answer}</Text>
                                 </View>
                             )}
                         </View>
@@ -88,28 +92,33 @@ export default function HelpFeedbackScreen() {
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Contact Us</Text>
-                    <TouchableOpacity style={styles.contactItem} onPress={() => { }}>
-                        <View style={styles.iconBox}>
-                            <Ionicons name="mail-outline" size={24} color="#4F46E5" />
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Contact Us</Text>
+                    <TouchableOpacity style={[styles.contactItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => { }}>
+                        <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#EEF2FF' }]}>
+                            <Ionicons name="mail-outline" size={24} color={colors.primary} />
                         </View>
                         <View>
-                            <Text style={styles.contactLabel}>Email Support</Text>
-                            <Text style={styles.contactSub}>support@vidhyarthi.com</Text>
+                            <Text style={[styles.contactLabel, { color: colors.text }]}>Email Support</Text>
+                            <Text style={[styles.contactSub, { color: colors.textSecondary }]}>support@vidhyarthi.com</Text>
                         </View>
-                        <Ionicons name="open-outline" size={20} color="#CBD5E1" style={{ marginLeft: 'auto' }} />
+                        <Ionicons name="open-outline" size={20} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
                     </TouchableOpacity>
                 </View>
 
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                    <View style={styles.feedbackSection}>
-                        <Text style={styles.sectionTitle}>Send Feedback</Text>
-                        <Text style={styles.feedbackDesc}>
+                    <View style={[styles.feedbackSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Send Feedback</Text>
+                        <Text style={[styles.feedbackDesc, { color: colors.textSecondary }]}>
                             Tell us what you love or what we could improve.
                         </Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, {
+                                backgroundColor: isDark ? colors.background : '#F8FAFC',
+                                borderColor: colors.border,
+                                color: colors.text
+                            }]}
                             placeholder="Write your feedback here..."
+                            placeholderTextColor={colors.textSecondary}
                             multiline
                             numberOfLines={4}
                             value={feedback}
@@ -119,6 +128,7 @@ export default function HelpFeedbackScreen() {
                         <TouchableOpacity
                             style={[
                                 styles.sendButton,
+                                { backgroundColor: colors.primary },
                                 (!feedback.trim() || sending) && styles.disabledButton
                             ]}
                             onPress={handleSendFeedback}
@@ -140,15 +150,15 @@ export default function HelpFeedbackScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        // borderBottomColor: '#F1F5F9',
     },
     backBtn: {
         marginRight: 16,
@@ -156,7 +166,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#0F172A',
+        // color: '#0F172A',
     },
     content: {
         padding: 20,
@@ -167,15 +177,15 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#1E293B',
+        // color: '#1E293B',
         marginBottom: 12,
     },
     faqItem: {
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
         borderRadius: 12,
         marginBottom: 8,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
+        // borderColor: '#F1F5F9',
         overflow: 'hidden',
     },
     faqHeader: {
@@ -187,34 +197,34 @@ const styles = StyleSheet.create({
     faqQuestion: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#334155',
+        // color: '#334155',
         flex: 1,
         marginRight: 8,
     },
     faqBody: {
         paddingHorizontal: 16,
         paddingBottom: 16,
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC',
     },
     faqAnswer: {
         fontSize: 14,
-        color: '#64748B',
+        // color: '#64748B',
         lineHeight: 20,
     },
     contactItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
         padding: 16,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
+        // borderColor: '#F1F5F9',
     },
     iconBox: {
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: '#EEF2FF',
+        // backgroundColor: '#EEF2FF',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
@@ -222,37 +232,37 @@ const styles = StyleSheet.create({
     contactLabel: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#1E293B',
+        // color: '#1E293B',
     },
     contactSub: {
         fontSize: 14,
-        color: '#64748B',
+        // color: '#64748B',
     },
     feedbackSection: {
-        backgroundColor: '#FFF',
+        // backgroundColor: '#FFF',
         padding: 20,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        // borderColor: '#E2E8F0',
     },
     feedbackDesc: {
         fontSize: 14,
-        color: '#64748B',
+        // color: '#64748B',
         marginBottom: 16,
     },
     input: {
-        backgroundColor: '#F8FAFC',
+        // backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        // borderColor: '#E2E8F0',
         borderRadius: 12,
         padding: 12,
         height: 120,
         fontSize: 15,
-        color: '#1E293B',
+        // color: '#1E293B',
         marginBottom: 16,
     },
     sendButton: {
-        backgroundColor: '#4F46E5',
+        // backgroundColor: '#4F46E5',
         paddingVertical: 14,
         borderRadius: 12,
         alignItems: 'center',

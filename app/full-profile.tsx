@@ -815,7 +815,7 @@ const ProfileScreen = () => {
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScrollView
                 refreshControl={
                     <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
@@ -1059,7 +1059,7 @@ const ProfileScreen = () => {
 
                 {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}
                 {activeTab !== 'home' && (
-                    <View style={styles.subFilterContainer}>
+                    <View style={[styles.subFilterContainer, { backgroundColor: colors.background }]}>
                         <View style={{ flexDirection: 'row', gap: 12 }}>
                             {['recent', 'old', 'popular'].map((type) => (
                                 <TouchableOpacity

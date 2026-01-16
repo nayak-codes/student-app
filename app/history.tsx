@@ -12,10 +12,12 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { HistoryItem, clearHistory, getHistory } from '../src/services/historyService';
 
 const HistoryScreen = () => {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [activeTab, setActiveTab] = useState('All');
 
@@ -63,11 +65,11 @@ const HistoryScreen = () => {
                 {item.image ? (
                     <Image source={{ uri: item.image }} style={styles.thumbnail} />
                 ) : (
-                    <View style={[styles.thumbnail, styles.placeholderThumb]}>
+                    <View style={[styles.thumbnail, styles.placeholderThumb, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#F1F5F9' }]}>
                         <Ionicons
                             name={item.type === 'pdf' ? 'document-text' : 'newspaper'}
                             size={24}
-                            color="#64748B"
+                            color={colors.textSecondary}
                         />
                     </View>
                 )}
@@ -79,39 +81,39 @@ const HistoryScreen = () => {
             </View>
             <View style={styles.infoContainer}>
                 <View style={styles.titleRow}>
-                    <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
+                    <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
                     <TouchableOpacity>
-                        <Ionicons name="ellipsis-vertical" size={16} color="#94A3B8" />
+                        <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
-                <Text style={styles.itemSubtitle}>{item.subtitle || 'StudentVerse'}</Text>
-                <Text style={styles.timestamp}>{formatTime(item.timestamp)}</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{item.subtitle || 'StudentVerse'}</Text>
+                <Text style={[styles.timestamp, { color: colors.textSecondary }]}>{formatTime(item.timestamp)}</Text>
             </View>
         </TouchableOpacity>
     );
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
-            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#0F172A" />
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>History</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>History</Text>
                 <View style={styles.headerActions}>
                     <TouchableOpacity onPress={() => router.push('/screens/universal-search')}>
-                        <Ionicons name="search" size={22} color="#0F172A" />
+                        <Ionicons name="search" size={22} color={colors.text} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={handleClearHistory} style={{ marginLeft: 16 }}>
-                        <Ionicons name="trash-outline" size={22} color="#EF4444" />
+                        <Ionicons name="trash-outline" size={22} color={colors.danger} />
                     </TouchableOpacity>
                 </View>
             </View>
 
             {/* Tabs */}
-            <View style={styles.tabContainer}>
+            <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
                 <FlatList
                     horizontal
                     data={tabs}
@@ -120,10 +122,14 @@ const HistoryScreen = () => {
                     contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
                     renderItem={({ item }) => (
                         <TouchableOpacity
-                            style={[styles.tab, activeTab === item && styles.activeTab]}
+                            style={[
+                                styles.tab,
+                                { backgroundColor: activeTab === item ? colors.primary : colors.card },
+                                activeTab !== item && { borderWidth: 1, borderColor: colors.border }
+                            ]}
                             onPress={() => setActiveTab(item)}
                         >
-                            <Text style={[styles.tabText, activeTab === item && styles.activeTabText]}>
+                            <Text style={[styles.tabText, { color: activeTab === item ? '#FFF' : colors.textSecondary }]}>
                                 {item}
                             </Text>
                         </TouchableOpacity>
@@ -139,8 +145,8 @@ const HistoryScreen = () => {
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
-                        <Ionicons name="time-outline" size={64} color="#CBD5E1" />
-                        <Text style={styles.emptyText}>No history found</Text>
+                        <Ionicons name="time-outline" size={64} color={colors.textSecondary} />
+                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No history found</Text>
                     </View>
                 }
             />
@@ -151,7 +157,7 @@ const HistoryScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        // backgroundColor: '#fff',
     },
     header: {
         height: 56,
@@ -160,7 +166,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        // borderBottomColor: '#F1F5F9',
     },
     backButton: {
         padding: 4,
@@ -168,7 +174,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#0F172A',
+        // color: '#0F172A',
     },
     headerActions: {
         flexDirection: 'row',
@@ -177,26 +183,26 @@ const styles = StyleSheet.create({
     tabContainer: {
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#F8FAFC',
+        // borderBottomColor: '#F8FAFC',
     },
     tab: {
         paddingHorizontal: 16,
         paddingVertical: 6,
         borderRadius: 20,
-        backgroundColor: '#F1F5F9',
+        // backgroundColor: '#F1F5F9',
         marginRight: 4,
     },
-    activeTab: {
-        backgroundColor: '#0F172A',
-    },
+    // activeTab: {
+    //     // backgroundColor: '#0F172A',
+    // },
     tabText: {
         fontSize: 14,
         fontWeight: '500',
-        color: '#64748B',
+        // color: '#64748B',
     },
-    activeTabText: {
-        color: '#FFF',
-    },
+    // activeTabText: {
+    //     color: '#FFF',
+    // },
     listContent: {
         padding: 16,
     },
@@ -215,7 +221,7 @@ const styles = StyleSheet.create({
     thumbnail: {
         width: '100%',
         height: '100%',
-        backgroundColor: '#F1F5F9',
+        // backgroundColor: '#F1F5F9',
     },
     placeholderThumb: {
         justifyContent: 'center',
@@ -247,19 +253,19 @@ const styles = StyleSheet.create({
     itemTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#0F172A',
+        // color: '#0F172A',
         flex: 1,
         marginRight: 8,
         lineHeight: 20,
     },
     itemSubtitle: {
         fontSize: 12,
-        color: '#64748B',
+        // color: '#64748B',
         marginTop: 2,
     },
     timestamp: {
         fontSize: 11,
-        color: '#94A3B8',
+        // color: '#94A3B8',
         marginTop: 2,
     },
     emptyState: {
@@ -269,7 +275,7 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         marginTop: 16,
-        color: '#94A3B8',
+        // color: '#94A3B8',
         fontSize: 16,
     }
 });
