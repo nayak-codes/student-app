@@ -19,6 +19,7 @@ import UploadResourceModal from '../src/components/UploadResourceModal';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { createPost } from '../src/services/postsService';
+import { uploadVideoToCloudinary } from '../src/services/videoService';
 import { uploadImageWithProgress } from '../src/utils/imgbbUpload';
 import { YouTubeVideoMetadata, getVideoMetadata, isYouTubeUrl } from '../src/utils/youtubeUtils';
 
@@ -36,7 +37,7 @@ export default function CreatePostScreen() {
     const [videoLink, setVideoLink] = useState('');
     const [videoMetadata, setVideoMetadata] = useState<YouTubeVideoMetadata | null>(null);
     const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [selectedMedia, setSelectedMedia] = useState<string | null>(null); // Renamed from selectedImage
     const [uploadProgress, setUploadProgress] = useState(0);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [postType, setPostType] = useState<'note' | 'video' | 'news' | 'image' | 'clip'>('note');
@@ -56,23 +57,28 @@ export default function CreatePostScreen() {
         }
     };
 
-    const pickImage = async () => {
+    const pickMedia = async (type: 'image' | 'video') => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert('Permission needed', 'Please allow access to photos');
+            Alert.alert('Permission needed', 'Please allow access to media library');
             return;
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [4, 3],
             quality: 0.8,
+            videoMaxDuration: type === 'video' ? 60 : undefined, // Limit clip duration if needed
         });
 
         if (!result.canceled) {
-            setSelectedImage(result.assets[0].uri);
-            setPostType('image');
+            setSelectedMedia(result.assets[0].uri);
+            if (type === 'video') {
+                // Keep existing postType (video or clip)
+            } else {
+                setPostType('image');
+            }
         }
     };
 
@@ -96,8 +102,8 @@ export default function CreatePostScreen() {
     };
 
     const handlePostSubmit = async () => {
-        if (!content.trim()) {
-            Alert.alert('Error', 'Please write something!');
+        if (!content.trim() && !selectedMedia && !videoLink && !videoMetadata) {
+            Alert.alert('Error', 'Please write something or add media!');
             return;
         }
         if (!user) {
@@ -107,23 +113,41 @@ export default function CreatePostScreen() {
 
         setIsSubmitting(true);
         try {
-            let imageUrl = '';
-            // Upload image if selected
-            if (selectedImage && postType === 'image') {
-                imageUrl = await uploadImageWithProgress(
-                    selectedImage,
-                    (progress) => setUploadProgress(progress)
-                );
+            let mediaUrl = '';
+
+            // Upload Media
+            if (selectedMedia) {
+                if (postType === 'image') {
+                    mediaUrl = await uploadImageWithProgress(
+                        selectedMedia,
+                        (progress) => setUploadProgress(progress)
+                    );
+                } else if (postType === 'video' || postType === 'clip') {
+                    const url = await uploadVideoToCloudinary(
+                        selectedMedia,
+                        (progress: number) => setUploadProgress(progress)
+                    );
+                    if (url) mediaUrl = url;
+                    else throw new Error("Video upload failed");
+                }
             }
+
+            // Determine final video link (uploaded or YouTube)
+            // If uploaded video, valid videoLink is the mediaUrl
+            const finalVideoLink = (postType === 'video' || postType === 'clip') && selectedMedia
+                ? mediaUrl
+                : (videoLink.trim() || undefined);
+
+            const finalImageUrl = postType === 'image' ? mediaUrl : undefined;
 
             await createPost({
                 userId: user.uid,
                 userName: userProfile?.name || 'Anonymous',
                 userExam: userProfile?.exam || 'Student',
                 content: content.trim(),
-                type: postType as any, // 'clip' might not be in the original type definition but we send it
-                videoLink: videoLink.trim() || undefined,
-                imageUrl: imageUrl || undefined,
+                type: postType as any,
+                videoLink: finalVideoLink,
+                imageUrl: finalImageUrl,
                 tags: selectedTags,
             });
 
@@ -134,6 +158,7 @@ export default function CreatePostScreen() {
             Alert.alert('Error', 'Failed to create post. Please try again.');
         } finally {
             setIsSubmitting(false);
+            setUploadProgress(0);
         }
     };
 
@@ -232,12 +257,29 @@ export default function CreatePostScreen() {
                         />
 
                         {/* Media Previews */}
-                        {selectedImage && (
+                        {selectedMedia && (
                             <View style={[styles.mediaPreview, { backgroundColor: isDark ? '#000' : '#F1F5F9' }]}>
-                                <Image source={{ uri: selectedImage }} style={styles.mediaImage} />
-                                <TouchableOpacity onPress={() => setSelectedImage(null)} style={styles.removeMedia}>
+                                {postType === 'image' ? (
+                                    <Image source={{ uri: selectedMedia }} style={styles.mediaImage} />
+                                ) : (
+                                    <View style={styles.videoOverlay}>
+                                        <Ionicons name="videocam" size={48} color="#FFF" />
+                                        <Text style={{ color: 'white', marginTop: 10 }}>Video Selected</Text>
+                                    </View>
+                                )}
+
+                                <TouchableOpacity onPress={() => setSelectedMedia(null)} style={styles.removeMedia}>
                                     <Ionicons name="close-circle" size={24} color={colors.danger} />
                                 </TouchableOpacity>
+
+                                {isSubmitting && uploadProgress > 0 && (
+                                    <View style={styles.videoOverlay}>
+                                        <ActivityIndicator color="#FFF" size="large" />
+                                        <Text style={{ color: '#FFF', fontWeight: 'bold', marginTop: 10 }}>
+                                            Uploading: {Math.round(uploadProgress)}%
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                         )}
 
@@ -261,7 +303,7 @@ export default function CreatePostScreen() {
                                     { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border },
                                     postType === 'image' && { borderColor: colors.primary, backgroundColor: isDark ? 'rgba(79,70,229,0.1)' : '#EEF2FF' }
                                 ]}
-                                onPress={pickImage}
+                                onPress={() => pickMedia('image')}
                             >
                                 <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(79,70,229,0.1)' : '#EEF2FF' }]}>
                                     <Ionicons name="image" size={24} color="#4F46E5" />
@@ -275,7 +317,14 @@ export default function CreatePostScreen() {
                                     { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border },
                                     postType === 'video' && { borderColor: colors.danger, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2' }
                                 ]}
-                                onPress={() => setPostType('video')}
+                                onPress={() => {
+                                    setPostType('video');
+                                    Alert.alert("Video Source", "Upload from?", [
+                                        { text: "Gallery (Upload)", onPress: () => pickMedia('video') },
+                                        { text: "YouTube Link", onPress: () => { /* Just sets type, input shows below */ } },
+                                        { text: "Cancel", style: "cancel" }
+                                    ]);
+                                }}
                             >
                                 <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2' }]}>
                                     <Ionicons name="videocam" size={24} color="#EF4444" />
@@ -289,7 +338,10 @@ export default function CreatePostScreen() {
                                     { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border },
                                     postType === 'clip' && { borderColor: '#10B981', backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#F0FDF4' }
                                 ]}
-                                onPress={() => setPostType('clip')}
+                                onPress={() => {
+                                    setPostType('clip');
+                                    pickMedia('video');
+                                }}
                             >
                                 <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#F0FDF4' }]}>
                                     <Ionicons name="film" size={24} color="#10B981" />
@@ -312,8 +364,8 @@ export default function CreatePostScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Video Link Input */}
-                        {(postType === 'video' || postType === 'clip') && (
+                        {/* Video Link Input (Only if no file selected) */}
+                        {((postType === 'video' && !selectedMedia)) && (
                             <View style={[styles.videoInputContainer, { backgroundColor: isDark ? colors.card : '#F1F5F9' }]}>
                                 <Ionicons name="link" size={20} color={colors.textSecondary} />
                                 <TextInput

@@ -1,6 +1,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
+import { ResizeMode, Video } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -86,12 +87,30 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
                     />
                 ) : null}
 
-                {/* Video Placeholder */}
-                {post.type === 'video' && !post.imageUrl && (
-                    <View style={[styles.videoPlaceholder, { backgroundColor: isDark ? '#000' : '#1E293B' }]}>
-                        <Ionicons name="play-circle-outline" size={64} color="#fff" />
-                        <Text style={{ color: 'white', marginTop: 8 }}>Video Content</Text>
-                    </View>
+                {/* Video Content */}
+                {(post.type === 'video' || post.type === 'clip') && !post.imageUrl && (
+                    post.videoLink ? (
+                        <Video
+                            style={[
+                                styles.postImage,
+                                {
+                                    aspectRatio: post.type === 'clip' ? 9 / 16 : 16 / 9,
+                                    backgroundColor: isDark ? '#000' : '#1E293B',
+                                    height: post.type === 'clip' ? 500 : 240, // Ensure substantial height for vertical
+                                    width: '100%'
+                                }
+                            ]}
+                            source={{ uri: post.videoLink }}
+                            useNativeControls
+                            resizeMode={post.type === 'clip' ? ResizeMode.COVER : ResizeMode.CONTAIN}
+                            isLooping
+                        />
+                    ) : (
+                        <View style={[styles.videoPlaceholder, { backgroundColor: isDark ? '#000' : '#1E293B' }]}>
+                            <Ionicons name="play-circle-outline" size={64} color="#fff" />
+                            <Text style={{ color: 'white', marginTop: 8 }}>Video Content</Text>
+                        </View>
+                    )
                 )}
             </View>
 

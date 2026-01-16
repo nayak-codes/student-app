@@ -1,13 +1,15 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { ResizeMode, Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
-import { addToHistory } from '../../src/services/historyService';
-
 import {
   Alert,
+  Dimensions,
   FlatList,
   Image,
   ImageSourcePropType,
   Linking,
+  Modal,
   RefreshControl,
   SafeAreaView,
   Share,
@@ -21,6 +23,7 @@ import CreatePostModal from '../../src/components/CreatePostModal';
 import YouTubePlayer from '../../src/components/YouTubePlayer';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { addToHistory } from '../../src/services/historyService';
 import { getAllPosts, likePost, Post, unlikePost } from '../../src/services/postsService';
 
 // Type definitions
@@ -43,7 +46,10 @@ interface FeedItem {
   userId?: string;
 }
 
-// Sample image posts (keeping original 3)
+const { width } = Dimensions.get('window');
+const COLUMN_WIDTH = width / 2 - 24; // 2 columns with padding
+
+// Sample Data (Placeholders)
 const sampleVideoPosts: FeedItem[] = [
   {
     id: 'sample_1',
@@ -54,7 +60,7 @@ const sampleVideoPosts: FeedItem[] = [
     comments: 45,
     saved: false,
     timeAgo: '2 hours ago',
-    videoLink: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', // Placeholder
+    videoLink: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   },
   {
     id: 'sample_2',
@@ -65,35 +71,30 @@ const sampleVideoPosts: FeedItem[] = [
     comments: 120,
     saved: false,
     timeAgo: '1 day ago',
-    videoLink: 'https://www.youtube.com/shorts/12345678901', // Placeholder
+    videoLink: 'https://www.youtube.com/shorts/12345678901',
   },
 ];
 
 function getTimeAgo(date: Date): string {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-// Convert Firestore post to FeedItem
 function convertToFeedItem(post: Post): FeedItem | null {
-  // Only process video posts
-  if (post.type !== 'video' && !post.videoLink) {
-    return null;
-  }
+  if (post.type !== 'video' && !post.videoLink) return null;
 
   let type: ContentType = 'video';
-  if (post.videoLink && (post.videoLink.includes('/shorts/') || post.videoLink.includes('#shorts'))) {
+  if (post.videoLink && (post.videoLink.includes('/shorts/') || post.videoLink.includes('#shorts') || post.type === 'clip')) {
     type = 'clip';
   }
 
   return {
     id: post.id,
     type: type,
-    title: post.content.substring(0, 60) + (post.content.length > 60 ? '...' : ''),
+    title: post.content.substring(0, 80) + (post.content.length > 80 ? '...' : ''),
     author: post.userName,
     likes: post.likes,
     comments: post.comments,
@@ -117,10 +118,11 @@ const ExploreScreen: React.FC = () => {
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const [playingVideoTitle, setPlayingVideoTitle] = useState<string>('');
+  const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Load posts from Firestore
+  // Load posts
   const loadPosts = async () => {
     try {
       setIsLoading(true);
@@ -128,25 +130,20 @@ const ExploreScreen: React.FC = () => {
       const feedItems = posts
         .map(convertToFeedItem)
         .filter((item): item is FeedItem => item !== null);
-
-      // Combine sample posts with real posts
       setFeedData([...sampleVideoPosts, ...feedItems]);
     } catch (error) {
       console.error('Error loading posts:', error);
-      Alert.alert('Error', 'Failed to load posts');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Refresh posts
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await loadPosts();
     setIsRefreshing(false);
   };
 
-  // Load posts on mount
   useEffect(() => {
     loadPosts();
   }, []);
@@ -154,32 +151,21 @@ const ExploreScreen: React.FC = () => {
   const toggleSave = (id: string) => {
     setSavedItems(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
       return newSet;
     });
   };
 
-  // Handle like/unlike
   const handleLike = async (item: FeedItem) => {
     if (!user) {
       Alert.alert('Login Required', 'Please login to like posts');
       return;
     }
-
-    // Skip sample posts
-    if (item.id.startsWith('sample_')) {
-      Alert.alert('Info', 'This is a sample post. You can only like real posts.');
-      return;
-    }
+    if (item.id.startsWith('sample_')) return;
 
     try {
       const hasLiked = item.likedBy?.includes(user.uid);
-
-      // Optimistic update
       setFeedData(prevData =>
         prevData.map(post => {
           if (post.id === item.id) {
@@ -194,172 +180,163 @@ const ExploreScreen: React.FC = () => {
           return post;
         })
       );
-
-      // Update in Firestore
-      if (hasLiked) {
-        await unlikePost(item.id, user.uid);
-      } else {
-        await likePost(item.id, user.uid);
-      }
+      if (hasLiked) await unlikePost(item.id, user.uid);
+      else await likePost(item.id, user.uid);
     } catch (error) {
       console.error('Error toggling like:', error);
-      Alert.alert('Error', 'Failed to update like');
-      // Reload posts to sync
       await loadPosts();
     }
   };
 
-  // Handle share
   const handleShare = async (item: FeedItem) => {
     try {
       await Share.share({
-        message: `Check out this post on Chitki!\n\n${item.title}\n\nBy: ${item.author}`,
+        message: `Check out this on Chitki!\n\n${item.title}\n\nBy: ${item.author}`,
         title: 'Share Post',
       });
-    } catch (error) {
-      console.error('Error sharing:', error);
+    } catch (error) { }
+  };
+
+  const playVideo = (item: FeedItem) => {
+    if (!item.videoLink) return;
+
+    const isYoutube = item.videoLink.includes('youtube.com') || item.videoLink.includes('youtu.be');
+
+    addToHistory({
+      id: item.id,
+      type: activeTab,
+      title: item.title,
+      subtitle: item.author,
+      image: item.imageUrl || undefined,
+      url: item.videoLink
+    });
+
+    if (isYoutube) {
+      const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+      const videoId = match ? match[1] : null;
+
+      if (videoId) {
+        setPlayingVideoId(videoId);
+        setPlayingVideoTitle(item.title);
+        setShowVideoPlayer(true);
+      } else {
+        Linking.openURL(item.videoLink);
+      }
+    } else {
+      setPlayingVideoUrl(item.videoLink);
     }
   };
 
   const filteredData = feedData.filter(item => item.type === activeTab);
 
-  const renderFeedItem = ({ item }: { item: FeedItem }) => {
+  // --- RENDERERS ---
+
+  const renderVideoItem = ({ item }: { item: FeedItem }) => {
     const hasLiked = user && item.likedBy?.includes(user.uid);
 
+    let thumbnailUrl = item.imageUrl;
+    if (!thumbnailUrl && item.videoLink) {
+      const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+      if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg`;
+    }
+
     return (
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        {item.image && (
-          <Image
-            source={item.image}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
-        )}
-
-        {/* Show uploaded images from ImgBB */}
-        {!item.image && item.imageUrl && (
-          <Image
-            source={{ uri: item.imageUrl }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
-        )}
-
-        {/* YouTube Video Thumbnail */}
-        {item.videoLink && (() => {
-          // Extract video ID and generate thumbnail
-          const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-          const videoId = match ? match[1] : null;
-          const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
-
-          return thumbnailUrl ? (
-            <TouchableOpacity
-              style={styles.videoContainer}
-              onPress={() => {
-                if (videoId) {
-                  // Track in History
-                  addToHistory({
-                    id: item.id,
-                    type: activeTab === 'clip' ? 'clip' : 'video',
-                    title: item.title,
-                    subtitle: item.author,
-                    image: thumbnailUrl,
-                    url: item.videoLink
-                  });
-
-                  setPlayingVideoId(videoId);
-                  setPlayingVideoTitle(item.title);
-                  setShowVideoPlayer(true);
-                }
-              }}
-            >
-              <Image
-                source={{ uri: thumbnailUrl }}
-                style={styles.cardImage}
-                resizeMode="cover"
-              />
-              <View style={styles.videoOverlay}>
-                <View style={styles.playButton}>
-                  <Ionicons name="play" size={48} color="#FFF" />
-                </View>
-              </View>
-            </TouchableOpacity>
+      <View style={[styles.videoCard, { backgroundColor: colors.card, shadowColor: colors.text }]}>
+        <TouchableOpacity style={styles.thumbnailContainer} onPress={() => playVideo(item)}>
+          {thumbnailUrl ? (
+            <Image source={{ uri: thumbnailUrl }} style={styles.videoThumbnail} resizeMode="cover" />
           ) : (
-            <TouchableOpacity
-              style={styles.videoOverlay}
-              onPress={() => Linking.openURL(item.videoLink!)}
-            >
-              <View style={styles.playButton}>
-                <Ionicons name="play" size={32} color="#FFF" />
-              </View>
-              <View style={styles.videoLabel}>
-                <Ionicons name="logo-youtube" size={16} color="#FFF" />
-                <Text style={styles.videoText}>Watch on YouTube</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })()}
-
-        <View style={styles.cardContent}>
-          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>
-            {item.title}
-          </Text>
-
-          <View style={styles.cardMeta}>
-            <Text style={[styles.author, { color: colors.primary }]}>{item.author}</Text>
-            <Text style={styles.metaSeparator}>•</Text>
-            <Text style={[styles.timeAgo, { color: colors.textSecondary }]}>{item.timeAgo}</Text>
-          </View>
-
-          {item.tags && item.tags.length > 0 && (
-            <View style={styles.tagsRow}>
-              {item.tags.slice(0, 3).map((tag, idx) => (
-                <Text key={idx} style={[
-                  styles.tagBadge,
-                  {
-                    backgroundColor: isDark ? colors.background : '#F1F5F9',
-                    color: colors.textSecondary
-                  }
-                ]}>#{tag}</Text>
-              ))}
+            <View style={[styles.videoThumbnail, { backgroundColor: isDark ? '#1E293B' : '#000' }]}>
+              <Ionicons name="play-circle" size={48} color="#FFF" />
             </View>
           )}
-
-          <View style={[styles.cardActions, { borderTopColor: colors.border }]}>
-            <TouchableOpacity style={styles.action} onPress={() => handleLike(item)}>
-              <Ionicons
-                name={hasLiked ? "heart" : "heart-outline"}
-                size={20}
-                color={hasLiked ? "#EF4444" : colors.textSecondary}
-              />
-              <Text style={[styles.actionText, { color: colors.textSecondary }, hasLiked && { color: '#EF4444' }]}>
-                {item.likes > 1000 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.action}>
-              <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
-              <Text style={[styles.actionText, { color: colors.textSecondary }]}>{item.comments}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.action} onPress={() => handleShare(item)}>
-              <MaterialCommunityIcons name="share-outline" size={20} color={colors.textSecondary} />
-              <Text style={[styles.actionText, { color: colors.textSecondary }]}>Share</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.action, styles.saveAction]}
-              onPress={() => toggleSave(item.id)}
-            >
-              <Ionicons
-                name={savedItems.has(item.id) ? "bookmark" : "bookmark-outline"}
-                size={20}
-                color={savedItems.has(item.id) ? colors.primary : colors.textSecondary}
-              />
-            </TouchableOpacity>
+          <View style={styles.durationBadge}>
+            <Text style={styles.durationText}>Video</Text>
           </View>
+        </TouchableOpacity>
+
+        <View style={styles.videoMetaContainer}>
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
+          </View>
+          <View style={styles.videoTextContent}>
+            <Text style={[styles.videoTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
+            <Text style={styles.videoSubtitle}>{item.author} • {item.timeAgo}</Text>
+          </View>
+          <TouchableOpacity onPress={() => { }}>
+            <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.cardActions, { borderTopColor: colors.border }]}>
+          <TouchableOpacity style={styles.action} onPress={() => handleLike(item)}>
+            <Ionicons
+              name={hasLiked ? "heart" : "heart-outline"}
+              size={20}
+              color={hasLiked ? "#EF4444" : colors.textSecondary}
+            />
+            <Text style={[styles.actionText, { color: colors.textSecondary }, hasLiked && { color: '#EF4444' }]}>
+              {item.likes > 1000 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.action}>
+            <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
+            <Text style={[styles.actionText, { color: colors.textSecondary }]}>{item.comments}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.action} onPress={() => handleShare(item)}>
+            <MaterialCommunityIcons name="share-outline" size={20} color={colors.textSecondary} />
+            <Text style={[styles.actionText, { color: colors.textSecondary }]}>Share</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.action, styles.saveAction]}
+            onPress={() => toggleSave(item.id)}
+          >
+            <Ionicons
+              name={savedItems.has(item.id) ? "bookmark" : "bookmark-outline"}
+              size={20}
+              color={savedItems.has(item.id) ? colors.primary : colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
       </View>
+    );
+  };
+
+  const renderClipItem = ({ item }: { item: FeedItem }) => {
+    let thumbnailUrl = item.imageUrl;
+    if (!thumbnailUrl && item.videoLink) {
+      const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+      if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/0.jpg`;
+    }
+
+    return (
+      <TouchableOpacity
+        style={[styles.clipCard, { backgroundColor: colors.card }]}
+        onPress={() => playVideo(item)}
+      >
+        {thumbnailUrl ? (
+          <Image source={{ uri: thumbnailUrl }} style={styles.clipThumbnail} resizeMode="cover" />
+        ) : (
+          <View style={[styles.clipThumbnail, { justifyContent: 'center', alignItems: 'center' }]}>
+            <Ionicons name="play-circle" size={40} color="rgba(255,255,255,0.4)" />
+          </View>
+        )}
+
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
+          locations={[0, 0.5, 1]}
+          style={styles.clipGradient}
+        >
+          <Text style={styles.clipTitle} numberOfLines={2}>{item.title}</Text>
+          <View style={styles.clipStats}>
+            <Ionicons name="play" size={10} color="#FFF" />
+            <Text style={styles.clipViewsText}>{item.likes > 1000 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}</Text>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
     );
   };
 
@@ -369,300 +346,336 @@ const ExploreScreen: React.FC = () => {
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Chitki</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Student Community</Text>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.headerLogo, { color: colors.primary }]}>Chitki</Text>
+          <Text style={[styles.headerTagline, { color: colors.textSecondary }]}>Explore</Text>
         </View>
-
-        <TouchableOpacity style={[styles.headerIconButton, { backgroundColor: isDark ? colors.card : '#F1F5F9' }]}>
-          <Ionicons name="search-outline" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={[styles.iconBtn, { backgroundColor: isDark ? colors.card : '#F1F5F9' }]}>
+            <Ionicons name="search" size={20} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs */}
-      <View style={[styles.tabs, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <TabButton icon="videocam-outline" label="Videos" active={activeTab === 'video'} onPress={() => setActiveTab('video')} />
-        <TabButton icon="film-outline" label="Clips (Shots)" active={activeTab === 'clip'} onPress={() => setActiveTab('clip')} />
+      <View style={[styles.tabContainer, { backgroundColor: colors.background }]}>
+        <TouchableOpacity
+          style={[styles.segmentBtn, activeTab === 'video' && styles.segmentBtnActive, { backgroundColor: activeTab === 'video' ? colors.primary : colors.card }]}
+          onPress={() => setActiveTab('video')}
+        >
+          <Text style={[styles.segmentText, { color: activeTab === 'video' ? '#FFF' : colors.textSecondary }]}>Videos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.segmentBtn, activeTab === 'clip' && styles.segmentBtnActive, { backgroundColor: activeTab === 'clip' ? colors.primary : colors.card }]}
+          onPress={() => setActiveTab('clip')}
+        >
+          <Text style={[styles.segmentText, { color: activeTab === 'clip' ? '#FFF' : colors.textSecondary }]}>Clips</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Feed */}
       <FlatList
+        key={activeTab}
         data={filteredData}
-        renderItem={renderFeedItem}
+        renderItem={activeTab === 'clip' ? renderClipItem : renderVideoItem}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.feed}
+        numColumns={activeTab === 'clip' ? 2 : 1}
+        contentContainerStyle={[
+          styles.listContent,
+          activeTab === 'clip' ? { paddingHorizontal: 12 } : { paddingHorizontal: 0 } // Full width for videos, padded for clips
+        ]}
+        columnWrapperStyle={activeTab === 'clip' ? { justifyContent: 'space-between', marginBottom: 12 } : undefined}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="film-outline" size={48} color={colors.textSecondary} />
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No {activeTab}s found</Text>
+          </View>
         }
       />
 
-      {/* FAB */}
       <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]} onPress={() => setShowCreateModal(true)}>
-        <Ionicons name="add" size={24} color="#FFF" />
+        <Ionicons name="add" size={28} color="#FFF" />
       </TouchableOpacity>
 
-      {/* Create Post Modal */}
       <CreatePostModal
         visible={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onPostCreated={loadPosts}
       />
 
-      {/* YouTube Video Player */}
+      {/* Cloudinary/Direct Player */}
+      <Modal
+        visible={!!playingVideoUrl}
+        animationType="slide"
+        onRequestClose={() => setPlayingVideoUrl(null)}
+        transparent={true}
+      >
+        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center' }}>
+          <StatusBar hidden />
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={() => setPlayingVideoUrl(null)}
+          >
+            <Ionicons name="close" size={30} color="#FFF" />
+          </TouchableOpacity>
+
+          {playingVideoUrl && (
+            <Video
+              style={{ width: '100%', height: '100%' }}
+              source={{ uri: playingVideoUrl }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+              isLooping
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* YouTube Player */}
       {playingVideoId && (
         <YouTubePlayer
           visible={showVideoPlayer}
           videoId={playingVideoId}
           title={playingVideoTitle}
-          onClose={() => {
-            setShowVideoPlayer(false);
-            setPlayingVideoId(null);
-            setPlayingVideoTitle('');
-          }}
+          onClose={() => { setShowVideoPlayer(false); setPlayingVideoId(null); }}
         />
       )}
     </SafeAreaView>
   );
 };
 
-// Reusable Components
-interface TabButtonProps {
-  icon: string;
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}
-
-const TabButton: React.FC<TabButtonProps> = ({ icon, label, active, onPress }) => {
-  const { colors, isDark } = useTheme();
-  return (
-    <TouchableOpacity
-      style={[
-        styles.tab,
-        { backgroundColor: isDark ? colors.card : '#F1F5F9' },
-        active && { backgroundColor: colors.primary }
-      ]}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={icon as any}
-        size={16}
-        color={active ? "#FFF" : colors.textSecondary}
-      />
-      <Text style={[
-        styles.tabText,
-        { color: colors.textSecondary },
-        active && { color: '#FFF' }
-      ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-};
-
-// Styles
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  safeArea: { flex: 1 },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1E293B',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
+  headerLogo: {
+    fontSize: 26,
+    fontWeight: '900',
+    marginRight: 8,
+    letterSpacing: -0.5,
+    fontFamily: 'Inter_900Black', // Assuming Inter is available, or fallback to default bold
   },
-  headerIconButton: {
+  headerTagline: {
+    fontSize: 14,
+    fontWeight: '500',
+    opacity: 0.8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+  },
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tabs: {
+  tabContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  tab: {
-    flexDirection: 'row',
+    paddingVertical: 16,
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
   },
-  // activeTab and activeTabText functionality moved to inline styles
-  activeTab: {
-    backgroundColor: '#4F46E5',
+  segmentBtn: {
+    marginRight: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-    marginLeft: 4,
-  },
-  activeTabText: {
-    color: '#FFF',
-  },
-  feed: {
-    padding: 16,
-  },
-  card: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
+  segmentBtnActive: {
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
   },
-  cardImage: {
+  segmentText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  listContent: {
+    paddingBottom: 80,
+    paddingTop: 8,
+  },
+  videoCard: {
+    marginBottom: 24,
+    backgroundColor: 'transparent',
+  },
+  thumbnailContainer: {
     width: '100%',
-    height: 200,
-    backgroundColor: '#F1F5F9',
-  },
-  videoContainer: {
+    height: 230,
     position: 'relative',
+  },
+  videoThumbnail: {
     width: '100%',
-    height: 200,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  videoOverlay: {
+  durationBadge: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 200,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
+    bottom: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  playButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,0,0,0.9)',
-    borderRadius: 4,
-  },
-  videoText: {
+  durationText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    marginLeft: 4,
   },
-  cardContent: {
-    padding: 16,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1E293B',
-    lineHeight: 22,
-  },
-  cardMeta: {
+  videoMetaContainer: {
     flexDirection: 'row',
+    padding: 16,
+    alignItems: 'flex-start',
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#334155',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginRight: 12,
   },
-  author: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#4F46E5',
+  avatarLetter: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#F8FAFC',
   },
-  metaSeparator: {
-    marginHorizontal: 6,
-    color: '#CBD5E1',
+  videoTextContent: {
+    flex: 1,
+    marginRight: 8,
   },
-  timeAgo: {
+  videoTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  videoSubtitle: {
     fontSize: 13,
     color: '#94A3B8',
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-  },
-  tagBadge: {
-    fontSize: 11,
-    color: '#64748B',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginRight: 6,
-    marginBottom: 4,
     fontWeight: '500',
   },
   cardActions: {
     flexDirection: 'row',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    paddingHorizontal: 16, // Added padding
+    paddingBottom: 16, // Added padding
+    alignItems: 'center',
   },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 24,
   },
   saveAction: {
     marginLeft: 'auto',
     marginRight: 0,
   },
   actionText: {
-    marginLeft: 4,
+    marginLeft: 6,
     fontSize: 13,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  clipCard: {
+    width: COLUMN_WIDTH,
+    height: 300, // Slightly taller
+    marginBottom: 0, // Managed by columnWrapper
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  clipThumbnail: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#1E293B', // Dark Slate
+  },
+  clipGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 160, // Taller gradient for better text readability
+    justifyContent: 'flex-end',
+    padding: 12,
+  },
+  clipTitle: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+    marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  clipStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)', // Glass effect pill
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  clipViewsText: {
+    color: '#F8FAFC',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   fab: {
     position: 'absolute',
-    bottom: 20,
-    right: 20,
+    bottom: 24,
+    right: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#4F46E5',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 100,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 10,
+    padding: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 25,
   },
 });
 
