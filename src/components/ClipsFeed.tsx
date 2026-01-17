@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert,
@@ -17,6 +18,7 @@ import {
     ViewToken,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { checkFollowStatus, followUser, unfollowUser } from '../services/connectionService';
 import { likePost, unlikePost } from '../services/postsService';
 import ShareToFriendsModal from './ShareToFriendsModal';
 
@@ -45,6 +47,7 @@ interface ClipsFeedProps {
 
 const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) => {
     const { user } = useAuth();
+    const router = useRouter();
     const [activeIndex, setActiveIndex] = useState(initialIndex);
     const flatListRef = useRef<FlatList>(null);
 
@@ -56,7 +59,32 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     const [isShareModalVisible, setIsShareModalVisible] = useState(false);
     const [selectedClipForShare, setSelectedClipForShare] = useState<FeedItem | null>(null);
 
+    // Initial check for follow status
     useEffect(() => {
+        const checkFollows = async () => {
+            if (!user) return;
+            const newFollowed = new Set<string>();
+
+            // We only check for the currently loaded items to save reads
+            // ideally this should be paginated or checked as items scroll into view
+            for (const item of data) {
+                if (item.userId && item.userId !== user.uid) {
+                    const isFollowing = await checkFollowStatus(user.uid, item.userId);
+                    if (isFollowing) newFollowed.add(item.userId);
+                }
+            }
+            setFollowedUsers(newFollowed);
+        };
+        checkFollows();
+    }, [data, user]);
+
+    useEffect(() => {
+        // Scroll to initial index once on mount
+        if (initialIndex > 0 && flatListRef.current) {
+            setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index: initialIndex, animated: false });
+            }, 100);
+        }
     }, [initialIndex]);
 
     const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -71,6 +99,20 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     const viewabilityConfig = useRef({
         itemVisiblePercentThreshold: 50,
     }).current;
+
+    const handleProfileNavigation = (authorId?: string) => {
+        if (!authorId) return;
+
+        onClose(); // Close the modal
+
+        // Use a small timeout to allow modal animation to start closing
+        setTimeout(() => {
+            router.push({
+                pathname: '/public-profile',
+                params: { userId: authorId }
+            });
+        }, 100);
+    };
 
     const handleLike = async (item: FeedItem, index: number) => {
         if (!user) {
@@ -99,7 +141,6 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
             }
         } catch (error) {
             console.error("Like failed", error);
-            // Revert on failure (optional, but good practice)
         }
     };
 
@@ -136,21 +177,47 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
         );
     };
 
-    const handleFollow = (authorName: string) => {
+    const handleFollow = async (userId?: string) => {
         if (!user) {
             Alert.alert("Login Required", "Please login to follow creators.");
             return;
         }
 
+        if (!userId) return;
+
+        const isFollowing = followedUsers.has(userId);
+
+        // Optimistic Update
         setFollowedUsers(prev => {
             const newSet = new Set(prev);
-            if (newSet.has(authorName)) {
-                newSet.delete(authorName);
+            if (isFollowing) {
+                newSet.delete(userId);
             } else {
-                newSet.add(authorName);
+                newSet.add(userId);
             }
             return newSet;
         });
+
+        try {
+            if (isFollowing) {
+                await unfollowUser(userId);
+            } else {
+                await followUser(userId);
+            }
+        } catch (error) {
+            console.error("Follow action failed:", error);
+            // Revert state if failed
+            setFollowedUsers(prev => {
+                const newSet = new Set(prev);
+                if (isFollowing) {
+                    newSet.add(userId);
+                } else {
+                    newSet.delete(userId);
+                }
+                return newSet;
+            });
+            Alert.alert("Error", "Failed to update follow status.");
+        }
     };
 
     const handleComments = () => {
@@ -160,7 +227,10 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
         const isActive = index === activeIndex;
         const hasLiked = user && item.likedBy?.includes(user.uid);
-        const isFollowing = followedUsers.has(item.author);
+        const isFollowing = item.userId ? followedUsers.has(item.userId) : false;
+
+        // Don't show follow button for own content
+        const showFollow = user && item.userId !== user.uid;
 
         return (
             <View style={styles.container}>
@@ -194,16 +264,25 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                     <View style={styles.bottomSection}>
                         <View style={styles.textContainer}>
                             <View style={styles.authorRow}>
-                                <View style={styles.avatarPlaceholder}>
-                                    <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
-                                </View>
-                                <Text style={styles.authorName}>{item.author}</Text>
                                 <TouchableOpacity
-                                    style={[styles.followBtn, isFollowing && styles.followingBtn]}
-                                    onPress={() => handleFollow(item.author)}
+                                    style={styles.avatarPlaceholder}
+                                    onPress={() => handleProfileNavigation(item.userId)}
                                 >
-                                    <Text style={styles.followText}>{isFollowing ? 'Following' : 'Follow'}</Text>
+                                    <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
                                 </TouchableOpacity>
+
+                                <TouchableOpacity onPress={() => handleProfileNavigation(item.userId)}>
+                                    <Text style={styles.authorName}>{item.author}</Text>
+                                </TouchableOpacity>
+
+                                {showFollow && (
+                                    <TouchableOpacity
+                                        style={[styles.followBtn, isFollowing && styles.followingBtn]}
+                                        onPress={() => handleFollow(item.userId)}
+                                    >
+                                        <Text style={styles.followText}>{isFollowing ? 'Following' : 'Follow'}</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                             <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
                             <Text style={styles.timeAgo}>{item.timeAgo}</Text>

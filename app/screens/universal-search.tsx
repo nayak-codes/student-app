@@ -1,7 +1,6 @@
-// Universal Search Screen - Search across everything
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -21,26 +20,27 @@ import { College, getAllColleges } from '../../src/services/collegeService';
 import { getAllResources, LibraryResource } from '../../src/services/libraryService';
 import { getAllPosts, Post } from '../../src/services/postsService';
 
-type SearchCategory = 'all' | 'colleges' | 'posts' | 'library' | 'users';
+const SEARCH_HISTORY_KEY = 'studentverse_search_history';
+
+type SearchCategory = 'all' | 'users' | 'colleges' | 'posts' | 'library';
 
 interface SearchResult {
     id: string;
-    type: 'college' | 'post' | 'resource' | 'user';
+    type: 'college' | 'user' | 'post' | 'resource';
     title: string;
     subtitle: string;
     description?: string;
     badge?: string;
-    data: College | Post | LibraryResource | UserProfile;
+    data: College | UserProfile | Post | LibraryResource;
     image?: string;
 }
-
-const SEARCH_HISTORY_KEY = 'studentverse_search_history';
-
 const SearchScreen = () => {
     const router = useRouter();
+    const params = useLocalSearchParams();
     const { colors, isDark } = useTheme();
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeCategory, setActiveCategory] = useState<SearchCategory>('all');
+    const [activeCategory, setActiveCategory] = useState<SearchCategory>((params.category as SearchCategory) || 'all');
+
     const [results, setResults] = useState<SearchResult[]>([]);
     const [allData, setAllData] = useState<{
         colleges: College[];

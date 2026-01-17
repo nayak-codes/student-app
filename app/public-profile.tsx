@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AddEducationModal from '../src/components/AddEducationModal';
+import ClipsFeed from '../src/components/ClipsFeed';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -476,6 +477,10 @@ const ProfileScreen = () => {
     const [docViewerVisible, setDocViewerVisible] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState<LibraryResource | null>(null);
 
+    // Clips Feed State
+    const [showClipsFeed, setShowClipsFeed] = useState(false);
+    const [initialClipIndex, setInitialClipIndex] = useState(0);
+
     // 5. Computed Display Values
     // If it's own profile, priority is authUserProfile (Firestore) > authUser (Auth)
     // If public, priority is publicUserProfile
@@ -757,10 +762,12 @@ const ProfileScreen = () => {
                 content = posts.filter(p => p.type === 'image' || p.type === 'note' || p.type === 'news');
                 break;
             case 'videos':
-                content = posts.filter(p => p.type === 'video' || !!p.videoLink);
+                // Show long-form videos
+                content = posts.filter(p => p.type === 'video');
                 break;
             case 'clips':
-                content = posts.filter(p => p.type === 'video' || !!p.videoLink);
+                // Show short clips (including standard videos for now to ensure visibility)
+                content = posts.filter(p => p.type === 'clip' || p.type === 'video');
                 break;
             case 'events':
                 content = [...events];
@@ -1155,20 +1162,42 @@ const ProfileScreen = () => {
                                     ))
                                 ) : activeTab === 'clips' ? (
                                     <View style={styles.gridContainer}>
-                                        {getFilteredAndSortedContent().map((item: any) => (
-                                            <Pressable
-                                                key={item.id}
-                                                style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: colors.background }]}
-                                                onPress={() => openPostModal(item)}
-                                            >
-                                                <Image
-                                                    source={{ uri: item.imageUrl || item.videoLink || 'https://via.placeholder.com/300' }}
-                                                    style={[styles.gridImage, { resizeMode: 'cover' }]}
-                                                />
-                                                <View style={styles.videoDurationBadge}><Ionicons name="play" size={10} color="#FFF" /></View>
-                                            </Pressable>
-                                        ))}
-                                        {getFilteredAndSortedContent().length === 0 && (
+                                        {posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary') && !p.videoLink.includes('long')))).map((item: any, index: number) => {
+                                            let thumbnailUrl = item.imageUrl;
+                                            if (!thumbnailUrl && item.videoLink) {
+                                                const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+                                                if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/0.jpg`;
+                                            }
+
+                                            return (
+                                                <Pressable
+                                                    key={item.id}
+                                                    style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: colors.background }]}
+                                                    onPress={() => {
+                                                        const clips = posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary') && !p.videoLink.includes('long'))));
+                                                        setInitialClipIndex(index);
+                                                        setShowClipsFeed(true);
+                                                    }}
+                                                >
+                                                    {thumbnailUrl ? (
+                                                        <Image
+                                                            source={{ uri: thumbnailUrl }}
+                                                            style={[styles.gridImage, { resizeMode: 'cover' }]}
+                                                        />
+                                                    ) : (
+                                                        <View style={[styles.gridImage, { backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' }]}>
+                                                            <Ionicons name="play-circle" size={32} color="#94A3B8" />
+                                                        </View>
+                                                    )}
+                                                    <View style={styles.videoDurationBadge}><Ionicons name="play" size={10} color="#FFF" /></View>
+                                                    <LinearGradient
+                                                        colors={['transparent', 'rgba(0,0,0,0.5)']}
+                                                        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40 }}
+                                                    />
+                                                </Pressable>
+                                            );
+                                        })}
+                                        {posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary') && !p.videoLink.includes('long')))).length === 0 && (
                                             <View style={{ padding: 40, alignItems: 'center', width: '100%' }}>
                                                 <Ionicons name="videocam-outline" size={48} color={colors.textSecondary} />
                                                 <Text style={{ marginTop: 12, color: colors.textSecondary }}>No clips yet</Text>
@@ -1274,6 +1303,32 @@ const ProfileScreen = () => {
                         resizeMode="contain"
                     />
                 </View>
+            </Modal>
+
+            {/* Clips Feed Modal */}
+            <Modal
+                visible={showClipsFeed}
+                animationType="slide"
+                transparent={false}
+                onRequestClose={() => setShowClipsFeed(false)}
+            >
+                <ClipsFeed
+                    initialIndex={initialClipIndex}
+                    data={posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary') && !p.videoLink.includes('long')))).map(p => ({
+                        id: p.id,
+                        type: 'clip',
+                        title: p.content,
+                        author: p.userName,
+                        likes: p.likes,
+                        comments: p.comments,
+                        saved: false,
+                        timeAgo: new Date(p.createdAt).toLocaleDateString(),
+                        imageUrl: p.imageUrl,
+                        videoLink: p.videoLink,
+                        userId: p.userId
+                    }))}
+                    onClose={() => setShowClipsFeed(false)}
+                />
             </Modal>
 
             {/* Notifications Modal */}

@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -48,7 +49,7 @@ interface FeedItem {
 }
 
 const { width } = Dimensions.get('window');
-const COLUMN_WIDTH = width / 2 - 24; // 2 columns with padding
+const COLUMN_WIDTH = width / 2 - 20; // 2 columns with padding
 
 // Sample Data (Placeholders)
 const sampleVideoPosts: FeedItem[] = [
@@ -110,6 +111,7 @@ function convertToFeedItem(post: Post): FeedItem | null {
 }
 
 const ExploreScreen: React.FC = () => {
+  const router = useRouter();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState<ContentType>('video');
@@ -251,18 +253,19 @@ const ExploreScreen: React.FC = () => {
     }
   };
 
-  const filteredData = feedData.filter(item => item.type === activeTab);
-
-  // --- RENDERERS ---
+  const filteredData = feedData.filter(item => {
+    if (activeTab === 'video') return item.type === 'video';
+    return item.type === 'clip';
+  });
 
   const renderVideoItem = ({ item }: { item: FeedItem }) => {
-    const hasLiked = user && item.likedBy?.includes(user.uid);
-
     let thumbnailUrl = item.imageUrl;
     if (!thumbnailUrl && item.videoLink) {
-      const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-      if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg`;
+      const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+      if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
     }
+
+    const hasLiked = user && item.likedBy?.includes(user.uid);
 
     return (
       <View style={[styles.videoCard, { backgroundColor: colors.card, shadowColor: colors.text }]}>
@@ -338,8 +341,9 @@ const ExploreScreen: React.FC = () => {
 
     return (
       <TouchableOpacity
-        style={[styles.clipCard, { backgroundColor: colors.card }]}
+        style={[styles.clipCard, { backgroundColor: colors.card, borderColor: isDark ? '#334155' : '#E2E8F0' }]}
         onPress={() => playVideo(item)}
+        activeOpacity={0.9}
       >
         {thumbnailUrl ? (
           <Image source={{ uri: thumbnailUrl }} style={styles.clipThumbnail} resizeMode="cover" />
@@ -350,14 +354,26 @@ const ExploreScreen: React.FC = () => {
         )}
 
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
-          locations={[0, 0.5, 1]}
+          colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
+          locations={[0, 0.4, 0.7, 1]}
           style={styles.clipGradient}
         >
-          <Text style={styles.clipTitle} numberOfLines={2}>{item.title}</Text>
-          <View style={styles.clipStats}>
-            <Ionicons name="play" size={10} color="#FFF" />
-            <Text style={styles.clipViewsText}>{item.likes > 1000 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}</Text>
+          <View style={styles.clipContent}>
+            <Text style={styles.clipTitle} numberOfLines={2}>{item.title}</Text>
+
+            <View style={styles.clipMetaRow}>
+              <View style={styles.clipAuthor}>
+                <View style={styles.miniAvatar}>
+                  <Text style={styles.miniAvatarText}>{item.author.charAt(0)}</Text>
+                </View>
+                <Text style={styles.clipAuthorName} numberOfLines={1}>{item.author}</Text>
+              </View>
+
+              <View style={styles.clipStats}>
+                <Ionicons name="play" size={10} color="#FFF" />
+                <Text style={styles.clipViewsText}>{item.likes > 1000 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}</Text>
+              </View>
+            </View>
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -368,15 +384,32 @@ const ExploreScreen: React.FC = () => {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Header */}
+      {/* Universal Header */}
       <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={styles.headerLeft}>
-          <Text style={[styles.headerLogo, { color: colors.primary }]}>Chitki</Text>
-          <Text style={[styles.headerTagline, { color: colors.textSecondary }]}>Explore</Text>
+        <View style={styles.brandContainer}>
+          <Text style={styles.brandText}>Vidhyardi</Text>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={[styles.iconBtn, { backgroundColor: isDark ? colors.card : '#F1F5F9' }]}>
-            <Ionicons name="search" size={20} color={colors.text} />
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push({ pathname: '/screens/universal-search', params: { category: 'posts' } })}
+          >
+            <Ionicons name="search-outline" size={26} color={colors.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => { /* Handle notifications */ }}
+          >
+            <Ionicons name="notifications-outline" size={26} color={colors.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push('/conversations')}
+          >
+            <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -405,9 +438,9 @@ const ExploreScreen: React.FC = () => {
         numColumns={activeTab === 'clip' ? 2 : 1}
         contentContainerStyle={[
           styles.listContent,
-          activeTab === 'clip' ? { paddingHorizontal: 12 } : { paddingHorizontal: 0 } // Full width for videos, padded for clips
+          activeTab === 'clip' ? { paddingHorizontal: 16 } : { paddingHorizontal: 0 } // Adjusted padding
         ]}
-        columnWrapperStyle={activeTab === 'clip' ? { justifyContent: 'space-between', marginBottom: 12 } : undefined}
+        columnWrapperStyle={activeTab === 'clip' ? { justifyContent: 'space-between', marginBottom: 16 } : undefined}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
@@ -490,37 +523,29 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
   },
-  headerLeft: {
+  brandContainer: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  headerLogo: {
-    fontSize: 26,
-    fontWeight: '900',
-    marginRight: 8,
-    letterSpacing: -0.5,
-    fontFamily: 'Inter_900Black', // Assuming Inter is available, or fallback to default bold
-  },
-  headerTagline: {
-    fontSize: 14,
-    fontWeight: '500',
-    opacity: 0.8,
-  },
-  headerRight: {
-    flexDirection: 'row',
-  },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
     alignItems: 'center',
+  },
+  brandText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#4F46E5',
+    letterSpacing: -0.5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  actionButton: {
+    padding: 4,
   },
   tabContainer: {
     flexDirection: 'row',
@@ -617,7 +642,7 @@ const styles = StyleSheet.create({
   cardActions: {
     flexDirection: 'row',
     paddingHorizontal: 16, // Added padding
-    paddingBottom: 16, // Added padding
+    paddingBottom: 16,
     alignItems: 'center',
   },
   action: {
@@ -637,11 +662,11 @@ const styles = StyleSheet.create({
   },
   clipCard: {
     width: COLUMN_WIDTH,
-    height: 300, // Slightly taller
-    marginBottom: 0, // Managed by columnWrapper
-    borderRadius: 16,
+    height: 320, // Taller for premium feel (approx 9:16 ratio)
+    borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: 1,
   },
   clipThumbnail: {
     width: '100%',
@@ -653,9 +678,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 160, // Taller gradient for better text readability
+    height: 180, // Taller gradient for better text readability
     justifyContent: 'flex-end',
     padding: 12,
+  },
+  clipContent: {
+    width: '100%',
   },
   clipTitle: {
     color: '#FFF',
@@ -663,18 +691,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 20,
     marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    textShadowRadius: 3,
+  },
+  clipMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  clipAuthor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  clipAuthorName: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  miniAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  miniAvatarText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   clipStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)', // Glass effect pill
-    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   clipViewsText: {
     color: '#F8FAFC',
