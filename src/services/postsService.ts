@@ -205,6 +205,40 @@ export const unlikePost = async (postId: string, userId: string): Promise<void> 
 };
 
 /**
+ * Get a single post by ID
+ */
+export const getPostById = async (postId: string): Promise<Post | null> => {
+    try {
+        const docRef = doc(db, POSTS_COLLECTION, postId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                userId: data.userId,
+                userName: data.userName,
+                userExam: data.userExam,
+                content: data.content,
+                type: data.type,
+                imageUrl: data.imageUrl,
+                videoLink: data.videoLink,
+                tags: data.tags || [],
+                likes: data.likes || 0,
+                likedBy: data.likedBy || [],
+                comments: data.comments || 0,
+                savedBy: data.savedBy || [],
+                createdAt: data.createdAt?.toDate() || new Date(),
+            } as Post;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting post by ID:', error);
+        return null;
+    }
+};
+
+/**
  * Delete a post
  */
 export const deletePost = async (postId: string): Promise<void> => {

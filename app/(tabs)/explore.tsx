@@ -1,5 +1,4 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -22,7 +21,6 @@ import {
 } from 'react-native';
 import ClipsFeed from '../../src/components/ClipsFeed';
 import CreatePostModal from '../../src/components/CreatePostModal';
-import YouTubePlayer from '../../src/components/YouTubePlayer';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { addToHistory } from '../../src/services/historyService';
@@ -118,10 +116,6 @@ const ExploreScreen: React.FC = () => {
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
   const [feedData, setFeedData] = useState<FeedItem[]>(sampleVideoPosts);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
-  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
-  const [playingVideoTitle, setPlayingVideoTitle] = useState<string>('');
-  const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -230,7 +224,21 @@ const ExploreScreen: React.FC = () => {
         setShowClipsFeed(true);
       } else {
         // Fallback if not found in list (shouldn't happen often)
-        setPlayingVideoUrl(item.videoLink);
+        router.push({
+          pathname: '/screens/video-player',
+          params: {
+            videoUri: item.videoLink,
+            postId: item.id,
+            title: item.title,
+            description: '',
+            authorName: item.author,
+            authorId: item.userId || '',
+            likes: item.likes.toString(),
+            views: '0',
+            date: item.timeAgo,
+            authorImage: undefined
+          }
+        });
       }
       return;
     }
@@ -238,18 +246,23 @@ const ExploreScreen: React.FC = () => {
     const isYoutube = item.videoLink.includes('youtube.com') || item.videoLink.includes('youtu.be');
 
     if (isYoutube) {
-      const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-      const videoId = match ? match[1] : null;
-
-      if (videoId) {
-        setPlayingVideoId(videoId);
-        setPlayingVideoTitle(item.title);
-        setShowVideoPlayer(true);
-      } else {
-        Linking.openURL(item.videoLink);
-      }
+      Linking.openURL(item.videoLink);
     } else {
-      setPlayingVideoUrl(item.videoLink);
+      router.push({
+        pathname: '/screens/video-player',
+        params: {
+          videoUri: item.videoLink,
+          postId: item.id,
+          title: item.title,
+          description: '', // FeedItem often lacks full description
+          authorName: item.author,
+          authorId: item.userId || '',
+          likes: item.likes.toString(),
+          views: '0', // FeedItem lacks views
+          date: item.timeAgo,
+          authorImage: undefined
+        }
+      });
     }
   };
 
@@ -476,45 +489,6 @@ const ExploreScreen: React.FC = () => {
           onClose={() => setShowClipsFeed(false)}
         />
       </Modal>
-
-      {/* Cloudinary/Direct Player (Fallback for standard videos) */}
-      <Modal
-        visible={!!playingVideoUrl}
-        animationType="slide"
-        onRequestClose={() => setPlayingVideoUrl(null)}
-        transparent={true}
-      >
-        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center' }}>
-          <StatusBar hidden />
-          <TouchableOpacity
-            style={styles.closeBtn}
-            onPress={() => setPlayingVideoUrl(null)}
-          >
-            <Ionicons name="close" size={30} color="#FFF" />
-          </TouchableOpacity>
-
-          {playingVideoUrl && (
-            <Video
-              style={{ width: '100%', height: '100%' }}
-              source={{ uri: playingVideoUrl }}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay
-              isLooping
-            />
-          )}
-        </View>
-      </Modal>
-
-      {/* YouTube Player */}
-      {playingVideoId && (
-        <YouTubePlayer
-          visible={showVideoPlayer}
-          videoId={playingVideoId}
-          title={playingVideoTitle}
-          onClose={() => { setShowVideoPlayer(false); setPlayingVideoId(null); }}
-        />
-      )}
     </SafeAreaView>
   );
 };

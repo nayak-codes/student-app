@@ -1,5 +1,7 @@
 // Ultra-Clean Student Profile Screen
 import { Ionicons } from '@expo/vector-icons';
+import { ResizeMode, Video } from 'expo-av';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -45,6 +47,38 @@ import { deletePost, getAllPosts, Post, updatePost } from '../src/services/posts
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
 type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
+
+// INLINE COMPONENT: Video Player Modal
+const VideoPlayerModal: React.FC<{
+    visible: boolean;
+    videoUri: string | null;
+    onClose: () => void;
+}> = ({ visible, videoUri, onClose }) => {
+    const { colors } = useTheme();
+    if (!videoUri) return null;
+
+    return (
+        <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={onClose}>
+            <View style={{ flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }}>
+                <TouchableOpacity
+                    style={{ position: 'absolute', top: 40, right: 20, zIndex: 10, padding: 10 }}
+                    onPress={onClose}
+                >
+                    <Ionicons name="close" size={30} color="white" />
+                </TouchableOpacity>
+                <Video
+                    source={{ uri: videoUri }}
+                    style={{ width: '100%', height: '80%' }}
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay
+                    isLooping={false}
+                    onError={(e) => console.log('Video error:', e)}
+                />
+            </View>
+        </Modal>
+    );
+};
 
 // Edit Post Modal
 const EditPostModal: React.FC<{
@@ -127,7 +161,7 @@ const EditPostModal: React.FC<{
 const PostCard: React.FC<{
     post: Post;
     onImagePress: (uri: string) => void;
-    onVideoPress: (link: string) => void;
+    onVideoPress: (link: string, post: Post) => void;
     onPress?: (post: Post) => void;
     onDelete?: (post: Post) => void;
     onEdit?: (post: Post) => void;
@@ -189,7 +223,7 @@ const PostCard: React.FC<{
             )}
 
             {post.videoLink && (
-                <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!)}>
+                <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!, post)}>
                     <View style={styles.videoContainer}>
                         <Ionicons name="play-circle" size={48} color="#6D28D9" />
                         <Text style={styles.videoText}>Video Post</Text>
@@ -362,7 +396,7 @@ const PostDetailModal: React.FC<{
     post: Post | null;
     onClose: () => void;
     onImagePress: (uri: string) => void;
-    onVideoPress: (link: string) => void;
+    onVideoPress: (link: string, post: Post) => void;
     onDelete?: (post: Post) => void | Promise<void>;
     onEdit?: (post: Post) => void | Promise<void>;
 }> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit }) => {
@@ -742,9 +776,30 @@ const ProfileScreen = () => {
         setViewerUri('');
     };
 
-    const openVideo = (link: string) => {
-        if (link) {
+    // Video logic
+    const openVideo = (link: string, post?: Post) => {
+        if (!link) return;
+
+        // If YouTube, open in browser/app
+        if (link.includes('youtube.com') || link.includes('youtu.be')) {
             Linking.openURL(link).catch(err => console.error("Couldn't load page", err));
+        } else {
+            // New YouTube-style Player Screen
+            router.push({
+                pathname: '/screens/video-player',
+                params: {
+                    videoUri: link,
+                    postId: post?.id,
+                    title: post?.content,
+                    description: post?.content,
+                    authorName: displayName, // Use current profile name
+                    authorImage: photoURL,
+                    authorId: targetUserId,
+                    likes: post?.likes,
+                    views: 0,
+                    date: post?.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Recently'
+                }
+            });
         }
     };
 
@@ -775,13 +830,13 @@ const ProfileScreen = () => {
                 // Show long-form videos (Exclude things that look like shorts)
                 content = posts.filter(p =>
                     p.type === 'video' &&
-                    !p.videoLink?.includes('shorts') &&
-                    !p.videoLink?.includes('cloudinary') // Assuming cloudinary links are usually clips in this app context
+                    !p.videoLink?.includes('shorts')
                 );
                 break;
             case 'clips':
                 // Handled in render directly for specific logic, but keeping this safe
-                content = posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary'))));
+                // STRICTER FILTER: Only type='clip' OR link has 'shorts'
+                content = posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts')));
                 break;
             case 'events':
                 content = [...events];
@@ -1158,7 +1213,7 @@ const ProfileScreen = () => {
                                         </View>
                                         <View>
                                             {posts.filter(p => p.type === 'video' || !!p.videoLink).slice(0, 3).map((item) => (
-                                                <VideoListItem key={item.id} post={item} onPress={openPostModal} />
+                                                <VideoListItem key={item.id} post={item} onPress={(p) => openVideo(p.videoLink || '', p)} />
                                             ))}
                                             {posts.filter(p => p.type === 'video' || !!p.videoLink).length === 0 && (
                                                 <Text style={{ color: colors.textSecondary, fontStyle: 'italic', marginBottom: 16 }}>No videos yet</Text>
@@ -1196,13 +1251,13 @@ const ProfileScreen = () => {
                                         <VideoListItem
                                             key={item.id}
                                             post={item}
-                                            onPress={openPostModal}
+                                            onPress={(p) => openVideo(p.videoLink || '', p)}
                                         />
                                     ))
                                 ) : activeTab === 'clips' ? (
                                     <View style={styles.gridContainer}>
                                         {/* Filter specifically for SHORTS/CLIPS structure based on URL or Type */}
-                                        {posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary') && !p.videoLink.includes('long')))).map((item: any, index: number) => {
+                                        {posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts'))).map((item: any, index: number) => {
                                             // Determine thumbnail
                                             let thumbnailUrl = item.imageUrl;
                                             if (!thumbnailUrl && item.videoLink) {
@@ -1216,10 +1271,6 @@ const ProfileScreen = () => {
                                                     style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: '#FFF' }]}
                                                     onPress={() => {
                                                         // Launch the ClipsFeed player
-                                                        const clips = posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary') && !p.videoLink.includes('long'))));
-                                                        // We need to pass valid FeedItems to ClipsFeed. 
-                                                        // The ClipsFeed component expects specific fields. 
-                                                        // Let's rely on the index to open the correct one.
                                                         setInitialClipIndex(index);
                                                         setShowClipsFeed(true);
                                                     }}
@@ -1242,7 +1293,7 @@ const ProfileScreen = () => {
                                                 </Pressable>
                                             );
                                         })}
-                                        {posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary') && !p.videoLink.includes('long')))).length === 0 && (
+                                        {posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts'))).length === 0 && (
                                             <View style={{ padding: 40, alignItems: 'center', width: '100%' }}>
                                                 <Ionicons name="videocam-outline" size={48} color={colors.textSecondary} />
                                                 <Text style={{ marginTop: 12, color: colors.textSecondary }}>No clips yet</Text>
@@ -1368,7 +1419,7 @@ const ProfileScreen = () => {
                 </View>
             </Modal>
 
-            {/* Clips Feed Modal */}
+            {/* ClipsFeed Modal */}
             <Modal
                 visible={showClipsFeed}
                 animationType="slide"
@@ -1377,7 +1428,7 @@ const ProfileScreen = () => {
             >
                 <ClipsFeed
                     initialIndex={initialClipIndex}
-                    data={posts.filter(p => p.type === 'clip' || (p.videoLink && (p.videoLink.includes('shorts') || p.videoLink.includes('cloudinary') && !p.videoLink.includes('long')))).map(p => ({
+                    data={posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts'))).map(p => ({
                         id: p.id,
                         type: 'clip',
                         title: p.content,
