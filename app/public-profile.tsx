@@ -1,6 +1,6 @@
 // Ultra-Clean Student Profile Screen
 import { Ionicons } from '@expo/vector-icons';
-import { ResizeMode, Video } from 'expo-av';
+
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -47,37 +47,7 @@ import { updatePostImpressions } from '../src/services/profileStatsService';
 
 type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
 
-// INLINE COMPONENT: Video Player Modal
-const VideoPlayerModal: React.FC<{
-    visible: boolean;
-    videoUri: string | null;
-    onClose: () => void;
-}> = ({ visible, videoUri, onClose }) => {
-    const { colors } = useTheme();
-    if (!videoUri) return null;
 
-    return (
-        <Modal visible={visible} animationType="fade" transparent={true} onRequestClose={onClose}>
-            <View style={{ flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }}>
-                <TouchableOpacity
-                    style={{ position: 'absolute', top: 40, right: 20, zIndex: 10, padding: 10 }}
-                    onPress={onClose}
-                >
-                    <Ionicons name="close" size={30} color="white" />
-                </TouchableOpacity>
-                <Video
-                    source={{ uri: videoUri }}
-                    style={{ width: '100%', height: '80%' }}
-                    useNativeControls
-                    resizeMode={ResizeMode.CONTAIN}
-                    shouldPlay
-                    isLooping={false}
-                    onError={(e) => console.log('Video error:', e)}
-                />
-            </View>
-        </Modal>
-    );
-};
 
 // Edit Post Modal
 const EditPostModal: React.FC<{

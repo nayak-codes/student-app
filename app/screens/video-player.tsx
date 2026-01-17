@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ResizeMode, Video } from 'expo-av';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    AppState,
     Dimensions,
     Image,
     Linking,
@@ -26,6 +28,19 @@ import { getAllPosts, getPostById, Post } from '../../src/services/postsService'
 const { width } = Dimensions.get('window');
 
 const VideoPlayerScreen = () => {
+    const isFocused = useIsFocused();
+    const [appStateVisible, setAppStateVisible] = useState(AppState.currentState);
+
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            setAppStateVisible(nextAppState);
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
+
     const router = useRouter();
     const params = useLocalSearchParams();
     const { colors, isDark } = useTheme();
@@ -42,9 +57,25 @@ const VideoPlayerScreen = () => {
     const views = params.views ? parseInt(params.views as string) : 0;
     const date = params.date as string;
 
+
+
+    // expo-video Player Setup
+    const player = useVideoPlayer(videoUri, player => {
+        player.loop = false;
+    });
+
+    // Lifecycle Management for Playback
+    useEffect(() => {
+        if (isFocused && appStateVisible === 'active') {
+            player.play();
+        } else {
+            player.pause();
+        }
+    }, [isFocused, appStateVisible, player]);
+
     console.log('VideoPlayerScreen Params:', { videoUri, postId, initialTitle });
 
-    const [loadingVideo, setLoadingVideo] = useState(true);
+    // const [loadingVideo, setLoadingVideo] = useState(true); // Handled by expo-video internal UI or can be added back with listeners
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [relatedVideos, setRelatedVideos] = useState<Post[]>([]);
     const [loadingRelated, setLoadingRelated] = useState(true);
@@ -122,34 +153,14 @@ const VideoPlayerScreen = () => {
                 <View style={styles.videoWrapper}>
                     {videoUri && !errorMsg ? (
                         <>
-                            <Video
-                                source={{ uri: videoUri }}
+                            <VideoView
+                                player={player}
                                 style={styles.video}
-                                resizeMode={ResizeMode.CONTAIN}
-                                useNativeControls
-                                shouldPlay={true}
-                                isLooping={false}
-                                onLoadStart={() => console.log('Video load started:', videoUri)}
-                                onLoad={(status) => {
-                                    console.log('Video loaded:', status);
-                                    setLoadingVideo(false);
-                                }}
-                                onError={(error) => {
-                                    console.log('Video playback error (handled):', error);
-                                    setLoadingVideo(false);
-                                    const errString = String(error);
-                                    if (errString.includes('hevc') || errString.includes('decoder')) {
-                                        setErrorMsg('This video format (HEVC) is not supported by your device hardware.');
-                                    } else {
-                                        setErrorMsg('Could not play video.');
-                                    }
-                                }}
+                                contentFit="contain"
+                                allowsFullscreen
+                                allowsPictureInPicture
                             />
-                            {loadingVideo && (
-                                <View style={styles.loadingOverlay}>
-                                    <ActivityIndicator size="large" color="#FFF" />
-                                </View>
-                            )}
+
                         </>
                     ) : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>

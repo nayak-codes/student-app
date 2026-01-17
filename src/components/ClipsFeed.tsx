@@ -1,13 +1,13 @@
+
 import { Ionicons } from '@expo/vector-icons';
-import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Dimensions,
     FlatList,
-    Image,
     Share,
     StatusBar,
     StyleSheet,
@@ -15,7 +15,7 @@ import {
     TouchableOpacity,
     TouchableWithoutFeedback,
     View,
-    ViewToken,
+    ViewToken
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { checkFollowStatus, followUser, unfollowUser } from '../services/connectionService';
@@ -45,6 +45,115 @@ interface ClipsFeedProps {
     onClose: () => void;
 }
 
+interface ClipsFeedItemProps {
+    item: FeedItem;
+    isActive: boolean;
+    hasLiked: boolean;
+    isFollowing: boolean;
+    showFollow: boolean;
+    onLike: () => void;
+    onShare: () => void;
+    onFollow: () => void;
+    onProfile: () => void;
+    onComments: () => void;
+    onClose: () => void;
+}
+
+const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
+    item, isActive, hasLiked, isFollowing, showFollow,
+    onLike, onShare, onFollow, onProfile, onComments, onClose
+}) => {
+    // Correct usage of useVideoPlayer hook
+    const player = useVideoPlayer(item.videoLink || '', player => {
+        player.loop = true;
+    });
+
+    useEffect(() => {
+        if (isActive) {
+            player.play();
+        } else {
+            player.pause();
+        }
+    }, [isActive, player]);
+
+    return (
+        <View style={styles.container}>
+            <TouchableWithoutFeedback onPress={() => {
+                if (player.playing) player.pause();
+                else player.play();
+            }}>
+                <View style={styles.videoContainer}>
+                    <VideoView
+                        player={player}
+                        style={styles.video}
+                        contentFit="cover"
+                        nativeControls={false}
+                    />
+                </View>
+            </TouchableWithoutFeedback>
+
+            {/* Overlay Controls */}
+            <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.8)']}
+                style={styles.overlay}
+            >
+                <View style={styles.bottomSection}>
+                    <View style={styles.textContainer}>
+                        <View style={styles.authorRow}>
+                            <TouchableOpacity
+                                style={styles.avatarPlaceholder}
+                                onPress={onProfile}
+                            >
+                                <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity onPress={onProfile}>
+                                <Text style={styles.authorName}>{item.author}</Text>
+                            </TouchableOpacity>
+
+                            {showFollow && (
+                                <TouchableOpacity
+                                    style={[styles.followBtn, isFollowing && styles.followingBtn]}
+                                    onPress={onFollow}
+                                >
+                                    <Text style={styles.followText}>{isFollowing ? 'Following' : 'Follow'}</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
+                        <Text style={styles.timeAgo}>{item.timeAgo}</Text>
+                    </View>
+
+                    <View style={styles.rightActions}>
+                        <TouchableOpacity style={styles.actionBtn} onPress={onLike}>
+                            <Ionicons name={hasLiked ? "heart" : "heart-outline"} size={32} color={hasLiked ? "#EF4444" : "#FFF"} />
+                            <Text style={styles.actionText}>{item.likes}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionBtn} onPress={onComments}>
+                            <Ionicons name="chatbubble-outline" size={30} color="#FFF" />
+                            <Text style={styles.actionText}>{item.comments}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionBtn} onPress={onShare}>
+                            <Ionicons name="arrow-redo-outline" size={30} color="#FFF" />
+                            <Text style={styles.actionText}>Share</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionBtn}>
+                            <Ionicons name="ellipsis-horizontal" size={30} color="#FFF" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </LinearGradient>
+
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                <Ionicons name="arrow-back" size={28} color="#FFF" />
+            </TouchableOpacity>
+        </View>
+    );
+};
+
 const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) => {
     const { user } = useAuth();
     const router = useRouter();
@@ -64,9 +173,6 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
         const checkFollows = async () => {
             if (!user) return;
             const newFollowed = new Set<string>();
-
-            // We only check for the currently loaded items to save reads
-            // ideally this should be paginated or checked as items scroll into view
             for (const item of data) {
                 if (item.userId && item.userId !== user.uid) {
                     const isFollowing = await checkFollowStatus(user.uid, item.userId);
@@ -79,7 +185,6 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     }, [data, user]);
 
     useEffect(() => {
-        // Scroll to initial index once on mount
         if (initialIndex > 0 && flatListRef.current) {
             setTimeout(() => {
                 flatListRef.current?.scrollToIndex({ index: initialIndex, animated: false });
@@ -102,10 +207,7 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
 
     const handleProfileNavigation = (authorId?: string) => {
         if (!authorId) return;
-
-        onClose(); // Close the modal
-
-        // Use a small timeout to allow modal animation to start closing
+        onClose();
         setTimeout(() => {
             router.push({
                 pathname: '/public-profile',
@@ -121,8 +223,6 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
         }
 
         const hasLiked = item.likedBy?.includes(user.uid);
-
-        // Optimistic Update
         const updatedItems = [...items];
         updatedItems[index] = {
             ...item,
@@ -187,7 +287,6 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
 
         const isFollowing = followedUsers.has(userId);
 
-        // Optimistic Update
         setFollowedUsers(prev => {
             const newSet = new Set(prev);
             if (isFollowing) {
@@ -206,7 +305,6 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
             }
         } catch (error) {
             console.error("Follow action failed:", error);
-            // Revert state if failed
             setFollowedUsers(prev => {
                 const newSet = new Set(prev);
                 if (isFollowing) {
@@ -224,107 +322,12 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
         Alert.alert("Comments", "Comments section coming soon!");
     };
 
-    const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
-        const isActive = index === activeIndex;
-        const hasLiked = user && item.likedBy?.includes(user.uid);
-        const isFollowing = item.userId ? followedUsers.has(item.userId) : false;
-
-        // Don't show follow button for own content
-        const showFollow = user && item.userId !== user.uid;
-
-        return (
-            <View style={styles.container}>
-                <TouchableWithoutFeedback onPress={() => {/* Maybe toggle pause? */ }}>
-                    <View style={styles.videoContainer}>
-                        {isActive ? (
-                            <Video
-                                style={styles.video}
-                                source={{ uri: item.videoLink || '' }}
-                                resizeMode={ResizeMode.COVER}
-                                shouldPlay={isActive}
-                                isLooping
-                                useNativeControls={false} // Custom overlay instead
-                            />
-                        ) : (
-                            // Show thumbnail for non-active items to save resources
-                            <Image
-                                source={{ uri: item.imageUrl || `https://img.youtube.com/vi/${item.videoLink?.split('v=')[1]}/hqdefault.jpg` }}
-                                style={styles.video}
-                                resizeMode="cover"
-                            />
-                        )}
-                    </View>
-                </TouchableWithoutFeedback>
-
-                {/* Overlay Controls */}
-                <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.8)']}
-                    style={styles.overlay}
-                >
-                    <View style={styles.bottomSection}>
-                        <View style={styles.textContainer}>
-                            <View style={styles.authorRow}>
-                                <TouchableOpacity
-                                    style={styles.avatarPlaceholder}
-                                    onPress={() => handleProfileNavigation(item.userId)}
-                                >
-                                    <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity onPress={() => handleProfileNavigation(item.userId)}>
-                                    <Text style={styles.authorName}>{item.author}</Text>
-                                </TouchableOpacity>
-
-                                {showFollow && (
-                                    <TouchableOpacity
-                                        style={[styles.followBtn, isFollowing && styles.followingBtn]}
-                                        onPress={() => handleFollow(item.userId)}
-                                    >
-                                        <Text style={styles.followText}>{isFollowing ? 'Following' : 'Follow'}</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                            <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-                            <Text style={styles.timeAgo}>{item.timeAgo}</Text>
-                        </View>
-
-                        <View style={styles.rightActions}>
-                            <TouchableOpacity style={styles.actionBtn} onPress={() => handleLike(item, index)}>
-                                <Ionicons name={hasLiked ? "heart" : "heart-outline"} size={32} color={hasLiked ? "#EF4444" : "#FFF"} />
-                                <Text style={styles.actionText}>{item.likes}</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionBtn} onPress={handleComments}>
-                                <Ionicons name="chatbubble-outline" size={30} color="#FFF" />
-                                <Text style={styles.actionText}>{item.comments}</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(item)}>
-                                <Ionicons name="arrow-redo-outline" size={30} color="#FFF" />
-                                <Text style={styles.actionText}>Share</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionBtn}>
-                                <Ionicons name="ellipsis-horizontal" size={30} color="#FFF" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </LinearGradient>
-
-                <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                    <Ionicons name="arrow-back" size={28} color="#FFF" />
-                </TouchableOpacity>
-            </View>
-        );
-    };
-
     return (
         <View style={styles.mainContainer}>
             <StatusBar hidden />
             <FlatList
                 ref={flatListRef}
                 data={items}
-                renderItem={renderItem}
                 keyExtractor={(item) => item.id}
                 pagingEnabled
                 showsVerticalScrollIndicator={false}
@@ -336,6 +339,28 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                 getItemLayout={(data, index) => (
                     { length: height, offset: height * index, index }
                 )}
+                renderItem={({ item, index }) => {
+                    const isActive = index === activeIndex;
+                    const hasLiked = user ? (item.likedBy?.includes(user.uid) || false) : false;
+                    const isFollowing = item.userId ? followedUsers.has(item.userId) : false;
+                    const showFollow = user ? (item.userId !== user.uid) : false;
+
+                    return (
+                        <ClipsFeedItem
+                            item={item}
+                            isActive={isActive}
+                            hasLiked={hasLiked}
+                            isFollowing={isFollowing}
+                            showFollow={showFollow}
+                            onLike={() => handleLike(item, index)}
+                            onShare={() => handleShare(item)}
+                            onFollow={() => handleFollow(item.userId)}
+                            onProfile={() => handleProfileNavigation(item.userId)}
+                            onComments={handleComments}
+                            onClose={onClose}
+                        />
+                    );
+                }}
             />
 
             <ShareToFriendsModal

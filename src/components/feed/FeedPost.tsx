@@ -1,8 +1,8 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
-import { ResizeMode, Video } from 'expo-av';
 import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -35,6 +35,11 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
             });
         }
     }, [post.imageUrl]);
+
+    // Setup video player if needed
+    const player = useVideoPlayer(post.videoLink || '', player => {
+        player.loop = true;
+    });
 
     const handleLike = () => {
         const newLikedState = !liked;
@@ -90,21 +95,22 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
                 {/* Video Content */}
                 {(post.type === 'video' || post.type === 'clip') && !post.imageUrl && (
                     post.videoLink ? (
-                        <Video
-                            style={[
-                                styles.postImage,
-                                {
-                                    aspectRatio: post.type === 'clip' ? 9 / 16 : 16 / 9,
-                                    backgroundColor: isDark ? '#000' : '#1E293B',
-                                    height: post.type === 'clip' ? 500 : 240, // Ensure substantial height for vertical
-                                    width: '100%'
-                                }
-                            ]}
-                            source={{ uri: post.videoLink }}
-                            useNativeControls
-                            resizeMode={post.type === 'clip' ? ResizeMode.COVER : ResizeMode.CONTAIN}
-                            isLooping
-                        />
+                        <View style={[
+                            styles.postImage,
+                            {
+                                aspectRatio: post.type === 'clip' ? 9 / 16 : 16 / 9,
+                                backgroundColor: isDark ? '#000' : '#1E293B',
+                                height: post.type === 'clip' ? 500 : 240, // Ensure substantial height for vertical
+                                width: '100%'
+                            }
+                        ]}>
+                            <VideoView
+                                player={player}
+                                style={{ width: '100%', height: '100%' }}
+                                contentFit={post.type === 'clip' ? 'cover' : 'contain'}
+                                nativeControls={true}
+                            />
+                        </View>
                     ) : (
                         <View style={[styles.videoPlaceholder, { backgroundColor: isDark ? '#000' : '#1E293B' }]}>
                             <Ionicons name="play-circle-outline" size={64} color="#fff" />
@@ -214,7 +220,6 @@ const styles = StyleSheet.create({
     },
     postImage: {
         width: '100%',
-        aspectRatio: 1,
     },
     videoPlaceholder: {
         width: '100%',
