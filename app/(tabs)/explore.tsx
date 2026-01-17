@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import ClipsFeed from '../../src/components/ClipsFeed';
 import CreatePostModal from '../../src/components/CreatePostModal';
 import YouTubePlayer from '../../src/components/YouTubePlayer';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -122,6 +123,10 @@ const ExploreScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // New state for Clips Feed
+  const [showClipsFeed, setShowClipsFeed] = useState(false);
+  const [initialClipIndex, setInitialClipIndex] = useState(0);
+
   // Load posts
   const loadPosts = async () => {
     try {
@@ -200,8 +205,10 @@ const ExploreScreen: React.FC = () => {
   const playVideo = (item: FeedItem) => {
     if (!item.videoLink) return;
 
-    const isYoutube = item.videoLink.includes('youtube.com') || item.videoLink.includes('youtu.be');
+    // Check if it's a clip type or a YouTube Short
+    const isClip = item.type === 'clip' || item.videoLink.includes('/shorts/') || item.videoLink.includes('#shorts');
 
+    // History tracking
     addToHistory({
       id: item.id,
       type: activeTab,
@@ -210,6 +217,23 @@ const ExploreScreen: React.FC = () => {
       image: item.imageUrl || undefined,
       url: item.videoLink
     });
+
+    if (isClip) {
+      // Find index of this item in the filtered clips list
+      const clipsInfo = feedData.filter(d => d.type === 'clip' || (d.videoLink && (d.videoLink.includes('/shorts/') || d.videoLink.includes('#shorts'))));
+      const index = clipsInfo.findIndex(c => c.id === item.id);
+
+      if (index !== -1) {
+        setInitialClipIndex(index);
+        setShowClipsFeed(true);
+      } else {
+        // Fallback if not found in list (shouldn't happen often)
+        setPlayingVideoUrl(item.videoLink);
+      }
+      return;
+    }
+
+    const isYoutube = item.videoLink.includes('youtube.com') || item.videoLink.includes('youtu.be');
 
     if (isYoutube) {
       const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
@@ -406,7 +430,21 @@ const ExploreScreen: React.FC = () => {
         onPostCreated={loadPosts}
       />
 
-      {/* Cloudinary/Direct Player */}
+      {/* Immersive Clips Feed Modal */}
+      <Modal
+        visible={showClipsFeed}
+        animationType="slide"
+        onRequestClose={() => setShowClipsFeed(false)}
+        transparent={false} // Full screen opaque
+      >
+        <ClipsFeed
+          data={feedData.filter(d => d.type === 'clip' || (d.videoLink && (d.videoLink.includes('/shorts/') || d.videoLink.includes('#shorts'))))}
+          initialIndex={initialClipIndex}
+          onClose={() => setShowClipsFeed(false)}
+        />
+      </Modal>
+
+      {/* Cloudinary/Direct Player (Fallback for standard videos) */}
       <Modal
         visible={!!playingVideoUrl}
         animationType="slide"
