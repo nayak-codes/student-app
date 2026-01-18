@@ -18,20 +18,45 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
+export type PostCategory = 'achievement' | 'internship' | 'project' | 'notes' | 'question' | 'announcement' | 'general';
+
+export type ReactionType = 'like' | 'celebrate' | 'support' | 'insightful';
+
+export interface Reactions {
+    like: number;
+    celebrate: number;
+    support: number;
+    insightful: number;
+}
+
 export interface Post {
     id: string;
     userId: string;
     userName: string;
     userExam: string;
+    userProfilePhoto?: string;
     content: string;
     type: 'image' | 'video' | 'note' | 'news' | 'clip';
     imageUrl?: string;
     videoLink?: string;
+    thumbnailUrl?: string;
     tags: string[];
+
+    // Enhanced professional fields
+    category?: PostCategory;
+    institution?: string;
+    program?: string;
+    skills?: string[];
+
+    // Engagement
     likes: number;
-    likedBy: string[]; // Array of user IDs who liked
+    likedBy: string[];
+    reactions?: Reactions;
+    reactedBy?: { [userId: string]: ReactionType }; // Track who reacted with what
     comments: number;
-    savedBy: string[]; // Array of user IDs who saved
+    savedBy: string[];
+    viewCount?: number;
+
     createdAt: Date;
 }
 
@@ -74,6 +99,9 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt' | 'like
         if (postData.imageUrl) {
             cleanData.imageUrl = postData.imageUrl;
         }
+        if (postData.thumbnailUrl) {
+            cleanData.thumbnailUrl = postData.thumbnailUrl;
+        }
 
         console.log('📤 Sending to Firestore:', cleanData);
 
@@ -108,15 +136,24 @@ export const getAllPosts = async (limitCount: number = 50): Promise<Post[]> => {
                 userId: data.userId,
                 userName: data.userName,
                 userExam: data.userExam,
+                userProfilePhoto: data.userProfilePhoto,
                 content: data.content,
                 type: data.type,
                 imageUrl: data.imageUrl,
                 videoLink: data.videoLink,
+                thumbnailUrl: data.thumbnailUrl,
                 tags: data.tags || [],
+                category: data.category,
+                institution: data.institution,
+                program: data.program,
+                skills: data.skills || [],
                 likes: data.likes || 0,
                 likedBy: data.likedBy || [],
+                reactions: data.reactions,
+                reactedBy: data.reactedBy || {},
                 comments: data.comments || 0,
                 savedBy: data.savedBy || [],
+                viewCount: data.viewCount || 0,
                 createdAt: data.createdAt?.toDate() || new Date(),
             });
         });
@@ -621,3 +658,94 @@ export const hasUserSavedPost = async (postId: string, userId: string): Promise<
         return false;
     }
 };
+
+// ==================== REACTION FUNCTIONS ====================
+
+/**
+ * Add a reaction to a post
+ */
+export const addReaction = async (postId: string, userId: string, reactionType: ReactionType): Promise<void> => {
+    try {
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        const postSnap = await getDoc(postRef);
+
+        if (!postSnap.exists()) return;
+
+        const data = postSnap.data();
+        const currentReactions = data.reactions || { like: 0, celebrate: 0, support: 0, insightful: 0 };
+        const currentReactedBy = data.reactedBy || {};
+
+        // If user already reacted, remove old reaction
+        const oldReaction = currentReactedBy[userId];
+        if (oldReaction) {
+            currentReactions[oldReaction] = Math.max(0, currentReactions[oldReaction] - 1);
+        }
+
+        // Add new reaction
+        currentReactions[reactionType] = (currentReactions[reactionType] || 0) + 1;
+        currentReactedBy[userId] = reactionType;
+
+        await updateDoc(postRef, {
+            reactions: currentReactions,
+            reactedBy: currentReactedBy,
+        });
+
+        console.log('Reaction added:', reactionType);
+    } catch (error) {
+        console.error('Error adding reaction:', error);
+        throw error;
+    }
+};
+
+/**
+ * Remove a reaction from a post
+ */
+export const removeReaction = async (postId: string, userId: string): Promise<void> => {
+    try {
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        const postSnap = await getDoc(postRef);
+
+        if (!postSnap.exists()) return;
+
+        const data = postSnap.data();
+        const currentReactions = data.reactions || { like: 0, celebrate: 0, support: 0, insightful: 0 };
+        const currentReactedBy = data.reactedBy || {};
+
+        const oldReaction = currentReactedBy[userId];
+        if (oldReaction) {
+            currentReactions[oldReaction] = Math.max(0, currentReactions[oldReaction] - 1);
+            delete currentReactedBy[userId];
+
+            await updateDoc(postRef, {
+                reactions: currentReactions,
+                reactedBy: currentReactedBy,
+            });
+
+            console.log('Reaction removed');
+        }
+    } catch (error) {
+        console.error('Error removing reaction:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get user's reaction on a post
+ */
+export const getUserReaction = async (postId: string, userId: string): Promise<ReactionType | undefined> => {
+    try {
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        const postSnap = await getDoc(postRef);
+
+        if (postSnap.exists()) {
+            const reactedBy = postSnap.data().reactedBy || {};
+            return reactedBy[userId];
+        }
+
+        return undefined;
+    } catch (error) {
+        console.error('Error getting user reaction:', error);
+        return undefined;
+    }
+};
+

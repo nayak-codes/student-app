@@ -2,12 +2,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { VideoView } from 'expo-video';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Dimensions,
     FlatList,
+    Image,
     Share,
     StatusBar,
     StyleSheet,
@@ -18,6 +19,7 @@ import {
     ViewToken
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useConditionalVideoPlayer } from '../hooks/useConditionalVideoPlayer';
 import { checkFollowStatus, followUser, unfollowUser } from '../services/connectionService';
 import { likePost, unlikePost } from '../services/postsService';
 import ShareToFriendsModal from './ShareToFriendsModal';
@@ -34,6 +36,7 @@ interface FeedItem {
     saved: boolean;
     timeAgo: string;
     imageUrl?: string;
+    thumbnailUrl?: string;
     videoLink?: string;
     likedBy?: string[];
     userId?: string;
@@ -57,21 +60,20 @@ interface ClipsFeedItemProps {
     onProfile: () => void;
     onComments: () => void;
     onClose: () => void;
+    shouldLoad: boolean;
 }
 
 const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
     item, isActive, hasLiked, isFollowing, showFollow,
-    onLike, onShare, onFollow, onProfile, onComments, onClose
+    onLike, onShare, onFollow, onProfile, onComments, onClose, shouldLoad
 }) => {
-    // Correct usage of useVideoPlayer hook
-    const player = useVideoPlayer(item.videoLink || '', player => {
-        player.loop = true;
-    });
+    // Use conditional player that only loads when within buffer window
+    const player = useConditionalVideoPlayer(item.videoLink || null, shouldLoad);
 
     useEffect(() => {
-        if (isActive) {
+        if (isActive && player) {
             player.play();
-        } else {
+        } else if (player) {
             player.pause();
         }
     }, [isActive, player]);
@@ -79,16 +81,28 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
     return (
         <View style={styles.container}>
             <TouchableWithoutFeedback onPress={() => {
-                if (player.playing) player.pause();
-                else player.play();
+                if (player) {
+                    if (player.playing) player.pause();
+                    else player.play();
+                }
             }}>
                 <View style={styles.videoContainer}>
-                    <VideoView
-                        player={player}
-                        style={styles.video}
-                        contentFit="cover"
-                        nativeControls={false}
-                    />
+                    {player && (
+                        <VideoView
+                            player={player}
+                            style={styles.video}
+                            contentFit="cover"
+                            nativeControls={false}
+                        />
+                    )}
+                    {/* Thumbnail Overlay - Show if provided and not playing/active logic could be refined but overlays are tricky with VideoView */}
+                    {item.thumbnailUrl && !isActive && (
+                        <Image
+                            source={{ uri: item.thumbnailUrl }}
+                            style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+                            resizeMode="cover"
+                        />
+                    )}
                 </View>
             </TouchableWithoutFeedback>
 
@@ -344,6 +358,8 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                     const hasLiked = user ? (item.likedBy?.includes(user.uid) || false) : false;
                     const isFollowing = item.userId ? followedUsers.has(item.userId) : false;
                     const showFollow = user ? (item.userId !== user.uid) : false;
+                    // Only load player for active item and immediate neighbors (+/- 1)
+                    const shouldLoad = Math.abs(index - activeIndex) <= 1;
 
                     return (
                         <ClipsFeedItem
@@ -358,9 +374,14 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                             onProfile={() => handleProfileNavigation(item.userId)}
                             onComments={handleComments}
                             onClose={onClose}
+                            shouldLoad={shouldLoad}
                         />
                     );
                 }}
+                initialNumToRender={1}
+                maxToRenderPerBatch={1}
+                windowSize={3}
+                removeClippedSubviews={true}
             />
 
             <ShareToFriendsModal

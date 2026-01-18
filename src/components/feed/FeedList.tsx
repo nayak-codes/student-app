@@ -1,26 +1,42 @@
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, RefreshControl, Share, StyleSheet, Text, View, ViewToken } from 'react-native';
 import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getAllPosts, likePost, Post, savePost, unlikePost, unsavePost } from '../../services/postsService';
+import { addReaction, getAllPosts, likePost, Post, ReactionType, removeReaction, savePost, unlikePost, unsavePost } from '../../services/postsService';
+import CommentsBottomSheet from '../CommentsBottomSheet';
 import FeedPost from './FeedPost';
+import ShortsGrid from './ShortsGrid';
 
 const FeedList: React.FC = () => {
     const { colors } = useTheme();
-    const [posts, setPosts] = useState<Post[]>([]);
+    const [allPosts, setAllPosts] = useState<Post[]>([]);
+    const [posts, setPosts] = useState<Post[]>([]); // Regular posts (not clips)
+    const [clips, setClips] = useState<Post[]>([]); // Clips only
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [shareModalVisible, setShareModalVisible] = useState(false);
     const [shareData, setShareData] = useState<any>(null);
+    const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+    const [selectedPostId, setSelectedPostId] = useState<string>('');
     const { user } = useAuth();
+
+    // Track which posts are currently visible in viewport
+    const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
 
 
     const fetchPosts = async () => {
         try {
             const fetchedPosts = await getAllPosts();
-            setPosts(fetchedPosts);
+            setAllPosts(fetchedPosts);
+
+            // Separate clips from regular posts
+            const clipPosts = fetchedPosts.filter(p => p.type === 'clip');
+            const regularPosts = fetchedPosts.filter(p => p.type !== 'clip');
+
+            setClips(clipPosts);
+            setPosts(regularPosts);
         } catch (error) {
             console.error('Error fetching posts:', error);
         } finally {
@@ -41,21 +57,6 @@ const FeedList: React.FC = () => {
     const handleLike = async (postId: string) => {
         if (!user) return;
 
-        // Optimistic update handled in FeedPost mainly, but if we need to sync state here:
-        // We can rely on the FeedPost internal state for immediate feedback
-        // and just fire the API call here.
-
-        // However, to keep global state consistent if we reload, we should update the valid post in our list
-        // This is a bit complex for a simple feed, so for now we'll just fire the API call.
-        // The FeedPost component handles the UI toggle locally.
-
-        // Ideally, we should check if currently liked, but FeedPost passes us the event.
-        // A better approach is to pass the current "liked" state from FeedPost or check it here.
-        // For simplicity: we assume the UI component toggles correctly.
-        // We need to know if we are liking or unliking. 
-        // Let's change FeedPost slightly? No, FeedPost just says "onLike".
-        // We can find the post and toggle.
-
         const postIndex = posts.findIndex(p => p.id === postId);
         if (postIndex === -1) return;
 
@@ -64,7 +65,6 @@ const FeedList: React.FC = () => {
 
         if (isLiked) {
             await unlikePost(postId, user.uid);
-            // Update local state
             const updatedPosts = [...posts];
             updatedPosts[postIndex] = {
                 ...post,
@@ -74,7 +74,6 @@ const FeedList: React.FC = () => {
             setPosts(updatedPosts);
         } else {
             await likePost(postId, user.uid);
-            // Update local state
             const updatedPosts = [...posts];
             updatedPosts[postIndex] = {
                 ...post,
@@ -85,13 +84,35 @@ const FeedList: React.FC = () => {
         }
     };
 
+    const handleReaction = async (postId: string, reactionType: ReactionType) => {
+        if (!user) return;
+
+        const postIndex = posts.findIndex(p => p.id === postId);
+        if (postIndex === -1) return;
+
+        const post = posts[postIndex];
+        const currentUserReaction = post.reactedBy?.[user.uid];
+
+        try {
+            if (currentUserReaction === reactionType) {
+                // Remove reaction if clicking same reaction
+                await removeReaction(postId, user.uid);
+            } else {
+                // Add or change reaction
+                await addReaction(postId, user.uid, reactionType);
+            }
+
+            // Refresh this specific post's data
+            // In a real app, you'd update optimistically or fetch just this post
+            fetchPosts();
+        } catch (error) {
+            console.error('Error handling reaction:', error);
+        }
+    };
+
     const handleComment = (postId: string) => {
-        // Navigate to comments screen
-        const router = require('expo-router').router;
-        router.push({
-            pathname: '/post-comments',
-            params: { postId },
-        });
+        setSelectedPostId(postId);
+        setCommentsModalVisible(true);
     };
 
     const handleShare = async (postId: string) => {
@@ -99,7 +120,6 @@ const FeedList: React.FC = () => {
             const post = posts.find(p => p.id === postId);
             if (!post) return;
 
-            // Show action sheet for share options
             Alert.alert(
                 'Share Post',
                 'Choose how you want to share this post',
@@ -147,7 +167,6 @@ const FeedList: React.FC = () => {
 
         if (isSaved) {
             await unsavePost(postId, user.uid);
-            // Update local state
             const updatedPosts = [...posts];
             updatedPosts[postIndex] = {
                 ...post,
@@ -156,7 +175,6 @@ const FeedList: React.FC = () => {
             setPosts(updatedPosts);
         } else {
             await savePost(postId, user.uid);
-            // Update local state
             const updatedPosts = [...posts];
             updatedPosts[postIndex] = {
                 ...post,
@@ -165,6 +183,23 @@ const FeedList: React.FC = () => {
             setPosts(updatedPosts);
         }
     };
+
+
+
+    // Viewability tracking for performance optimization
+    const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+        const visibleIds = new Set(
+            viewableItems
+                .map(item => item.item?.id)
+                .filter(id => id !== undefined)
+        );
+        setVisiblePostIds(visibleIds);
+    }).current;
+
+    const viewabilityConfig = useRef({
+        itemVisiblePercentThreshold: 50,
+        minimumViewTime: 100,
+    }).current;
 
     if (loading) {
         return (
@@ -179,26 +214,41 @@ const FeedList: React.FC = () => {
             <FlatList
                 data={posts}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                    <FeedPost
-                        post={item}
-                        currentUserLiked={item.likedBy?.includes(user?.uid || '')}
-                        currentUserSaved={item.savedBy?.includes(user?.uid || '')}
-                        onLike={handleLike}
-                        onComment={handleComment}
-                        onShare={handleShare}
-                        onSave={handleSave}
-                    />
+                renderItem={({ item, index }) => (
+                    <>
+                        <FeedPost
+                            post={item}
+                            currentUserLiked={item.likedBy?.includes(user?.uid || '')}
+                            currentUserSaved={item.savedBy?.includes(user?.uid || '')}
+                            currentUserReaction={item.reactedBy?.[user?.uid || '']}
+                            onLike={handleLike}
+                            onReact={handleReaction}
+                            onComment={handleComment}
+                            onShare={handleShare}
+                            onSave={handleSave}
+                            isVisible={visiblePostIds.has(item.id)}
+                        />
+                        {/* Show shorts after 2nd post */}
+                        {index === 1 && clips.length > 0 && (
+                            <ShortsGrid shorts={clips.slice(0, 8)} />
+                        )}
+                    </>
                 )}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
                 }
+                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfig={viewabilityConfig}
                 contentContainerStyle={posts.length === 0 ? styles.emptyContainer : styles.listContent}
                 ListEmptyComponent={
                     <View style={styles.emptyView}>
                         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No posts yet. Be the first to share!</Text>
                     </View>
                 }
+                initialNumToRender={3}
+                maxToRenderPerBatch={3}
+                windowSize={5}
+                removeClippedSubviews={true}
             />
 
             {/* Share Modal */}
@@ -210,6 +260,16 @@ const FeedList: React.FC = () => {
                 }}
                 shareType="post"
                 shareData={shareData}
+            />
+
+            {/* Comments Bottom Sheet */}
+            <CommentsBottomSheet
+                visible={commentsModalVisible}
+                postId={selectedPostId}
+                onClose={() => {
+                    setCommentsModalVisible(false);
+                    setSelectedPostId('');
+                }}
             />
         </View>
     );

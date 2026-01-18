@@ -41,6 +41,7 @@ export default function CreatePostScreen() {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [postType, setPostType] = useState<'note' | 'video' | 'news' | 'image' | 'clip'>('note');
+    const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const availableTags = [
@@ -79,6 +80,22 @@ export default function CreatePostScreen() {
             } else {
                 setPostType('image');
             }
+        }
+    };
+
+    const pickThumbnail = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') return;
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [16, 9],
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            setSelectedThumbnail(result.assets[0].uri);
         }
     };
 
@@ -140,6 +157,17 @@ export default function CreatePostScreen() {
 
             const finalImageUrl = postType === 'image' ? mediaUrl : undefined;
 
+            // Upload Thumbnail if selected
+            let finalThumbnailUrl = undefined;
+            if (selectedThumbnail) {
+                finalThumbnailUrl = await uploadImageWithProgress(
+                    selectedThumbnail,
+                    (progress) => { /* Optional: show separate progress for thumbnail */ }
+                );
+            } else if (videoMetadata?.thumbnailUrl) {
+                finalThumbnailUrl = videoMetadata.thumbnailUrl;
+            }
+
             await createPost({
                 userId: user.uid,
                 userName: userProfile?.name || 'Anonymous',
@@ -148,6 +176,7 @@ export default function CreatePostScreen() {
                 type: postType as any,
                 videoLink: finalVideoLink,
                 imageUrl: finalImageUrl,
+                thumbnailUrl: finalThumbnailUrl,
                 tags: selectedTags,
             });
 
@@ -377,6 +406,32 @@ export default function CreatePostScreen() {
                                     autoCapitalize="none"
                                 />
                                 {isFetchingMetadata && <ActivityIndicator size="small" color={colors.primary} />}
+                            </View>
+                        )}
+
+                        {/* Thumbnail Selection for Video/Clips */}
+                        {(postType === 'video' || postType === 'clip') && (
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Thumbnail (Optional)</Text>
+                                {selectedThumbnail ? (
+                                    <View style={[styles.mediaPreview, { height: 120, backgroundColor: isDark ? '#000' : '#F1F5F9' }]}>
+                                        <Image source={{ uri: selectedThumbnail }} style={styles.mediaImage} resizeMode="cover" />
+                                        <TouchableOpacity onPress={() => setSelectedThumbnail(null)} style={styles.removeMedia}>
+                                            <Ionicons name="close-circle" size={24} color={colors.danger} />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.videoInputContainer,
+                                            { backgroundColor: isDark ? colors.card : '#F1F5F9', justifyContent: 'center' }
+                                        ]}
+                                        onPress={pickThumbnail}
+                                    >
+                                        <Ionicons name="image-outline" size={24} color={colors.textSecondary} />
+                                        <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>Add Custom Thumbnail</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         )}
 

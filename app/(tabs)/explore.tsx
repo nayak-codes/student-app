@@ -40,6 +40,7 @@ interface FeedItem {
   timeAgo: string;
   image?: ImageSourcePropType;
   imageUrl?: string;
+  thumbnailUrl?: string;
   videoLink?: string;
   tags?: string[];
   likedBy?: string[];
@@ -101,6 +102,7 @@ function convertToFeedItem(post: Post): FeedItem | null {
     saved: false,
     timeAgo: getTimeAgo(post.createdAt),
     imageUrl: post.imageUrl,
+    thumbnailUrl: post.thumbnailUrl,
     videoLink: post.videoLink,
     tags: post.tags,
     likedBy: post.likedBy,
@@ -272,7 +274,7 @@ const ExploreScreen: React.FC = () => {
   });
 
   const renderVideoItem = ({ item }: { item: FeedItem }) => {
-    let thumbnailUrl = item.imageUrl;
+    let thumbnailUrl = item.thumbnailUrl || item.imageUrl;
     if (!thumbnailUrl && item.videoLink) {
       const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
       if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
@@ -286,7 +288,8 @@ const ExploreScreen: React.FC = () => {
           {thumbnailUrl ? (
             <Image source={{ uri: thumbnailUrl }} style={styles.videoThumbnail} resizeMode="cover" />
           ) : (
-            <View style={[styles.videoThumbnail, { backgroundColor: isDark ? '#1E293B' : '#000' }]}>
+            <View style={[styles.videoThumbnail, { backgroundColor: isDark ? '#1E293B' : '#000', justifyContent: 'center', alignItems: 'center' }]}>
+              {/* No thumbnail available, show placeholder icon only here */}
               <Ionicons name="play-circle" size={48} color="#FFF" />
             </View>
           )}
@@ -346,7 +349,7 @@ const ExploreScreen: React.FC = () => {
   };
 
   const renderClipItem = ({ item }: { item: FeedItem }) => {
-    let thumbnailUrl = item.imageUrl;
+    let thumbnailUrl = item.thumbnailUrl || item.imageUrl;
     if (!thumbnailUrl && item.videoLink) {
       const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
       if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/0.jpg`;

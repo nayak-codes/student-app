@@ -2,7 +2,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -11,14 +10,26 @@ import { Post } from '../../services/postsService';
 interface FeedPostProps {
     post: Post;
     onLike: (postId: string) => void;
+    onReact: (postId: string, reactionType: any) => void;
     onComment: (postId: string) => void;
     onShare: (postId: string) => void;
     onSave: (postId: string) => void;
-    currentUserLiked: boolean;
-    currentUserSaved: boolean;
+    currentUserLiked?: boolean;
+    currentUserSaved?: boolean;
+    currentUserReaction?: any;
+    isVisible?: boolean;
 }
 
-const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, onSave, currentUserLiked, currentUserSaved }) => {
+const FeedPost: React.FC<FeedPostProps> = ({
+    post,
+    onLike,
+    onComment,
+    onShare,
+    onSave,
+    currentUserLiked,
+    currentUserSaved,
+    isVisible = true
+}) => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
     const [aspectRatio, setAspectRatio] = useState(1);
@@ -30,16 +41,16 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
         if (post.imageUrl) {
             Image.getSize(post.imageUrl, (width, height) => {
                 setAspectRatio(width / height);
-            }, (err) => {
-                console.log('Error getting image size:', err);
             });
         }
     }, [post.imageUrl]);
 
-    // Setup video player if needed
-    const player = useVideoPlayer(post.videoLink || '', player => {
-        player.loop = true;
-    });
+    const handleProfilePress = () => {
+        router.push({
+            pathname: '/public-profile' as any,
+            params: { userId: post.userId },
+        });
+    };
 
     const handleLike = () => {
         const newLikedState = !liked;
@@ -53,24 +64,35 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
         onSave(post.id);
     };
 
-    const handleProfilePress = () => {
+    const handleVideoPress = () => {
         router.push({
-            pathname: '/public-profile',
+            pathname: '/screens/video-player' as any,
             params: {
-                userId: post.userId,
-                userName: post.userName,
+                videoUri: post.videoLink,
+                postId: post.id,
+                title: post.content || 'Untitled Video',
+                description: post.content || '',
+                authorName: post.userName,
+                authorId: post.userId,
+                likes: post.likes,
+                views: post.viewCount || 0,
+                date: post.createdAt ? new Date(post.createdAt).toLocaleDateString() : '',
+                thumbnail: post.thumbnailUrl || post.imageUrl,
             },
         });
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={[styles.container, { backgroundColor: colors.card }]}>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity style={styles.userInfo} onPress={handleProfilePress}>
-                    {/* Placeholder Avatar - in real app, use user profile image */}
                     <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                        <Text style={styles.avatarText}>{post.userName.charAt(0).toUpperCase()}</Text>
+                        {post.userProfilePhoto ? (
+                            <Image source={{ uri: post.userProfilePhoto }} style={styles.avatarImage} />
+                        ) : (
+                            <Text style={styles.avatarText}>{post.userName.charAt(0).toUpperCase()}</Text>
+                        )}
                     </View>
                     <View>
                         <Text style={[styles.userName, { color: colors.text }]}>{post.userName}</Text>
@@ -78,92 +100,117 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
                     </View>
                 </TouchableOpacity>
                 <TouchableOpacity>
-                    <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
+                    <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
                 </TouchableOpacity>
             </View>
 
-            {/* Content Media - Image/Video */}
+            {/* Content */}
             <View style={styles.content}>
-                {post.imageUrl ? (
+                {post.type === 'image' && post.imageUrl && (
                     <Image
                         source={{ uri: post.imageUrl }}
-                        style={[styles.postImage, { aspectRatio, backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
+                        style={[styles.postImage, { aspectRatio }]}
                         resizeMode="cover"
                     />
-                ) : null}
+                )}
 
-                {/* Video Content */}
-                {(post.type === 'video' || post.type === 'clip') && !post.imageUrl && (
-                    post.videoLink ? (
-                        <View style={[
-                            styles.postImage,
-                            {
-                                aspectRatio: post.type === 'clip' ? 9 / 16 : 16 / 9,
-                                backgroundColor: isDark ? '#000' : '#1E293B',
-                                height: post.type === 'clip' ? 500 : 240, // Ensure substantial height for vertical
-                                width: '100%'
-                            }
-                        ]}>
-                            <VideoView
-                                player={player}
-                                style={{ width: '100%', height: '100%' }}
-                                contentFit={post.type === 'clip' ? 'cover' : 'contain'}
-                                nativeControls={true}
-                            />
-                        </View>
-                    ) : (
-                        <View style={[styles.videoPlaceholder, { backgroundColor: isDark ? '#000' : '#1E293B' }]}>
-                            <Ionicons name="play-circle-outline" size={64} color="#fff" />
-                            <Text style={{ color: 'white', marginTop: 8 }}>Video Content</Text>
-                        </View>
-                    )
+                {(post.type === 'video' || post.type === 'clip') && post.thumbnailUrl && (
+                    <TouchableOpacity onPress={handleVideoPress} activeOpacity={0.9}>
+                        <Image
+                            source={{ uri: post.thumbnailUrl }}
+                            style={[styles.postImage, { aspectRatio: 16 / 9 }]}
+                            resizeMode="cover"
+                        />
+                    </TouchableOpacity>
                 )}
             </View>
 
-            {/* Actions */}
-            <View style={styles.actions}>
-                <View style={styles.actionLeft}>
+            {/* Actions - Unique Circular Style */}
+            <View style={styles.actionsWrapper}>
+                <View style={styles.actions}>
+                    {/* Like Button */}
                     <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
-                        <Ionicons
-                            name={liked ? "heart" : "heart-outline"}
-                            size={28}
-                            color={liked ? "#ff3b30" : colors.text}
-                        />
+                        <View style={[
+                            styles.iconCircle,
+                            liked && styles.likeActive,
+                            { backgroundColor: liked ? '#EF4444' : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)') }
+                        ]}>
+                            <Ionicons
+                                name={liked ? "heart" : "heart-outline"}
+                                size={20}
+                                color={liked ? "#FFF" : colors.text}
+                            />
+                        </View>
+                        {likeCount > 0 && (
+                            <Text style={[styles.actionCount, { color: colors.text }]}>
+                                {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}k` : likeCount}
+                            </Text>
+                        )}
                     </TouchableOpacity>
+
+                    {/* Comment Button */}
                     <TouchableOpacity onPress={() => onComment(post.id)} style={styles.actionButton}>
-                        <View style={styles.commentButtonContainer}>
-                            <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
-                            {post.comments > 0 && (
-                                <Text style={styles.commentCount}>{post.comments}</Text>
-                            )}
+                        <View style={[
+                            styles.iconCircle,
+                            post.comments > 0 && styles.commentActive,
+                            { backgroundColor: post.comments > 0 ? '#3B82F6' : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)') }
+                        ]}>
+                            <Ionicons
+                                name="chatbubble-outline"
+                                size={20}
+                                color={post.comments > 0 ? '#FFF' : colors.text}
+                            />
+                        </View>
+                        {post.comments > 0 && (
+                            <Text style={[styles.actionCount, { color: colors.text }]}>
+                                {post.comments > 999 ? `${(post.comments / 1000).toFixed(1)}k` : post.comments}
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Share Button */}
+                    <TouchableOpacity onPress={() => onShare(post.id)} style={styles.actionButton}>
+                        <View style={[
+                            styles.iconCircle,
+                            { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }
+                        ]}>
+                            <Ionicons name="share-outline" size={20} color={colors.text} />
                         </View>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => onShare(post.id)} style={styles.actionButton}>
-                        <Ionicons name="paper-plane-outline" size={26} color={colors.text} />
+
+                    {/* Save Button */}
+                    <TouchableOpacity onPress={handleSave} style={styles.actionButton}>
+                        <View style={[
+                            styles.iconCircle,
+                            saved && styles.saveActive,
+                            { backgroundColor: saved ? '#10B981' : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)') }
+                        ]}>
+                            <Ionicons
+                                name={saved ? "bookmark" : "bookmark-outline"}
+                                size={20}
+                                color={saved ? '#FFF' : colors.text}
+                            />
+                        </View>
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={handleSave}>
-                    <Ionicons
-                        name={saved ? "bookmark" : "bookmark-outline"}
-                        size={26}
-                        color={saved ? colors.primary : colors.text}
-                    />
-                </TouchableOpacity>
             </View>
 
-            {/* Footer: Likes, Caption, Time */}
+            {/* Footer */}
             <View style={styles.footer}>
-                <Text style={[styles.likes, { color: colors.text }]}>{likeCount} likes</Text>
+                {likeCount > 0 && (
+                    <Text style={[styles.likes, { color: colors.text }]}>
+                        {likeCount.toLocaleString()} {likeCount === 1 ? 'like' : 'likes'}
+                    </Text>
+                )}
 
-                {/* Caption */}
-                {post.content ? (
+                {post.content && (
                     <View style={styles.captionContainer}>
                         <Text style={[styles.captionText, { color: colors.text }]}>
-                            <Text style={[styles.captionUsername, { color: colors.text }]}>{post.userName} </Text>
+                            <Text style={styles.captionUsername}>{post.userName} </Text>
                             {post.content}
                         </Text>
                     </View>
-                ) : null}
+                )}
 
                 <Text style={[styles.timeAgo, { color: colors.textSecondary }]}>
                     {post.createdAt ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }) : 'Just now'}
@@ -175,8 +222,7 @@ const FeedPost: React.FC<FeedPostProps> = ({ post, onLike, onComment, onShare, o
 
 const styles = StyleSheet.create({
     container: {
-        paddingBottom: 12,
-        borderBottomWidth: 1,
+        marginBottom: 12,
     },
     header: {
         flexDirection: 'row',
@@ -195,11 +241,16 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 10,
+        marginRight: 12,
+        overflow: 'hidden',
+    },
+    avatarImage: {
+        width: '100%',
+        height: '100%',
     },
     avatarText: {
         color: '#fff',
-        fontWeight: 'bold',
+        fontWeight: '700',
         fontSize: 16,
     },
     userName: {
@@ -208,54 +259,90 @@ const styles = StyleSheet.create({
     },
     userExam: {
         fontSize: 12,
+        marginTop: 2,
     },
     content: {
-        marginBottom: 5,
-    },
-    postText: {
-        paddingHorizontal: 12,
-        paddingBottom: 10,
-        fontSize: 15,
-        lineHeight: 22,
+        marginBottom: 4,
     },
     postImage: {
         width: '100%',
     },
     videoPlaceholder: {
         width: '100%',
-        aspectRatio: 1,
+        aspectRatio: 16 / 9,
         justifyContent: 'center',
         alignItems: 'center',
+        gap: 8,
+    },
+    playText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    playButtonOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    },
+    playButton: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    actionsWrapper: {
+        paddingHorizontal: 14,
+        paddingVertical: 10,
     },
     actions: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 14,
-        paddingTop: 12,
-        paddingBottom: 12,
-    },
-    actionLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        gap: 12,
     },
     actionButton: {
-        marginRight: 18,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    iconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    likeActive: {
+        backgroundColor: '#EF4444',
+    },
+    commentActive: {
+        backgroundColor: '#3B82F6',
+    },
+    saveActive: {
+        backgroundColor: '#10B981',
+    },
+    actionCount: {
+        fontSize: 13,
+        fontWeight: '700',
     },
     footer: {
         paddingHorizontal: 14,
+        paddingBottom: 8,
     },
     likes: {
         fontWeight: '700',
         fontSize: 14,
-        marginBottom: 4,
-    },
-    timeAgo: {
-        fontSize: 12,
-        marginTop: 4,
+        marginBottom: 6,
     },
     captionContainer: {
-        marginTop: 6,
+        marginTop: 4,
+        marginBottom: 6,
     },
     captionText: {
         fontSize: 14,
@@ -264,24 +351,9 @@ const styles = StyleSheet.create({
     captionUsername: {
         fontWeight: '700',
     },
-    commentButtonContainer: {
-        position: 'relative',
-    },
-    commentCount: {
-        position: 'absolute',
-        top: -6,
-        right: -8,
-        backgroundColor: '#4F46E5',
-        borderRadius: 10,
-        minWidth: 18,
-        height: 18,
-        paddingHorizontal: 4,
-        justifyContent: 'center',
-        alignItems: 'center',
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#FFF',
-        textAlign: 'center',
+    timeAgo: {
+        fontSize: 11,
+        marginTop: 4,
     },
 });
 

@@ -38,6 +38,7 @@ export interface UserProfile {
     preferences: {
         language: 'en' | 'te';
         notifications: boolean;
+        theme?: 'light' | 'dark';
     };
 
     // LinkedIn-Style Professional Fields (all optional for backward compatibility)

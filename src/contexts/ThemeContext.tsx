@@ -68,9 +68,10 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
                 // We'll proceed with local storage primary usage.
                 await updateUserProfile(user.uid, {
                     preferences: {
-                        ...userProfile?.preferences, // keep existing
+                        language: userProfile?.preferences?.language ?? 'en',
+                        notifications: userProfile?.preferences?.notifications ?? true,
                         theme: newTheme
-                    } as any // Cast as any because 'theme' might not be in interface yet
+                    }
                 });
             }
         } catch (error) {

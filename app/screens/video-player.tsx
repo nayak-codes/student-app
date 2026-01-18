@@ -56,8 +56,7 @@ const VideoPlayerScreen = () => {
     const likes = params.likes ? parseInt(params.likes as string) : 0;
     const views = params.views ? parseInt(params.views as string) : 0;
     const date = params.date as string;
-
-
+    const thumbnail = params.thumbnail as string;
 
     // expo-video Player Setup
     const player = useVideoPlayer(videoUri, player => {
@@ -346,15 +345,16 @@ const VideoPlayerScreen = () => {
                                             authorId: item.userId,
                                             likes: item.likes,
                                             views: 0, // Mock or fetch
-                                            date: new Date(item.createdAt).toLocaleDateString()
+                                            date: new Date(item.createdAt).toLocaleDateString(),
+                                            thumbnail: item.thumbnailUrl || item.imageUrl
                                         }
                                     });
                                 }}
                             >
                                 {/* Thumbnail */}
                                 <View style={styles.relatedThumbnailContainer}>
-                                    {item.imageUrl ? (
-                                        <Image source={{ uri: item.imageUrl }} style={styles.relatedThumbnail} resizeMode="cover" />
+                                    {(item.thumbnailUrl || item.imageUrl) ? (
+                                        <Image source={{ uri: item.thumbnailUrl || item.imageUrl }} style={styles.relatedThumbnail} resizeMode="cover" />
                                     ) : (
                                         <LinearGradient
                                             colors={['#1F2937', '#000']}

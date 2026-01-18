@@ -196,8 +196,17 @@ const PostCard: React.FC<{
             {post.videoLink && (
                 <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!, post)}>
                     <View style={[styles.videoContainer, { backgroundColor: colors.border }]}>
-                        <Ionicons name="play-circle" size={48} color={colors.primary} />
-                        <Text style={[styles.videoText, { color: colors.text }]}>Video Post</Text>
+                        {post.thumbnailUrl && (
+                            <Image
+                                source={{ uri: post.thumbnailUrl }}
+                                style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+                                resizeMode="cover"
+                            />
+                        )}
+                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: post.thumbnailUrl ? 'rgba(0,0,0,0.3)' : 'transparent' }}>
+                            <Ionicons name="play-circle" size={48} color={post.thumbnailUrl ? "#FFF" : colors.primary} />
+                            {!post.thumbnailUrl && <Text style={[styles.videoText, { color: colors.text }]}>Video Post</Text>}
+                        </View>
                     </View>
                 </TouchableOpacity>
             )}
@@ -253,8 +262,8 @@ const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = (
         >
             {/* Thumbnail */}
             <View style={styles.videoListThumbnailContainer}>
-                {post.imageUrl ? (
-                    <Image source={{ uri: post.imageUrl }} style={styles.videoListThumbnail} resizeMode="cover" />
+                {(post.thumbnailUrl || post.imageUrl) ? (
+                    <Image source={{ uri: post.thumbnailUrl || post.imageUrl }} style={styles.videoListThumbnail} resizeMode="cover" />
                 ) : (
                     <View style={[styles.videoListThumbnail, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
                         <Ionicons name="play-circle" size={32} color="#FFF" />
@@ -1194,7 +1203,7 @@ const ProfileScreen = () => {
                                 ) : activeTab === 'clips' ? (
                                     <View style={styles.gridContainer}>
                                         {posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts'))).map((item: any, index: number) => {
-                                            let thumbnailUrl = item.imageUrl;
+                                            let thumbnailUrl = item.thumbnailUrl || item.imageUrl;
                                             if (!thumbnailUrl && item.videoLink) {
                                                 const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
                                                 if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/0.jpg`;
