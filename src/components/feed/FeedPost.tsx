@@ -6,14 +6,18 @@ import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Post } from '../../services/postsService';
+import PostOptionsModal from '../PostOptionsModal';
 
 interface FeedPostProps {
     post: Post;
+    currentUserId: string;
     onLike: (postId: string) => void;
     onReact: (postId: string, reactionType: any) => void;
     onComment: (postId: string) => void;
     onShare: (postId: string) => void;
     onSave: (postId: string) => void;
+    onDelete: (postId: string) => void;
+    onEdit: (postId: string) => void;
     currentUserLiked?: boolean;
     currentUserSaved?: boolean;
     currentUserReaction?: any;
@@ -22,10 +26,13 @@ interface FeedPostProps {
 
 const FeedPost: React.FC<FeedPostProps> = ({
     post,
+    currentUserId,
     onLike,
     onComment,
     onShare,
     onSave,
+    onDelete,
+    onEdit,
     currentUserLiked,
     currentUserSaved,
     isVisible = true
@@ -36,6 +43,9 @@ const FeedPost: React.FC<FeedPostProps> = ({
     const [liked, setLiked] = useState(currentUserLiked);
     const [saved, setSaved] = useState(currentUserSaved);
     const [likeCount, setLikeCount] = useState(post.likes);
+    const [showOptionsModal, setShowOptionsModal] = useState(false);
+
+    const isOwnPost = post.userId === currentUserId;
 
     React.useEffect(() => {
         if (post.imageUrl) {
@@ -99,9 +109,11 @@ const FeedPost: React.FC<FeedPostProps> = ({
                         <Text style={[styles.userExam, { color: colors.textSecondary }]}>{post.userExam}</Text>
                     </View>
                 </TouchableOpacity>
-                <TouchableOpacity>
-                    <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
-                </TouchableOpacity>
+                {isOwnPost && (
+                    <TouchableOpacity onPress={() => setShowOptionsModal(true)}>
+                        <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* Content */}
@@ -216,6 +228,14 @@ const FeedPost: React.FC<FeedPostProps> = ({
                     {post.createdAt ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }) : 'Just now'}
                 </Text>
             </View>
+
+            {/* Post Options Modal */}
+            <PostOptionsModal
+                visible={showOptionsModal}
+                onClose={() => setShowOptionsModal(false)}
+                onEdit={() => onEdit(post.id)}
+                onDelete={() => onDelete(post.id)}
+            />
         </View>
     );
 };

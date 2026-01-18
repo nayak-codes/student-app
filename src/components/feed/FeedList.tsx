@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, FlatList, RefreshControl, Share, StyleSheet, 
 import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { addReaction, getAllPosts, likePost, Post, ReactionType, removeReaction, savePost, unlikePost, unsavePost } from '../../services/postsService';
+import { addReaction, deletePost, getAllPosts, likePost, Post, ReactionType, removeReaction, savePost, unlikePost, unsavePost } from '../../services/postsService';
 import CommentsBottomSheet from '../CommentsBottomSheet';
 import FeedPost from './FeedPost';
 import ShortsGrid from './ShortsGrid';
@@ -115,6 +115,25 @@ const FeedList: React.FC = () => {
         setCommentsModalVisible(true);
     };
 
+    const handleDelete = async (postId: string) => {
+        if (!user?.uid) return;
+
+        try {
+            await deletePost(postId, user.uid);
+            Alert.alert('Success', 'Post deleted successfully');
+            // Refresh feed
+            await fetchPosts();
+        } catch (error: any) {
+            console.error('Error deleting post:', error);
+            Alert.alert('Error', error.message || 'Failed to delete post');
+        }
+    };
+
+    const handleEdit = (postId: string) => {
+        // Navigate to edit screen (to be implemented)
+        Alert.alert('Edit Post', 'Edit functionality coming soon!');
+    };
+
     const handleShare = async (postId: string) => {
         try {
             const post = posts.find(p => p.id === postId);
@@ -218,6 +237,7 @@ const FeedList: React.FC = () => {
                     <>
                         <FeedPost
                             post={item}
+                            currentUserId={user?.uid || ''}
                             currentUserLiked={item.likedBy?.includes(user?.uid || '')}
                             currentUserSaved={item.savedBy?.includes(user?.uid || '')}
                             currentUserReaction={item.reactedBy?.[user?.uid || '']}
@@ -226,6 +246,8 @@ const FeedList: React.FC = () => {
                             onComment={handleComment}
                             onShare={handleShare}
                             onSave={handleSave}
+                            onDelete={handleDelete}
+                            onEdit={handleEdit}
                             isVisible={visiblePostIds.has(item.id)}
                         />
                         {/* Show shorts after 2nd post */}

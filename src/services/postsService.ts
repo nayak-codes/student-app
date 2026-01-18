@@ -276,11 +276,25 @@ export const getPostById = async (postId: string): Promise<Post | null> => {
 };
 
 /**
- * Delete a post
+ * Delete a post (only by owner)
  */
-export const deletePost = async (postId: string): Promise<void> => {
+export const deletePost = async (postId: string, userId: string): Promise<void> => {
     try {
-        await deleteDoc(doc(db, POSTS_COLLECTION, postId));
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        const postSnap = await getDoc(postRef);
+
+        if (!postSnap.exists()) {
+            throw new Error('Post not found');
+        }
+
+        const postData = postSnap.data();
+
+        // Verify ownership
+        if (postData.userId !== userId) {
+            throw new Error('Unauthorized: You can only delete your own posts');
+        }
+
+        await deleteDoc(postRef);
         console.log('Post deleted');
     } catch (error) {
         console.error('Error deleting post:', error);
@@ -289,14 +303,31 @@ export const deletePost = async (postId: string): Promise<void> => {
 };
 
 /**
- * Update a post
+ * Update a post (only by owner)
  */
-export const updatePost = async (postId: string, updates: Partial<Post>): Promise<void> => {
+export const updatePost = async (
+    postId: string,
+    userId: string,
+    updates: Partial<Pick<Post, 'content' | 'tags' | 'category' | 'skills'>>
+): Promise<void> => {
     try {
         const postRef = doc(db, POSTS_COLLECTION, postId);
+        const postSnap = await getDoc(postRef);
+
+        if (!postSnap.exists()) {
+            throw new Error('Post not found');
+        }
+
+        const postData = postSnap.data();
+
+        // Verify ownership
+        if (postData.userId !== userId) {
+            throw new Error('Unauthorized: You can only edit your own posts');
+        }
+
         await updateDoc(postRef, {
             ...updates,
-            // updatedAt: Timestamp.now(), // If we had this field
+            updatedAt: Timestamp.now(),
         });
         console.log('Post updated');
     } catch (error) {
@@ -748,4 +779,3 @@ export const getUserReaction = async (postId: string, userId: string): Promise<R
         return undefined;
     }
 };
-

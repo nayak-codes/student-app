@@ -252,8 +252,26 @@ const PostCard: React.FC<{
 // ... (existing imports)
 
 // Video List Item Component - YouTube Style
-const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({ post, onPress }) => {
+const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void; onDelete?: (post: Post) => void; onEdit?: (post: Post) => void; }> = ({ post, onPress, onDelete, onEdit }) => {
     const { colors, isDark } = useTheme();
+    const [showOptions, setShowOptions] = useState(false);
+
+    const handleOptions = () => {
+        const buttons: any[] = [
+            { text: 'Cancel', style: 'cancel' as const },
+        ];
+
+        if (onEdit) {
+            buttons.push({ text: 'Edit', onPress: () => onEdit(post) });
+        }
+
+        if (onDelete) {
+            buttons.push({ text: 'Delete', style: 'destructive' as const, onPress: () => onDelete(post) });
+        }
+
+        Alert.alert('Post Options', 'Choose an action', buttons);
+    };
+
     return (
         <TouchableOpacity
             style={[styles.videoListItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
@@ -278,9 +296,11 @@ const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = (
             <View style={styles.videoListDetails}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={[styles.videoListTitle, { color: colors.text }]} numberOfLines={2}>{post.content || 'Untitled Video'}</Text>
-                    <TouchableOpacity style={{ paddingLeft: 8 }}>
-                        <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
-                    </TouchableOpacity>
+                    {(onDelete || onEdit) && (
+                        <TouchableOpacity style={{ paddingLeft: 8 }} onPress={handleOptions}>
+                            <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
                 <Text style={[styles.videoListMeta, { color: colors.textSecondary }]}>
                     {post.userName} • {post.likes || 0} views • 2 hours ago
@@ -422,7 +442,7 @@ const ProfileScreen = () => {
     const { colors, isDark } = useTheme();
 
     // 3. Derived State (Who are we viewing?)
-    const isOwnProfile = false; // Always public view
+    const isOwnProfile = authUser?.uid === userId; // Check if viewing own profile
     const targetUserId = userId;
 
     // DEBUG: Log to help troubleshoot
@@ -716,7 +736,8 @@ const ProfileScreen = () => {
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete", style: "destructive", onPress: async () => {
-                        await deletePost(post.id);
+                        if (!authUser?.uid) return;
+                        await deletePost(post.id, authUser.uid);
                         if (detailModalVisible) closePostModal();
                         handleRefresh();
                     }
@@ -727,7 +748,8 @@ const ProfileScreen = () => {
 
     const savePostEdit = async (postId: string, newContent: string) => {
         try {
-            await updatePost(postId, { content: newContent });
+            if (!authUser?.uid) return;
+            await updatePost(postId, authUser.uid, { content: newContent });
             handleRefresh();
         } catch (error) {
             Alert.alert("Error", "Failed to update post");
@@ -1159,7 +1181,13 @@ const ProfileScreen = () => {
                                         </View>
                                         <View>
                                             {posts.filter(p => p.type === 'video' || !!p.videoLink).slice(0, 3).map((item) => (
-                                                <VideoListItem key={item.id} post={item} onPress={(p) => openVideo(p.videoLink || '', p)} />
+                                                <VideoListItem
+                                                    key={item.id}
+                                                    post={item}
+                                                    onPress={(p) => openVideo(p.videoLink || '', p)}
+                                                    onDelete={isOwnProfile ? handleDeletePost : undefined}
+                                                    onEdit={isOwnProfile ? handleEditPost : undefined}
+                                                />
                                             ))}
                                             {posts.filter(p => p.type === 'video' || !!p.videoLink).length === 0 && (
                                                 <Text style={{ color: colors.textSecondary, fontStyle: 'italic', marginBottom: 16 }}>No videos yet</Text>
@@ -1198,6 +1226,8 @@ const ProfileScreen = () => {
                                             key={item.id}
                                             post={item}
                                             onPress={(p) => openVideo(p.videoLink || '', p)}
+                                            onDelete={isOwnProfile ? handleDeletePost : undefined}
+                                            onEdit={isOwnProfile ? handleEditPost : undefined}
                                         />
                                     ))
                                 ) : activeTab === 'clips' ? (

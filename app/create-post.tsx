@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
@@ -42,6 +43,7 @@ export default function CreatePostScreen() {
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [postType, setPostType] = useState<'note' | 'video' | 'news' | 'image' | 'clip'>('note');
     const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null);
+    const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const availableTags = [
@@ -58,6 +60,23 @@ export default function CreatePostScreen() {
         }
     };
 
+    const generateVideoThumbnail = async (videoUri: string): Promise<string | null> => {
+        try {
+            setIsGeneratingThumbnail(true);
+            const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+                time: 1000, // Get frame at 1 second
+                quality: 0.8,
+            });
+            return uri;
+        } catch (error) {
+            console.error('Error generating thumbnail:', error);
+            Alert.alert('Info', 'Could not generate thumbnail automatically. You can add one manually.');
+            return null;
+        } finally {
+            setIsGeneratingThumbnail(false);
+        }
+    };
+
     const pickMedia = async (type: 'image' | 'video') => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
@@ -65,10 +84,13 @@ export default function CreatePostScreen() {
             return;
         }
 
+        // Use vertical aspect for clips, 4:3 for regular videos
+        const aspectRatio = postType === 'clip' ? [9, 16] : [4, 3];
+
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            aspect: [4, 3],
+            aspect: aspectRatio as [number, number],
             quality: 0.8,
             videoMaxDuration: type === 'video' ? 60 : undefined, // Limit clip duration if needed
         });
@@ -76,7 +98,13 @@ export default function CreatePostScreen() {
         if (!result.canceled) {
             setSelectedMedia(result.assets[0].uri);
             if (type === 'video') {
-                // Keep existing postType (video or clip)
+                // Auto-generate thumbnail if not already set
+                if (!selectedThumbnail) {
+                    const autoThumbnail = await generateVideoThumbnail(result.assets[0].uri);
+                    if (autoThumbnail) {
+                        setSelectedThumbnail(autoThumbnail);
+                    }
+                }
             } else {
                 setPostType('image');
             }
@@ -87,10 +115,13 @@ export default function CreatePostScreen() {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') return;
 
+        // Use vertical aspect ratio for clips, horizontal for videos
+        const aspectRatio = postType === 'clip' ? [9, 16] : [16, 9];
+
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            aspect: [16, 9],
+            aspect: aspectRatio as [number, number],
             quality: 0.8,
         });
 
@@ -412,8 +443,15 @@ export default function CreatePostScreen() {
                         {/* Thumbnail Selection for Video/Clips */}
                         {(postType === 'video' || postType === 'clip') && (
                             <View style={{ marginBottom: 20 }}>
-                                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Thumbnail (Optional)</Text>
-                                {selectedThumbnail ? (
+                                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+                                    Thumbnail {selectedThumbnail && '(Auto-generated)'}
+                                </Text>
+                                {isGeneratingThumbnail ? (
+                                    <View style={[styles.videoInputContainer, { backgroundColor: isDark ? colors.card : '#F1F5F9', justifyContent: 'center', paddingVertical: 40 }]}>
+                                        <ActivityIndicator size="large" color={colors.primary} />
+                                        <Text style={{ color: colors.textSecondary, marginTop: 12 }}>Generating thumbnail...</Text>
+                                    </View>
+                                ) : selectedThumbnail ? (
                                     <View style={[styles.mediaPreview, { height: 120, backgroundColor: isDark ? '#000' : '#F1F5F9' }]}>
                                         <Image source={{ uri: selectedThumbnail }} style={styles.mediaImage} resizeMode="cover" />
                                         <TouchableOpacity onPress={() => setSelectedThumbnail(null)} style={styles.removeMedia}>

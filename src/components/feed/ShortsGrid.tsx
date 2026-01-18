@@ -45,50 +45,64 @@ const ShortsGrid: React.FC<ShortsGridProps> = ({ shorts }) => {
                 contentContainerStyle={styles.scrollContent}
                 pagingEnabled
             >
-                {shorts.map((short, index) => (
-                    <TouchableOpacity
-                        key={short.id}
-                        style={[
-                            styles.shortItem,
-                            { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }
-                        ]}
-                        onPress={() => handleShortPress(short, index)}
-                        activeOpacity={0.9}
-                    >
-                        {/* Thumbnail */}
-                        {short.thumbnailUrl ? (
-                            <Image
-                                source={{ uri: short.thumbnailUrl }}
-                                style={styles.thumbnail}
-                                resizeMode="cover"
-                            />
-                        ) : (
-                            <View style={[styles.placeholderThumbnail, { backgroundColor: isDark ? '#334155' : '#CBD5E1' }]}>
-                                <Ionicons name="play" size={40} color={colors.textSecondary} />
-                            </View>
-                        )}
+                {shorts.map((short, index) => {
+                    // Try to extract YouTube thumbnail if no thumbnail exists
+                    let thumbnailUri = short.thumbnailUrl || short.imageUrl;
 
-                        {/* Overlay Gradient */}
-                        <View style={styles.overlay}>
-                            {/* Play Icon */}
-                            <View style={styles.playIconContainer}>
-                                <Ionicons name="play" size={32} color="#FFF" />
-                            </View>
+                    if (!thumbnailUri && short.videoLink) {
+                        // Extract YouTube video ID and generate thumbnail
+                        const youtubeMatch = short.videoLink.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                        if (youtubeMatch) {
+                            thumbnailUri = `https://img.youtube.com/vi/${youtubeMatch[1]}/maxresdefault.jpg`;
+                        }
+                    }
 
-                            {/* Bottom Info */}
-                            <View style={styles.bottomInfo}>
-                                <Text style={styles.viewCount} numberOfLines={1}>
-                                    {short.viewCount && short.viewCount > 0
-                                        ? `${short.viewCount > 1000 ? `${(short.viewCount / 1000).toFixed(1)}K` : short.viewCount} views`
-                                        : 'New'}
-                                </Text>
-                                <Text style={styles.shortTitle} numberOfLines={2}>
-                                    {short.content || short.userName}
-                                </Text>
+                    return (
+                        <TouchableOpacity
+                            key={short.id}
+                            style={[
+                                styles.shortItem,
+                                { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }
+                            ]}
+                            onPress={() => handleShortPress(short, index)}
+                            activeOpacity={0.9}
+                        >
+                            {/* Thumbnail */}
+                            {thumbnailUri ? (
+                                <Image
+                                    source={{ uri: thumbnailUri }}
+                                    style={styles.thumbnail}
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <View style={[styles.placeholderThumbnail, { backgroundColor: isDark ? '#334155' : '#CBD5E1' }]}>
+                                    <Ionicons name="film" size={40} color={colors.textSecondary} />
+                                    <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 12 }}>Short</Text>
+                                </View>
+                            )}
+
+                            {/* Overlay Gradient */}
+                            <View style={styles.overlay}>
+                                {/* Play Icon */}
+                                <View style={styles.playIconContainer}>
+                                    <Ionicons name="play" size={32} color="#FFF" />
+                                </View>
+
+                                {/* Bottom Info */}
+                                <View style={styles.bottomInfo}>
+                                    <Text style={styles.viewCount} numberOfLines={1}>
+                                        {short.viewCount && short.viewCount > 0
+                                            ? `${short.viewCount > 1000 ? `${(short.viewCount / 1000).toFixed(1)}K` : short.viewCount} views`
+                                            : 'New'}
+                                    </Text>
+                                    <Text style={styles.shortTitle} numberOfLines={2}>
+                                        {short.content || short.userName}
+                                    </Text>
+                                </View>
                             </View>
-                        </View>
-                    </TouchableOpacity>
-                ))}
+                        </TouchableOpacity>
+                    );
+                })}
             </ScrollView>
         </View>
     );
