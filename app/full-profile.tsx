@@ -45,6 +45,8 @@ import { getUserResources, LibraryResource } from '../src/services/libraryServic
 import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
+type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
+
 // Edit Post Modal
 const EditPostModal: React.FC<{
     visible: boolean;
@@ -721,7 +723,8 @@ const ProfileScreen = () => {
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete", style: "destructive", onPress: async () => {
-                        await deletePost(post.id);
+                        if (!authUser?.uid) return;
+                        await deletePost(post.id, authUser.uid);
                         if (detailModalVisible) closePostModal();
                         handleRefresh();
                     }
@@ -732,7 +735,8 @@ const ProfileScreen = () => {
 
     const savePostEdit = async (postId: string, newContent: string) => {
         try {
-            await updatePost(postId, { content: newContent });
+            if (!authUser?.uid) return;
+            await updatePost(postId, authUser.uid, { content: newContent });
             handleRefresh();
         } catch (error) {
             Alert.alert("Error", "Failed to update post");

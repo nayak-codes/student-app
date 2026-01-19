@@ -40,6 +40,7 @@ export interface Post {
     imageUrl?: string;
     videoLink?: string;
     thumbnailUrl?: string;
+    duration?: string; // Video duration in format "3:45"
     tags: string[];
 
     // Enhanced professional fields
@@ -142,6 +143,7 @@ export const getAllPosts = async (limitCount: number = 50): Promise<Post[]> => {
                 imageUrl: data.imageUrl,
                 videoLink: data.videoLink,
                 thumbnailUrl: data.thumbnailUrl,
+                duration: data.duration, // Map duration from Firestore
                 tags: data.tags || [],
                 category: data.category,
                 institution: data.institution,
@@ -777,5 +779,20 @@ export const getUserReaction = async (postId: string, userId: string): Promise<R
     } catch (error) {
         console.error('Error getting user reaction:', error);
         return undefined;
+    }
+};
+
+/**
+ * Increment view count for a post
+ */
+export const incrementViewCount = async (postId: string): Promise<void> => {
+    try {
+        const postRef = doc(db, POSTS_COLLECTION, postId);
+        await updateDoc(postRef, {
+            viewCount: increment(1)
+        });
+    } catch (error) {
+        console.error('Error incrementing view count:', error);
+        // Don't throw - view tracking shouldn't break app flow
     }
 };

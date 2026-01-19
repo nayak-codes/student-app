@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -81,25 +82,43 @@ const ShortsGrid: React.FC<ShortsGridProps> = ({ shorts }) => {
                                 </View>
                             )}
 
-                            {/* Overlay Gradient */}
-                            <View style={styles.overlay}>
-                                {/* Play Icon */}
-                                <View style={styles.playIconContainer}>
-                                    <Ionicons name="play" size={32} color="#FFF" />
-                                </View>
-
-                                {/* Bottom Info */}
-                                <View style={styles.bottomInfo}>
-                                    <Text style={styles.viewCount} numberOfLines={1}>
-                                        {short.viewCount && short.viewCount > 0
-                                            ? `${short.viewCount > 1000 ? `${(short.viewCount / 1000).toFixed(1)}K` : short.viewCount} views`
-                                            : 'New'}
-                                    </Text>
+                            {/* Gradient Overlay - match Clips feed layout */}
+                            <LinearGradient
+                                colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
+                                locations={[0, 0.4, 0.7, 1]}
+                                style={styles.clipGradient}
+                            >
+                                {/* Bottom section - title + creator */}
+                                <View style={styles.bottomSection}>
+                                    {/* Title */}
                                     <Text style={styles.shortTitle} numberOfLines={2}>
-                                        {short.content || short.userName}
+                                        {short.content || 'Untitled'}
                                     </Text>
+
+                                    {/* Creator row */}
+                                    <View style={styles.creatorRow}>
+                                        <View style={styles.creatorAvatar}>
+                                            {short.userProfilePhoto ? (
+                                                <Image source={{ uri: short.userProfilePhoto }} style={styles.avatarImage} />
+                                            ) : (
+                                                <Text style={styles.avatarText}>{short.userName.charAt(0).toUpperCase()}</Text>
+                                            )}
+                                        </View>
+                                        <Text style={styles.creatorName} numberOfLines={1}>
+                                            {short.userName}
+                                        </Text>
+                                        {/* Combined play + view count bubble */}
+                                        <View style={styles.clipStats}>
+                                            <Ionicons name="play" size={10} color="#FFF" />
+                                            <Text style={styles.viewCount}>
+                                                {short.viewCount && short.viewCount > 0
+                                                    ? short.viewCount > 1000 ? `${(short.viewCount / 1000).toFixed(1)}K` : short.viewCount
+                                                    : '0'}
+                                            </Text>
+                                        </View>
+                                    </View>
                                 </View>
-                            </View>
+                            </LinearGradient>
                         </TouchableOpacity>
                     );
                 })}
@@ -135,10 +154,10 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     shortItem: {
-        width: 180,
-        height: 240,
-        borderRadius: 12,
-        marginRight: 8,
+        width: 170,  // Match Clips tab dimensions
+        height: 340, // Increased height for better vertical ratio
+        borderRadius: 20,
+        marginRight: 12,
         overflow: 'hidden',
         position: 'relative',
     },
@@ -152,30 +171,78 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0, 0, 0, 0.25)',
-        justifyContent: 'space-between',
+    clipGradient: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 180,
+        justifyContent: 'flex-end',
         padding: 12,
     },
-    playIconContainer: {
-        flex: 1,
+    bottomSection: {
+        gap: 8,
+    },
+    creatorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    creatorAvatar: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255,255,255,0.2)',
         justifyContent: 'center',
         alignItems: 'center',
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
     },
-    bottomInfo: {
-        gap: 4,
+    avatarImage: {
+        width: '100%',
+        height: '100%',
+    },
+    avatarText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    creatorName: {
+        color: '#E2E8F0',
+        fontSize: 11,
+        fontWeight: '600',
+        flex: 1,
+        marginLeft: 6,
+    },
+    playIconText: {
+        color: '#FFF',
+        fontSize: 10,
+    },
+    clipStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
     },
     viewCount: {
-        color: '#FFF',
-        fontSize: 12,
+        color: '#F8FAFC',
+        fontSize: 11,
         fontWeight: '600',
+        marginLeft: 4,
     },
     shortTitle: {
         color: '#FFF',
-        fontSize: 13,
-        fontWeight: '600',
-        lineHeight: 16,
+        fontSize: 16,
+        fontWeight: '800',
+        lineHeight: 20,
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
     },
 });
 

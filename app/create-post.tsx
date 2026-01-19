@@ -43,6 +43,7 @@ export default function CreatePostScreen() {
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [postType, setPostType] = useState<'note' | 'video' | 'news' | 'image' | 'clip'>('note');
     const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null);
+    const [videoDuration, setVideoDuration] = useState<string>(''); // Store video duration
     const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -89,22 +90,27 @@ export default function CreatePostScreen() {
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
+            allowsEditing: type !== 'video', // Disable editing for videos to preserve metadata
             aspect: aspectRatio as [number, number],
             quality: 0.8,
-            videoMaxDuration: type === 'video' ? 60 : undefined, // Limit clip duration if needed
+            videoMaxDuration: type === 'video' ? 60 : undefined,
         });
 
         if (!result.canceled) {
             setSelectedMedia(result.assets[0].uri);
             if (type === 'video') {
-                // Auto-generate thumbnail if not already set
+                console.log('📹 Video selected:', result.assets[0].uri);
+
+                // Auto-generate thumbnail
                 if (!selectedThumbnail) {
                     const autoThumbnail = await generateVideoThumbnail(result.assets[0].uri);
                     if (autoThumbnail) {
                         setSelectedThumbnail(autoThumbnail);
                     }
                 }
+
+                // Duration will be entered in UI field below
+                console.log('📹 Video selected, user can enter duration in UI');
             } else {
                 setPostType('image');
             }
@@ -199,6 +205,8 @@ export default function CreatePostScreen() {
                 finalThumbnailUrl = videoMetadata.thumbnailUrl;
             }
 
+            console.log('Creating post with duration:', videoDuration);
+
             await createPost({
                 userId: user.uid,
                 userName: userProfile?.name || 'Anonymous',
@@ -208,9 +216,11 @@ export default function CreatePostScreen() {
                 videoLink: finalVideoLink,
                 imageUrl: finalImageUrl,
                 thumbnailUrl: finalThumbnailUrl,
+                duration: videoDuration || undefined,
                 tags: selectedTags,
             });
 
+            console.log('✅ Post created with duration:', videoDuration);
             Alert.alert('Success', 'Post created successfully!');
             router.back();
         } catch (error) {
@@ -470,6 +480,37 @@ export default function CreatePostScreen() {
                                         <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>Add Custom Thumbnail</Text>
                                     </TouchableOpacity>
                                 )}
+                            </View>
+                        )}
+
+                        {/* Duration Input for Videos/Clips */}
+                        {(postType === 'video' || postType === 'clip') && selectedMedia && (
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={[styles.sectionLabel, { color: colors.primary, fontWeight: '600' }]}>
+                                    ⏱️ Video Duration (Required)
+                                </Text>
+                                <View style={[styles.videoInputContainer, { backgroundColor: isDark ? colors.card : '#F1F5F9', borderWidth: 2, borderColor: videoDuration ? colors.primary : colors.border }]}>
+                                    <Ionicons name="time-outline" size={20} color={colors.primary} />
+                                    <TextInput
+                                        style={[styles.linkInput, { color: colors.text, fontWeight: '600' }]}
+                                        placeholder="Enter duration (e.g., 0:30 or 1:45)"
+                                        placeholderTextColor={colors.textSecondary}
+                                        value={videoDuration}
+                                        onChangeText={(text) => {
+                                            console.log('⏱️ Duration changed to:', text);
+                                            // Auto-format as user types
+                                            if (/^\d{0,2}:?\d{0,2}$/.test(text) || text === '') {
+                                                setVideoDuration(text);
+                                            }
+                                        }}
+                                        keyboardType="numeric"
+                                        maxLength={5}
+                                        autoFocus={false}
+                                    />
+                                    {videoDuration && (
+                                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>✓</Text>
+                                    )}
+                                </View>
                             </View>
                         )}
 

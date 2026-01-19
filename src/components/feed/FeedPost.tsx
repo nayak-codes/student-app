@@ -92,6 +92,67 @@ const FeedPost: React.FC<FeedPostProps> = ({
         });
     };
 
+    const isVideo = post.type === 'video' || post.type === 'clip';
+
+    // Video posts render differently (like explore feed)
+    if (isVideo) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.card, marginBottom: 0 }]}>
+                {/* Video Thumbnail */}
+                {post.thumbnailUrl && (
+                    <TouchableOpacity onPress={handleVideoPress} activeOpacity={0.9} style={styles.videoContainer}>
+                        <Image
+                            source={{ uri: post.thumbnailUrl }}
+                            style={styles.videoThumbnailFeed}
+                            resizeMode="cover"
+                        />
+                        {/* Duration badge only */}
+                        {post.duration && (
+                            <View style={styles.durationBadgeFeed}>
+                                <Text style={styles.durationTextFeed}>{post.duration}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                )}
+
+                {/* Profile Info Below (simplified - just author + time) */}
+                <View style={[styles.videoMetaFeed, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={handleProfilePress} style={styles.videoMetaContent}>
+                        <View style={[styles.avatarSmall, { backgroundColor: colors.primary }]}>
+                            {post.userProfilePhoto ? (
+                                <Image source={{ uri: post.userProfilePhoto }} style={styles.avatarSmall} />
+                            ) : (
+                                <Text style={styles.avatarTextSmall}>{post.userName.charAt(0).toUpperCase()}</Text>
+                            )}
+                        </View>
+                        <View style={styles.videoTextFeed}>
+                            <Text style={[styles.videoTitleFeed, { color: colors.text }]} numberOfLines={2}>
+                                {post.content || 'Untitled Video'}
+                            </Text>
+                            <Text style={[styles.videoSubtitleFeed, { color: colors.textSecondary }]}>
+                                {post.userName} • {post.createdAt ? formatDistanceToNow(new Date(post.createdAt)) : 'Just now'} • {post.viewCount || 0} views
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                    {isOwnPost && (
+                        <TouchableOpacity onPress={() => setShowOptionsModal(true)} style={{ padding: 8 }}>
+                            <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Post Options Modal */}
+                <PostOptionsModal
+                    visible={showOptionsModal}
+                    onClose={() => setShowOptionsModal(false)}
+                    onEdit={() => onEdit(post.id)}
+                    onDelete={() => onDelete(post.id)}
+                />
+            </View>
+        );
+    }
+
+    // Regular posts (images/text) keep the original layout
     return (
         <View style={[styles.container, { backgroundColor: colors.card }]}>
             {/* Header */}
@@ -124,16 +185,6 @@ const FeedPost: React.FC<FeedPostProps> = ({
                         style={[styles.postImage, { aspectRatio }]}
                         resizeMode="cover"
                     />
-                )}
-
-                {(post.type === 'video' || post.type === 'clip') && post.thumbnailUrl && (
-                    <TouchableOpacity onPress={handleVideoPress} activeOpacity={0.9}>
-                        <Image
-                            source={{ uri: post.thumbnailUrl }}
-                            style={[styles.postImage, { aspectRatio: 16 / 9 }]}
-                            resizeMode="cover"
-                        />
-                    </TouchableOpacity>
                 )}
             </View>
 
@@ -374,6 +425,75 @@ const styles = StyleSheet.create({
     timeAgo: {
         fontSize: 11,
         marginTop: 4,
+    },
+    // Video Feed Styles (like explore)
+    videoContainer: {
+        position: 'relative',
+    },
+    videoThumbnailFeed: {
+        width: '100%',
+        height: 230,
+        backgroundColor: '#000',
+    },
+    playIconContainer: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: [{ translateX: -28 }, { translateY: -28 }],
+    },
+    durationBadgeFeed: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+    },
+    durationTextFeed: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    videoMetaFeed: {
+        flexDirection: 'row',
+        padding: 12,
+        paddingTop: 14,
+        paddingBottom: 12,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    videoMetaContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    avatarSmall: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    avatarTextSmall: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#F8FAFC',
+    },
+    videoTextFeed: {
+        flex: 1,
+        marginRight: 8,
+    },
+    videoTitleFeed: {
+        fontSize: 15,
+        fontWeight: '600',
+        lineHeight: 20,
+        marginBottom: 4,
+    },
+    videoSubtitleFeed: {
+        fontSize: 12,
+        fontWeight: '500',
     },
 });
 

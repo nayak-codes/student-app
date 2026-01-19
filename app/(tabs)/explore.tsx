@@ -1,4 +1,4 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -24,7 +24,7 @@ import CreatePostModal from '../../src/components/CreatePostModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { addToHistory } from '../../src/services/historyService';
-import { getAllPosts, likePost, Post, unlikePost } from '../../src/services/postsService';
+import { getAllPosts, incrementViewCount, likePost, Post, unlikePost } from '../../src/services/postsService';
 
 // Type definitions
 type ContentType = 'video' | 'clip';
@@ -38,6 +38,8 @@ interface FeedItem {
   comments: number;
   saved: boolean;
   timeAgo: string;
+  viewCount?: number; // Added for view count display
+  duration?: string; // Video duration like "3:45"
   image?: ImageSourcePropType;
   imageUrl?: string;
   thumbnailUrl?: string;
@@ -52,17 +54,7 @@ const COLUMN_WIDTH = width / 2 - 20; // 2 columns with padding
 
 // Sample Data (Placeholders)
 const sampleVideoPosts: FeedItem[] = [
-  {
-    id: 'sample_1',
-    type: 'video',
-    title: 'How to prepare for JEE Mains 2026? | Strategy & Tips',
-    author: 'Physics Galaxy',
-    likes: 1200,
-    comments: 45,
-    saved: false,
-    timeAgo: '2 hours ago',
-    videoLink: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-  },
+
   {
     id: 'sample_2',
     type: 'clip',
@@ -101,6 +93,8 @@ function convertToFeedItem(post: Post): FeedItem | null {
     comments: post.comments,
     saved: false,
     timeAgo: getTimeAgo(post.createdAt),
+    viewCount: post.viewCount, // Map view count
+    duration: post.duration, // Map duration from post
     imageUrl: post.imageUrl,
     thumbnailUrl: post.thumbnailUrl,
     videoLink: post.videoLink,
@@ -203,6 +197,11 @@ const ExploreScreen: React.FC = () => {
   const playVideo = (item: FeedItem) => {
     if (!item.videoLink) return;
 
+    // Track view (async, don't wait for it)
+    if (!item.id.startsWith('sample_')) {
+      incrementViewCount(item.id).catch((err: any) => console.log('View tracking failed:', err));
+    }
+
     // Check if it's a clip type or a YouTube Short
     const isClip = item.type === 'clip' || item.videoLink.includes('/shorts/') || item.videoLink.includes('#shorts');
 
@@ -294,7 +293,7 @@ const ExploreScreen: React.FC = () => {
             </View>
           )}
           <View style={styles.durationBadge}>
-            <Text style={styles.durationText}>Video</Text>
+            <Text style={styles.durationText}>{item.duration || '0:00'}</Text>
           </View>
         </TouchableOpacity>
 
@@ -304,45 +303,8 @@ const ExploreScreen: React.FC = () => {
           </View>
           <View style={styles.videoTextContent}>
             <Text style={[styles.videoTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
-            <Text style={styles.videoSubtitle}>{item.author} • {item.timeAgo}</Text>
+            <Text style={styles.videoSubtitle}>{item.author} • {item.timeAgo} • {item.viewCount || 0} views</Text>
           </View>
-          <TouchableOpacity onPress={() => { }}>
-            <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={[styles.cardActions, { borderTopColor: colors.border }]}>
-          <TouchableOpacity style={styles.action} onPress={() => handleLike(item)}>
-            <Ionicons
-              name={hasLiked ? "heart" : "heart-outline"}
-              size={20}
-              color={hasLiked ? "#EF4444" : colors.textSecondary}
-            />
-            <Text style={[styles.actionText, { color: colors.textSecondary }, hasLiked && { color: '#EF4444' }]}>
-              {item.likes > 1000 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.action}>
-            <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
-            <Text style={[styles.actionText, { color: colors.textSecondary }]}>{item.comments}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.action} onPress={() => handleShare(item)}>
-            <MaterialCommunityIcons name="share-outline" size={20} color={colors.textSecondary} />
-            <Text style={[styles.actionText, { color: colors.textSecondary }]}>Share</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.action, styles.saveAction]}
-            onPress={() => toggleSave(item.id)}
-          >
-            <Ionicons
-              name={savedItems.has(item.id) ? "bookmark" : "bookmark-outline"}
-              size={20}
-              color={savedItems.has(item.id) ? colors.primary : colors.textSecondary}
-            />
-          </TouchableOpacity>
         </View>
       </View>
     );
@@ -551,10 +513,9 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 80,
-    paddingTop: 8,
   },
   videoCard: {
-    marginBottom: 24,
+    marginBottom: 0, // Remove gap between videos
     backgroundColor: 'transparent',
   },
   thumbnailContainer: {
@@ -570,7 +531,7 @@ const styles = StyleSheet.create({
   },
   durationBadge: {
     position: 'absolute',
-    bottom: 12,
+    top: 12, // Changed from bottom to top
     right: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     paddingHorizontal: 8,
@@ -584,20 +545,22 @@ const styles = StyleSheet.create({
   },
   videoMetaContainer: {
     flexDirection: 'row',
-    padding: 16,
-    alignItems: 'flex-start',
+    padding: 12,
+    paddingTop: 14,
+    paddingBottom: 8,
+    alignItems: 'center', // Changed from flex-start to center
   },
   avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#334155',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   avatarLetter: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#F8FAFC',
   },
@@ -606,20 +569,21 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   videoTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    lineHeight: 22,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
     marginBottom: 4,
   },
   videoSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#94A3B8',
     fontWeight: '500',
   },
   cardActions: {
     flexDirection: 'row',
-    paddingHorizontal: 16, // Added padding
-    paddingBottom: 16,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    paddingTop: 4,
     alignItems: 'center',
   },
   action: {
