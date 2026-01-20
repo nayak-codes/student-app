@@ -1,4 +1,3 @@
-
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -14,7 +13,6 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    TouchableWithoutFeedback,
     View,
     ViewToken
 } from 'react-native';
@@ -22,6 +20,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConditionalVideoPlayer } from '../hooks/useConditionalVideoPlayer';
 import { checkFollowStatus, followUser, unfollowUser } from '../services/connectionService';
 import { likePost, unlikePost } from '../services/postsService';
+import CommentsSheet from './CommentsSheet';
 import ShareToFriendsModal from './ShareToFriendsModal';
 
 const { width, height } = Dimensions.get('window');
@@ -80,31 +79,24 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
 
     return (
         <View style={styles.container}>
-            <TouchableWithoutFeedback onPress={() => {
-                if (player) {
-                    if (player.playing) player.pause();
-                    else player.play();
-                }
-            }}>
-                <View style={styles.videoContainer}>
-                    {player && (
-                        <VideoView
-                            player={player}
-                            style={styles.video}
-                            contentFit="cover"
-                            nativeControls={false}
-                        />
-                    )}
-                    {/* Thumbnail Overlay - Show if provided and not playing/active logic could be refined but overlays are tricky with VideoView */}
-                    {item.thumbnailUrl && !isActive && (
-                        <Image
-                            source={{ uri: item.thumbnailUrl }}
-                            style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
-                            resizeMode="cover"
-                        />
-                    )}
-                </View>
-            </TouchableWithoutFeedback>
+            <View style={styles.videoContainer}>
+                {player && (
+                    <VideoView
+                        player={player}
+                        style={styles.video}
+                        contentFit="cover"
+                        nativeControls={false}
+                    />
+                )}
+                {/* Thumbnail Overlay - Show if provided and not playing/active logic could be refined but overlays are tricky with VideoView */}
+                {item.thumbnailUrl && !isActive && (
+                    <Image
+                        source={{ uri: item.thumbnailUrl }}
+                        style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+                        resizeMode="cover"
+                    />
+                )}
+            </View>
 
             {/* Overlay Controls */}
             <LinearGradient
@@ -178,9 +170,16 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     const [items, setItems] = useState(data);
     const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
 
+
+
     // Share Modal State
     const [isShareModalVisible, setIsShareModalVisible] = useState(false);
     const [selectedClipForShare, setSelectedClipForShare] = useState<FeedItem | null>(null);
+
+    // Comments State
+    const [commentsVisible, setCommentsVisible] = useState(false);
+    const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+    const [selectedClipCommentCount, setSelectedClipCommentCount] = useState(0);
 
     // Initial check for follow status
     useEffect(() => {
@@ -332,8 +331,10 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
         }
     };
 
-    const handleComments = () => {
-        Alert.alert("Comments", "Comments section coming soon!");
+    const handleComments = (item: FeedItem) => {
+        setSelectedClipId(item.id);
+        setSelectedClipCommentCount(item.comments);
+        setCommentsVisible(true);
     };
 
     return (
@@ -372,7 +373,7 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                             onShare={() => handleShare(item)}
                             onFollow={() => handleFollow(item.userId)}
                             onProfile={() => handleProfileNavigation(item.userId)}
-                            onComments={handleComments}
+                            onComments={() => handleComments(item)}
                             onClose={onClose}
                             shouldLoad={shouldLoad}
                         />
@@ -389,6 +390,15 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                 onClose={() => setIsShareModalVisible(false)}
                 postToShare={selectedClipForShare}
             />
+
+            {selectedClipId && (
+                <CommentsSheet
+                    visible={commentsVisible}
+                    onClose={() => setCommentsVisible(false)}
+                    postId={selectedClipId}
+                    commentCount={selectedClipCommentCount}
+                />
+            )}
         </View>
     );
 };
@@ -407,7 +417,6 @@ const styles = StyleSheet.create({
     videoContainer: {
         width: '100%',
         height: '100%',
-        position: 'absolute',
     },
     video: {
         width: '100%',

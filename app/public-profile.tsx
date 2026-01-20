@@ -42,7 +42,7 @@ import {
 } from '../src/services/connectionService';
 import { EventItem } from '../src/services/eventService';
 import { getUserResources, LibraryResource } from '../src/services/libraryService';
-import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
+import { deletePost, getAllPosts, incrementViewCount, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
 type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
@@ -303,7 +303,7 @@ const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void; onDel
                     )}
                 </View>
                 <Text style={[styles.videoListMeta, { color: colors.textSecondary }]}>
-                    {post.userName} • {post.likes || 0} views • 2 hours ago
+                    {post.userName} • {post.viewCount || 0} views • 2 hours ago
                 </Text>
             </View>
         </TouchableOpacity>
@@ -789,7 +789,7 @@ const ProfileScreen = () => {
                     authorImage: photoURL,
                     authorId: targetUserId,
                     likes: post?.likes,
-                    views: 0,
+                    views: post?.viewCount || 0,
                     date: post?.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Recently'
                 }
             });
@@ -1093,7 +1093,7 @@ const ProfileScreen = () => {
 
                 {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}
                 {activeTab !== 'home' && (
-                    <View style={styles.subFilterContainer}>
+                    <View style={[styles.subFilterContainer, { backgroundColor: colors.background }]}>
                         <View style={{ flexDirection: 'row', gap: 12 }}>
                             {['recent', 'old', 'popular'].map((type) => (
                                 <TouchableOpacity
@@ -1231,8 +1231,10 @@ const ProfileScreen = () => {
                                         />
                                     ))
                                 ) : activeTab === 'clips' ? (
-                                    <View style={styles.gridContainer}>
+                                    <View style={styles.clipsGridContainer}>
+                                        {/* Filter specifically for SHORTS/CLIPS structure based on URL or Type */}
                                         {posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts'))).map((item: any, index: number) => {
+                                            // Determine thumbnail
                                             let thumbnailUrl = item.thumbnailUrl || item.imageUrl;
                                             if (!thumbnailUrl && item.videoLink) {
                                                 const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
@@ -1242,27 +1244,72 @@ const ProfileScreen = () => {
                                             return (
                                                 <Pressable
                                                     key={item.id}
-                                                    style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: colors.background }]}
+                                                    style={styles.clipCardItem}
                                                     onPress={() => {
+                                                        // Increment view count in background (non-blocking)
+                                                        incrementViewCount(item.id);
+
+                                                        // Launch the ClipsFeed player
                                                         setInitialClipIndex(index);
                                                         setShowClipsFeed(true);
                                                     }}
                                                 >
+                                                    {/* Thumbnail */}
                                                     {thumbnailUrl ? (
                                                         <Image
                                                             source={{ uri: thumbnailUrl }}
-                                                            style={[styles.gridImage, { resizeMode: 'cover' }]}
+                                                            style={styles.clipThumbnail}
+                                                            resizeMode="cover"
                                                         />
                                                     ) : (
-                                                        <View style={[styles.gridImage, { backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' }]}>
-                                                            <Ionicons name="play-circle" size={32} color="#94A3B8" />
+                                                        <View style={[styles.clipThumbnail, { backgroundColor: isDark ? '#334155' : '#CBD5E1', justifyContent: 'center', alignItems: 'center' }]}>
+                                                            <Ionicons name="film" size={40} color={colors.textSecondary} />
+                                                            <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 12 }}>Clip</Text>
                                                         </View>
                                                     )}
-                                                    <View style={styles.videoDurationBadge}><Ionicons name="play" size={10} color="#FFF" /></View>
+
+                                                    {/* Gradient Overlay */}
                                                     <LinearGradient
-                                                        colors={['transparent', 'rgba(0,0,0,0.5)']}
-                                                        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40 }}
-                                                    />
+                                                        colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
+                                                        locations={[0, 0.4, 0.7, 1]}
+                                                        style={styles.clipGradient}
+                                                    >
+                                                        {/* Bottom section - title + creator */}
+                                                        <View style={styles.clipContent}>
+                                                            {/* Title */}
+                                                            <Text style={styles.clipTitle} numberOfLines={1}>
+                                                                {item.content || 'Untitled'}
+                                                            </Text>
+
+                                                            {/* Creator row */}
+                                                            <View style={styles.clipMetaRow}>
+                                                                <View style={styles.clipAuthor}>
+                                                                    <View style={styles.clipAvatar}>
+                                                                        {item.userProfilePhoto ? (
+                                                                            <Image source={{ uri: item.userProfilePhoto }} style={{ width: '100%', height: '100%' }} />
+                                                                        ) : (
+                                                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>
+                                                                                {item.userName.charAt(0).toUpperCase()}
+                                                                            </Text>
+                                                                        )}
+                                                                    </View>
+                                                                    <Text style={styles.clipAuthorName} numberOfLines={1}>
+                                                                        {item.userName}
+                                                                    </Text>
+                                                                </View>
+
+                                                                {/* Combined play + view count bubble */}
+                                                                <View style={styles.clipStats}>
+                                                                    <Ionicons name="play" size={10} color="#FFF" />
+                                                                    <Text style={styles.clipViewsText}>
+                                                                        {item.viewCount && item.viewCount > 0
+                                                                            ? item.viewCount > 1000 ? `${(item.viewCount / 1000).toFixed(1)}K` : item.viewCount
+                                                                            : '0'}
+                                                                    </Text>
+                                                                </View>
+                                                            </View>
+                                                        </View>
+                                                    </LinearGradient>
                                                 </Pressable>
                                             );
                                         })}
@@ -2256,6 +2303,92 @@ const styles = StyleSheet.create({
     horizontalList: {
         paddingHorizontal: 16,
         paddingBottom: 8,
+    },
+    // Clip Card Styles
+    clipsGridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        paddingHorizontal: 2,
+        gap: 2,
+    },
+    clipCardItem: {
+        width: '32.5%',
+        aspectRatio: 9 / 16,
+        borderRadius: 16,
+        overflow: 'hidden',
+        position: 'relative',
+        marginBottom: 2,
+    },
+    clipThumbnail: {
+        width: '100%',
+        height: '100%',
+    },
+    clipGradient: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 200,
+        justifyContent: 'flex-end',
+        padding: 10,
+    },
+    clipContent: {
+        width: '100%',
+    },
+    clipTitle: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: '700',
+        lineHeight: 15,
+        marginBottom: 5,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+    },
+    clipMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    clipAuthor: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 8,
+    },
+    clipAvatar: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
+        overflow: 'hidden',
+    },
+    clipAuthorName: {
+        color: '#E2E8F0',
+        fontSize: 10,
+        fontWeight: '600',
+        marginLeft: 5,
+        flex: 1,
+    },
+    clipStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    clipViewsText: {
+        color: '#FFF',
+        fontSize: 9,
+        fontWeight: '600',
+        marginLeft: 3,
     },
 });
 

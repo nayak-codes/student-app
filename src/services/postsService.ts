@@ -461,7 +461,20 @@ export const hasUserLikedPost = async (postId: string, userId: string): Promise<
     }
 };
 
-// ==================== COMMENT FUNCTIONS ====================
+export interface Comment {
+    id: string;
+    postId: string;
+    userId: string;
+    userName: string;
+    userPhoto?: string;
+    text: string;
+    likes?: number; // Added
+    likedBy?: string[]; // Added
+    parentId?: string | null; // Added for threading
+    createdAt: Date;
+}
+
+// ... (keep existing code)
 
 /**
  * Add a comment to a post
@@ -471,7 +484,8 @@ export const addComment = async (
     userId: string,
     userName: string,
     userPhoto: string | undefined,
-    text: string
+    text: string,
+    parentId: string | null = null // Added optional parentId
 ): Promise<string> => {
     try {
         const commentData = {
@@ -480,6 +494,9 @@ export const addComment = async (
             userName,
             userPhoto: userPhoto || '',
             text,
+            likes: 0,
+            likedBy: [],
+            parentId, // Save parentId
             createdAt: Timestamp.now(),
         };
 
@@ -520,6 +537,9 @@ export const getComments = async (postId: string): Promise<Comment[]> => {
                 userName: data.userName,
                 userPhoto: data.userPhoto,
                 text: data.text,
+                likes: data.likes || 0,
+                likedBy: data.likedBy || [],
+                parentId: data.parentId || null, // Retrieve parentId
                 createdAt: data.createdAt?.toDate() || new Date(),
             });
         });
@@ -548,6 +568,38 @@ export const deleteComment = async (postId: string, commentId: string): Promise<
         console.log('Comment deleted');
     } catch (error) {
         console.error('Error deleting comment:', error);
+        throw error;
+    }
+};
+
+/**
+ * Like a comment
+ */
+export const likeComment = async (postId: string, commentId: string, userId: string): Promise<void> => {
+    try {
+        const commentRef = doc(db, POSTS_COLLECTION, postId, 'comments', commentId);
+        await updateDoc(commentRef, {
+            likes: increment(1),
+            likedBy: arrayUnion(userId),
+        });
+    } catch (error) {
+        console.error('Error liking comment:', error);
+        throw error;
+    }
+};
+
+/**
+ * Unlike a comment
+ */
+export const unlikeComment = async (postId: string, commentId: string, userId: string): Promise<void> => {
+    try {
+        const commentRef = doc(db, POSTS_COLLECTION, postId, 'comments', commentId);
+        await updateDoc(commentRef, {
+            likes: increment(-1),
+            likedBy: arrayRemove(userId),
+        });
+    } catch (error) {
+        console.error('Error unliking comment:', error);
         throw error;
     }
 };

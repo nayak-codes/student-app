@@ -53,20 +53,7 @@ const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = width / 2 - 20; // 2 columns with padding
 
 // Sample Data (Placeholders)
-const sampleVideoPosts: FeedItem[] = [
 
-  {
-    id: 'sample_2',
-    type: 'clip',
-    title: 'Motivation for Students #shorts',
-    author: 'Study Motivation',
-    likes: 5600,
-    comments: 120,
-    saved: false,
-    timeAgo: '1 day ago',
-    videoLink: 'https://www.youtube.com/shorts/12345678901',
-  },
-];
 
 function getTimeAgo(date: Date): string {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -110,7 +97,7 @@ const ExploreScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState<ContentType>('video');
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
-  const [feedData, setFeedData] = useState<FeedItem[]>(sampleVideoPosts);
+  const [feedData, setFeedData] = useState<FeedItem[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -127,7 +114,7 @@ const ExploreScreen: React.FC = () => {
       const feedItems = posts
         .map(convertToFeedItem)
         .filter((item): item is FeedItem => item !== null);
-      setFeedData([...sampleVideoPosts, ...feedItems]);
+      setFeedData(feedItems);
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {

@@ -32,7 +32,7 @@ const ShortsGrid: React.FC<ShortsGridProps> = ({ shorts }) => {
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <Ionicons name="play-circle" size={28} color="#FF0000" />
-                    <Text style={[styles.headerTitle, { color: colors.text }]}>Shorts</Text>
+                    <Text style={[styles.headerTitle, { color: colors.text }]}>Clips</Text>
                 </View>
                 <TouchableOpacity>
                     <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />

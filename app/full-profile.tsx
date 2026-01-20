@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 // VideoPlayerModal removed - migrated to VideoPlayerScreen
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -27,6 +28,7 @@ import ClipsFeed from '../src/components/ClipsFeed';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
 import { EventCard } from '../src/components/EventCard';
+import { db } from '../src/config/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { Education } from '../src/services/authService';
@@ -42,7 +44,7 @@ import {
 } from '../src/services/connectionService';
 import { EventItem, getUserEvents } from '../src/services/eventService';
 import { getUserResources, LibraryResource } from '../src/services/libraryService';
-import { deletePost, getAllPosts, Post, updatePost } from '../src/services/postsService';
+import { deletePost, getAllPosts, incrementViewCount, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
 type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
@@ -690,6 +692,37 @@ const ProfileScreen = () => {
         loadConnectionData();
     }, [targetUserId]);
 
+    // Real-time listener for clip view counts
+    useEffect(() => {
+        if (posts.length === 0) return;
+
+        // Subscribe to real-time updates for all clips
+        const clipPosts = posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts')));
+
+        const unsubscribers = clipPosts.map(post => {
+            return onSnapshot(doc(db, 'posts', post.id), (docSnap: any) => {
+                if (docSnap.exists()) {
+                    const newData = docSnap.data();
+                    const newViewCount = newData.viewCount || 0;
+
+                    // Update local state with new view count
+                    setPosts(prev => prev.map(p =>
+                        p.id === post.id
+                            ? { ...p, viewCount: newViewCount }
+                            : p
+                    ));
+                }
+            }, (error: any) => {
+                console.log('View count listener error (non-critical):', error);
+            });
+        });
+
+        // Cleanup function
+        return () => {
+            unsubscribers.forEach(unsub => unsub());
+        };
+    }, [posts.length]); // Re-subscribe when post count changes
+
     const handleRefresh = async () => {
         setIsRefreshing(true);
         if (isOwnProfile && refreshProfile) await refreshProfile();
@@ -1233,7 +1266,7 @@ const ProfileScreen = () => {
                                         />
                                     ))
                                 ) : activeTab === 'clips' ? (
-                                    <View style={styles.gridContainer}>
+                                    <View style={styles.clipsGridContainer}>
                                         {/* Filter specifically for SHORTS/CLIPS structure based on URL or Type */}
                                         {posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts'))).map((item: any, index: number) => {
                                             // Determine thumbnail
@@ -1246,28 +1279,72 @@ const ProfileScreen = () => {
                                             return (
                                                 <Pressable
                                                     key={item.id}
-                                                    style={[styles.gridItem, { width: '33.33%', aspectRatio: 9 / 16, margin: 0, borderWidth: 0.5, borderColor: '#FFF' }]}
+                                                    style={styles.clipCardItem}
                                                     onPress={() => {
+                                                        // Increment view count in background (non-blocking)
+                                                        incrementViewCount(item.id);
+
                                                         // Launch the ClipsFeed player
                                                         setInitialClipIndex(index);
                                                         setShowClipsFeed(true);
                                                     }}
                                                 >
+                                                    {/* Thumbnail */}
                                                     {thumbnailUrl ? (
                                                         <Image
                                                             source={{ uri: thumbnailUrl }}
-                                                            style={[styles.gridImage, { resizeMode: 'cover' }]}
+                                                            style={styles.clipThumbnail}
+                                                            resizeMode="cover"
                                                         />
                                                     ) : (
-                                                        <View style={[styles.gridImage, { backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' }]}>
-                                                            <Ionicons name="play-circle" size={32} color="#94A3B8" />
+                                                        <View style={[styles.clipThumbnail, { backgroundColor: isDark ? '#334155' : '#CBD5E1', justifyContent: 'center', alignItems: 'center' }]}>
+                                                            <Ionicons name="film" size={40} color={colors.textSecondary} />
+                                                            <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 12 }}>Clip</Text>
                                                         </View>
                                                     )}
-                                                    <View style={styles.videoDurationBadge}><Ionicons name="play" size={10} color="#FFF" /></View>
+
+                                                    {/* Gradient Overlay */}
                                                     <LinearGradient
-                                                        colors={['transparent', 'rgba(0,0,0,0.5)']}
-                                                        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40 }}
-                                                    />
+                                                        colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
+                                                        locations={[0, 0.4, 0.7, 1]}
+                                                        style={styles.clipGradient}
+                                                    >
+                                                        {/* Bottom section - title + creator */}
+                                                        <View style={styles.clipContent}>
+                                                            {/* Title */}
+                                                            <Text style={styles.clipTitle} numberOfLines={1}>
+                                                                {item.content || 'Untitled'}
+                                                            </Text>
+
+                                                            {/* Creator row */}
+                                                            <View style={styles.clipMetaRow}>
+                                                                <View style={styles.clipAuthor}>
+                                                                    <View style={styles.clipAvatar}>
+                                                                        {item.userProfilePhoto ? (
+                                                                            <Image source={{ uri: item.userProfilePhoto }} style={{ width: '100%', height: '100%' }} />
+                                                                        ) : (
+                                                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>
+                                                                                {item.userName.charAt(0).toUpperCase()}
+                                                                            </Text>
+                                                                        )}
+                                                                    </View>
+                                                                    <Text style={styles.clipAuthorName} numberOfLines={1}>
+                                                                        {item.userName}
+                                                                    </Text>
+                                                                </View>
+
+                                                                {/* Combined play + view count bubble */}
+                                                                <View style={styles.clipStats}>
+                                                                    <Ionicons name="play" size={10} color="#FFF" />
+                                                                    <Text style={styles.clipViewsText}>
+                                                                        {item.viewCount && item.viewCount > 0
+                                                                            ? item.viewCount > 1000 ? `${(item.viewCount / 1000).toFixed(1)}K` : item.viewCount
+                                                                            : '0'}
+                                                                    </Text>
+                                                                </View>
+                                                            </View>
+                                                        </View>
+                                                    </LinearGradient>
                                                 </Pressable>
                                             );
                                         })}
@@ -2296,6 +2373,92 @@ const styles = StyleSheet.create({
     },
     filterTextActive: {
         color: '#4F46E5',
+    },
+    // Clip Card Styles (matching ShortsGrid but in 3-column grid)
+    clipsGridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        paddingHorizontal: 2,
+        gap: 2,
+    },
+    clipCardItem: {
+        width: '32.5%',  // Larger width for better visibility
+        aspectRatio: 9 / 16,  // Vertical aspect ratio
+        borderRadius: 16,
+        overflow: 'hidden',
+        position: 'relative',
+        marginBottom: 2,
+    },
+    clipThumbnail: {
+        width: '100%',
+        height: '100%',
+    },
+    clipGradient: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 200,
+        justifyContent: 'flex-end',
+        padding: 10,
+    },
+    clipContent: {
+        width: '100%',
+    },
+    clipTitle: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: '700',
+        lineHeight: 15,
+        marginBottom: 5,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+    },
+    clipMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    clipAuthor: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 8,
+    },
+    clipAvatar: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
+        overflow: 'hidden',
+    },
+    clipAuthorName: {
+        color: '#E2E8F0',
+        fontSize: 10,
+        fontWeight: '600',
+        marginLeft: 5,
+        flex: 1,
+    },
+    clipStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    clipViewsText: {
+        color: '#F8FAFC',
+        fontSize: 10,
+        fontWeight: '600',
+        marginLeft: 3,
     },
 });
 
