@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Dimensions,
     FlatList,
     Image,
     Linking,
@@ -22,6 +24,8 @@ import { getAllResources, LibraryResource } from '../../src/services/libraryServ
 import { getAllPosts, Post } from '../../src/services/postsService';
 
 const SEARCH_HISTORY_KEY = 'studentverse_search_history';
+const { width } = Dimensions.get('window');
+const COLUMN_WIDTH = width / 2 - 24; // 2 columns with padding (16px outer + 12px gap approx)
 
 type SearchCategory = 'all' | 'users' | 'colleges' | 'posts' | 'library' | 'videos' | 'clips';
 
@@ -34,6 +38,10 @@ interface SearchResult {
     badge?: string;
     data: College | UserProfile | Post | LibraryResource;
     image?: string;
+}
+
+interface ScoredResult extends SearchResult {
+    score: number;
 }
 
 function getTimeAgo(date: Date): string {
@@ -193,6 +201,35 @@ const SearchScreen = () => {
                     data: post,
                 });
             });
+        } else if (activeCategory === 'videos' || activeCategory === 'clips') {
+            allData.posts.forEach(post => {
+                let isVideo = post.type === 'video';
+                let isClip = post.type === 'clip';
+
+                if (post.videoLink) {
+                    if (post.videoLink.includes('shorts')) isClip = true;
+                    else isVideo = true;
+                }
+
+                if (activeCategory === 'videos' && !isVideo) return;
+                if (activeCategory === 'clips' && !isClip) return;
+
+                if (activeCategory === 'clips') isClip = true;
+
+                if (isVideo || isClip) {
+                    const finalType = isClip ? 'clip' : 'video';
+                    browseResults.push({
+                        id: `${finalType}_${post.id}`,
+                        type: finalType,
+                        title: post.content,
+                        subtitle: `By ${post.userName} • ${post.likes} likes`,
+                        description: finalType === 'clip' ? 'Short Clip' : 'Video',
+                        badge: finalType === 'clip' ? 'CLIP' : 'VIDEO',
+                        data: post,
+                        image: post.thumbnailUrl || post.imageUrl
+                    });
+                }
+            });
         }
         // Add other categories if needed
 
@@ -215,7 +252,42 @@ const SearchScreen = () => {
             console.error('Error loading search history:', error);
         }
     };
-    // ... existing saveRecentSearch, removeRecentSearch, clearAllRecentSearches ...
+    const saveRecentSearch = async (term: string) => {
+        if (!term || !term.trim()) return;
+        const normalizedTerm = term.trim();
+
+        // Remove duplicates (move to top)
+        const updated = [
+            normalizedTerm,
+            ...recentSearches.filter(t => t.toLowerCase() !== normalizedTerm.toLowerCase())
+        ].slice(0, 20); // Keep last 20
+
+        setRecentSearches(updated);
+        try {
+            await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+        } catch (e) {
+            console.error('Failed to save search history', e);
+        }
+    };
+
+    const removeRecentSearch = async (term: string) => {
+        const updated = recentSearches.filter(t => t !== term);
+        setRecentSearches(updated);
+        try {
+            await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+        } catch (e) {
+            console.error('Failed to remove search item', e);
+        }
+    };
+
+    const clearAllRecentSearches = async () => {
+        setRecentSearches([]);
+        try {
+            await AsyncStorage.removeItem(SEARCH_HISTORY_KEY);
+        } catch (e) {
+            console.error('Failed to clear search history', e);
+        }
+    };
 
     // ... existing loadAllData, performSearch, generateSuggestions, handleTextChange, handleSearchSubmit ...
 
@@ -274,35 +346,7 @@ const SearchScreen = () => {
         </View>
     );
 
-    const saveRecentSearch = async (term: string) => {
-        if (!term.trim()) return;
-        try {
-            const newHistory = [term, ...recentSearches.filter(t => t !== term)].slice(0, 5);
-            setRecentSearches(newHistory);
-            await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(newHistory));
-        } catch (error) {
-            console.error('Error saving search history:', error);
-        }
-    };
 
-    const removeRecentSearch = async (termToRemove: string) => {
-        try {
-            const newHistory = recentSearches.filter(term => term !== termToRemove);
-            setRecentSearches(newHistory);
-            await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(newHistory));
-        } catch (error) {
-            console.error('Error removing search history:', error);
-        }
-    };
-
-    const clearAllRecentSearches = async () => {
-        try {
-            setRecentSearches([]);
-            await AsyncStorage.removeItem(SEARCH_HISTORY_KEY);
-        } catch (error) {
-            console.error('Error clearing search history:', error);
-        }
-    };
 
     const loadAllData = async () => {
         try {
@@ -340,18 +384,47 @@ const SearchScreen = () => {
 
     const performSearch = () => {
         const query = searchQuery.toLowerCase().trim();
-        const searchResults: SearchResult[] = [];
+        if (!query) {
+            setResults([]);
+            return;
+        }
+
+        // Helper: Calculate match score
+        const getMatchScore = (text: string | undefined | null, weight: number = 1.0): number => {
+            if (!text) return 0;
+            const t = text.toLowerCase();
+
+            // 1. Exact Match (Highest Priority)
+            if (t === query) return 100 * weight;
+
+            // 2. Starts With (High Priority)
+            if (t.startsWith(query)) return 80 * weight;
+
+            // 3. Whole Word Match (Medium Priority)
+            try {
+                if (new RegExp(`\\b${query}\\b`).test(t)) return 70 * weight;
+                if (new RegExp(`\\b${query}`).test(t)) return 60 * weight;
+            } catch (e) { }
+
+            // 4. Partial substring (Lowest Priority) - Only for queries >= 3 chars
+            if (query.length >= 3 && t.includes(query)) return 40 * weight;
+
+            return 0;
+        };
+
+        const scoredResults: ScoredResult[] = [];
 
         // 1. Search Colleges
         if (activeCategory === 'all' || activeCategory === 'colleges') {
             allData.colleges.forEach((college) => {
-                if (
-                    college.name.toLowerCase().includes(query) ||
-                    college.location.toLowerCase().includes(query) ||
-                    college.type.toLowerCase().includes(query) ||
-                    college.category.toLowerCase().includes(query)
-                ) {
-                    searchResults.push({
+                let maxScore = 0;
+                maxScore = Math.max(maxScore, getMatchScore(college.name, 1.0));
+                maxScore = Math.max(maxScore, getMatchScore(college.location, 0.5));
+                maxScore = Math.max(maxScore, getMatchScore(college.type, 0.5));
+                maxScore = Math.max(maxScore, getMatchScore(college.category, 0.5));
+
+                if (maxScore > 0) {
+                    scoredResults.push({
                         id: `college_${college.id}`,
                         type: 'college',
                         title: college.name,
@@ -359,6 +432,7 @@ const SearchScreen = () => {
                         description: `${college.category} • Est. ${college.established}`,
                         badge: college.category,
                         data: college,
+                        score: maxScore
                     });
                 }
             });
@@ -367,16 +441,13 @@ const SearchScreen = () => {
         // 2. Search Users
         if (activeCategory === 'all' || activeCategory === 'users') {
             allData.users.forEach((user) => {
-                const userName = user.name?.toLowerCase() || '';
-                const userEmail = user.email?.toLowerCase() || '';
-                const userExam = user.exam?.toLowerCase() || '';
+                let maxScore = 0;
+                maxScore = Math.max(maxScore, getMatchScore(user.name, 1.0));
+                maxScore = Math.max(maxScore, getMatchScore(user.email, 0.8));
+                maxScore = Math.max(maxScore, getMatchScore(user.exam, 0.6));
 
-                if (
-                    userName.includes(query) ||
-                    userEmail.includes(query) ||
-                    userExam.includes(query)
-                ) {
-                    searchResults.push({
+                if (maxScore > 0) {
+                    scoredResults.push({
                         id: `user_${user.id}`,
                         type: 'user',
                         title: user.name || 'Unknown User',
@@ -384,7 +455,8 @@ const SearchScreen = () => {
                         description: user.headline || 'Student at Vidhyardhi',
                         badge: user.role === 'creator' ? 'CREATOR' : undefined,
                         data: user,
-                        image: user.profilePhoto || user.photoURL
+                        image: user.profilePhoto || user.photoURL,
+                        score: maxScore
                     });
                 }
             });
@@ -393,12 +465,17 @@ const SearchScreen = () => {
         // 3. Search Posts
         if (activeCategory === 'all' || activeCategory === 'posts') {
             allData.posts.forEach((post) => {
-                if (
-                    post.content.toLowerCase().includes(query) ||
-                    post.tags.some(tag => tag.toLowerCase().includes(query)) ||
-                    post.userName.toLowerCase().includes(query)
-                ) {
-                    searchResults.push({
+                let maxScore = 0;
+                maxScore = Math.max(maxScore, getMatchScore(post.content, 1.0));
+                maxScore = Math.max(maxScore, getMatchScore(post.userName, 0.5));
+                if (post.tags) {
+                    post.tags.forEach(tag => {
+                        maxScore = Math.max(maxScore, getMatchScore(tag, 0.7));
+                    });
+                }
+
+                if (maxScore > 0) {
+                    scoredResults.push({
                         id: `post_${post.id}`,
                         type: 'post',
                         title: post.content.substring(0, 60) + '...',
@@ -406,6 +483,7 @@ const SearchScreen = () => {
                         description: `${post.likes} likes • ${post.comments} comments`,
                         badge: post.type,
                         data: post,
+                        score: maxScore
                     });
                 }
             });
@@ -414,14 +492,17 @@ const SearchScreen = () => {
         // 4. Search Library
         if (activeCategory === 'all' || activeCategory === 'library') {
             allData.resources.forEach((resource) => {
-                if (
-                    resource.title.toLowerCase().includes(query) ||
-                    resource.description.toLowerCase().includes(query) ||
-                    resource.subject.toLowerCase().includes(query) ||
-                    resource.topic.toLowerCase().includes(query) ||
-                    resource.tags.some(tag => tag.toLowerCase().includes(query))
-                ) {
-                    searchResults.push({
+                let maxScore = 0;
+                maxScore = Math.max(maxScore, getMatchScore(resource.title, 1.0));
+                maxScore = Math.max(maxScore, getMatchScore(resource.description, 0.5));
+                maxScore = Math.max(maxScore, getMatchScore(resource.subject, 0.6));
+                maxScore = Math.max(maxScore, getMatchScore(resource.topic, 0.6));
+                if (resource.tags) {
+                    resource.tags.forEach(tag => maxScore = Math.max(maxScore, getMatchScore(tag, 0.7)));
+                }
+
+                if (maxScore > 0) {
+                    scoredResults.push({
                         id: `resource_${resource.id}`,
                         type: 'resource',
                         title: resource.title,
@@ -429,6 +510,7 @@ const SearchScreen = () => {
                         description: resource.description,
                         badge: resource.type.toUpperCase(),
                         data: resource,
+                        score: maxScore
                     });
                 }
             });
@@ -437,37 +519,59 @@ const SearchScreen = () => {
         // 5. Search Videos & Clips
         if (activeCategory === 'all' || activeCategory === 'videos' || activeCategory === 'clips') {
             allData.posts.forEach((post) => {
-                const isVideo = post.type === 'video' || (post.videoLink && !post.videoLink.includes('shorts'));
-                const isClip = post.type === 'clip' || (post.videoLink && post.videoLink.includes('shorts'));
+                // Detect Type
+                let isVideo = post.type === 'video';
+                let isClip = post.type === 'clip';
 
-                if ((activeCategory === 'videos' && !isVideo) || (activeCategory === 'clips' && !isClip)) return;
+                // Fallback detection from link if not explicitly typed or to augment
+                if (post.videoLink) {
+                    if (post.videoLink.includes('shorts')) {
+                        isClip = true;
+                    } else if (!post.videoLink.includes('shorts')) {
+                        // Only count as video if not a short
+                        isVideo = true;
+                    }
+                }
 
-                if (
-                    post.content.toLowerCase().includes(query) ||
-                    post.tags.some(tag => tag.toLowerCase().includes(query)) ||
-                    post.userName.toLowerCase().includes(query)
-                ) {
-                    // Avoid duplicates if already added as 'post' in 'all' category
-                    // For now, let's allow 'post' category to capture text posts and these to capture videos
-                    // But if activeCategory is 'all', we should distinguish visually
+                // Apply Category Filters
+                if (activeCategory === 'videos' && !isVideo) return;
+                if (activeCategory === 'clips' && !isClip) return;
 
-                    if (isVideo || isClip) {
-                        searchResults.push({
-                            id: `${isVideo ? 'video' : 'clip'}_${post.id}`,
-                            type: isVideo ? 'video' : 'clip',
+                // Force Type based on Category (Fixes ambiguity)
+                if (activeCategory === 'clips') isClip = true;
+
+                if (isVideo || isClip) {
+                    // Precedence: Clip > Video
+                    const finalType = isClip ? 'clip' : 'video';
+
+                    let maxScore = 0;
+                    maxScore = Math.max(maxScore, getMatchScore(post.content, 1.0));
+                    maxScore = Math.max(maxScore, getMatchScore(post.userName, 0.5));
+                    if (post.tags) {
+                        post.tags.forEach(tag => maxScore = Math.max(maxScore, getMatchScore(tag, 0.7)));
+                    }
+
+                    if (maxScore > 0) {
+                        scoredResults.push({
+                            id: `${finalType}_${post.id}`,
+                            type: finalType,
                             title: post.content,
                             subtitle: `By ${post.userName} • ${post.likes} likes`,
-                            description: post.type === 'clip' ? 'Short Clip' : 'Video',
-                            badge: isVideo ? 'VIDEO' : 'CLIP',
+                            description: finalType === 'clip' ? 'Short Clip' : 'Video',
+                            badge: finalType === 'clip' ? 'CLIP' : 'VIDEO',
                             data: post,
-                            image: post.thumbnailUrl || post.imageUrl
+                            image: post.thumbnailUrl || post.imageUrl,
+                            score: maxScore
                         });
                     }
                 }
             });
         }
 
-        setResults(searchResults);
+        // Sort by Score (Descending)
+        scoredResults.sort((a, b) => b.score - a.score);
+
+        setResults(scoredResults);
     };
 
     const generateSuggestions = (text: string) => {
@@ -631,7 +735,56 @@ const SearchScreen = () => {
 
     const renderResult = ({ item }: { item: SearchResult }) => {
         // 1. Video / Clip Result (YouTube Style)
-        if (item.type === 'video' || item.type === 'clip') {
+        // 1. Clip Result (Replicated from Explore UI)
+        if (item.type === 'clip') {
+            const post = item.data as Post;
+            return (
+                <TouchableOpacity
+                    style={[styles.clipResultCard, { backgroundColor: colors.card, borderColor: isDark ? '#334155' : '#E2E8F0' }]}
+                    onPress={() => handleResultClick(item)}
+                    activeOpacity={0.9}
+                >
+                    <Image
+                        source={{ uri: item.image }}
+                        style={styles.clipThumbnail}
+                        resizeMode="cover"
+                    />
+
+                    <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
+                        locations={[0, 0.4, 0.7, 1]}
+                        style={styles.clipGradient}
+                    >
+                        <View style={styles.clipContent}>
+                            <Text style={styles.clipTitle} numberOfLines={2}>
+                                {item.title}
+                            </Text>
+
+                            <View style={styles.clipMetaRow}>
+                                <View style={styles.clipAuthor}>
+                                    {post.userProfilePhoto ? (
+                                        <Image source={{ uri: post.userProfilePhoto }} style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }} />
+                                    ) : (
+                                        <View style={styles.miniAvatar}>
+                                            <Text style={styles.miniAvatarText}>{post.userName?.charAt(0)}</Text>
+                                        </View>
+                                    )}
+                                    <Text style={styles.clipAuthorName} numberOfLines={1}>{post.userName}</Text>
+                                </View>
+
+                                <View style={styles.clipStats}>
+                                    <Ionicons name="play" size={10} color="#FFF" />
+                                    <Text style={styles.clipViewsText}>{post.viewCount || 0}</Text>
+                                </View>
+                            </View>
+                        </View>
+                    </LinearGradient>
+                </TouchableOpacity>
+            );
+        }
+
+        // 1. Video Result (YouTube Style)
+        if (item.type === 'video') {
             const post = item.data as Post;
             return (
                 <TouchableOpacity
@@ -646,7 +799,7 @@ const SearchScreen = () => {
                             resizeMode="cover"
                         />
                         <View style={styles.durationBadge}>
-                            <Text style={styles.durationText}>{post.type === 'clip' ? 'SHORTS' : post.duration || 'Video'}</Text>
+                            <Text style={styles.durationText}>{post.duration || 'Video'}</Text>
                         </View>
                     </View>
 
@@ -667,7 +820,7 @@ const SearchScreen = () => {
                                 {item.title}
                             </Text>
                             <Text style={[styles.videoSubtitle, { color: colors.textSecondary }]}>
-                                {post.userName} • {post.viewCount || 0} views • {item.type === 'clip' ? 'Shorts' : getTimeAgo(new Date(post.createdAt))}
+                                {post.userName} • {post.viewCount || 0} views • {getTimeAgo(new Date(post.createdAt))}
                             </Text>
                         </View>
 
@@ -856,11 +1009,17 @@ const SearchScreen = () => {
                         {results.length} result{results.length !== 1 ? 's' : ''} found
                     </Text>
                     <FlatList
+                        key={activeCategory === 'clips' ? 'grid' : 'list'}
                         data={results}
                         renderItem={renderResult}
                         keyExtractor={(item) => item.id}
+                        numColumns={activeCategory === 'clips' ? 2 : 1}
+                        columnWrapperStyle={activeCategory === 'clips' ? { justifyContent: 'space-between', marginBottom: 16 } : undefined}
+                        contentContainerStyle={[
+                            styles.resultsList,
+                            activeCategory === 'clips' ? { paddingHorizontal: 16 } : undefined
+                        ]}
                         showsVerticalScrollIndicator={false}
-                        contentContainerStyle={styles.resultsList}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
                                 <Ionicons name="search-outline" size={64} color={colors.textSecondary} />
@@ -1166,9 +1325,10 @@ const styles = StyleSheet.create({
     },
     sectionHeader: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 16,
-        gap: 8,
+        paddingRight: 4, // Add slight padding for touch target safety
     },
     sectionTitle: {
         fontSize: 16,
@@ -1402,4 +1562,90 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    // New Clip Style Cards (Matched with Explore)
+    clipResultCard: {
+        width: COLUMN_WIDTH,
+        height: 320, // Taller for premium feel
+        borderRadius: 20,
+        overflow: 'hidden',
+        position: 'relative',
+        borderWidth: 1,
+        marginBottom: 0, // Handled by columnWrapper gap
+    },
+    clipThumbnail: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#1E293B',
+    },
+    clipGradient: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 180,
+        justifyContent: 'flex-end',
+        padding: 12,
+    },
+    clipContent: {
+        width: '100%',
+    },
+    clipTitle: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: '700',
+        lineHeight: 20,
+        marginBottom: 8,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+    },
+    clipMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    clipAuthor: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 8,
+    },
+    clipAuthorName: {
+        color: '#E2E8F0',
+        fontSize: 11,
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    miniAvatar: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
+    },
+    miniAvatarText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    clipStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    clipViewsText: {
+        color: '#F8FAFC',
+        fontSize: 11,
+        fontWeight: '600',
+        marginLeft: 4,
+    },
+    // Keep container styles for other types
 });

@@ -1,10 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '../src/contexts/AuthContext';
 
 export default function WelcomeScreen() {
     const router = useRouter();
+    const { user, loading } = useAuth();
+
+    // If still loading auth state, show spinner
+    if (loading) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#6C63FF" />
+            </View>
+        );
+    }
+
+    // If user is already logged in, redirect to tabs
+    if (user) {
+        return <Redirect href="/(tabs)" />;
+    }
 
     return (
         <View style={styles.container}>

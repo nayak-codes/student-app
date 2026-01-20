@@ -46,7 +46,7 @@ export default function LoginScreen() {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>📚 StudentVerse</Text>
+          <Text style={styles.logo}>📚 Vidhyardhi</Text>
           <Text style={styles.title}>Welcome Back!</Text>
           <Text style={styles.subtitle}>Sign in to continue your learning journey</Text>
         </View>
