@@ -20,13 +20,15 @@ import { db } from '../config/firebase';
 
 export type PostCategory = 'achievement' | 'internship' | 'project' | 'notes' | 'question' | 'announcement' | 'general';
 
-export type ReactionType = 'like' | 'celebrate' | 'support' | 'insightful';
+export type ReactionType = 'like' | 'celebrate' | 'support' | 'insightful' | 'love' | 'funny';
 
 export interface Reactions {
     like: number;
     celebrate: number;
     support: number;
     insightful: number;
+    love: number;
+    funny: number;
 }
 
 export interface Post {

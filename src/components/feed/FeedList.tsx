@@ -33,7 +33,8 @@ const FeedList: React.FC = () => {
 
             // Separate clips from regular posts
             const clipPosts = fetchedPosts.filter(p => p.type === 'clip');
-            const regularPosts = fetchedPosts.filter(p => p.type !== 'clip');
+            // Filter out 'clip' AND 'video' from main feed (LinkedIn style text/image focus)
+            const regularPosts = fetchedPosts.filter(p => p.type !== 'clip' && p.type !== 'video');
 
             setClips(clipPosts);
             setPosts(regularPosts);

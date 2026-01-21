@@ -2,27 +2,36 @@
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Post } from '../../services/postsService';
+import { Post, ReactionType } from '../../services/postsService';
 import PostOptionsModal from '../PostOptionsModal';
 
 interface FeedPostProps {
     post: Post;
     currentUserId: string;
     onLike: (postId: string) => void;
-    onReact: (postId: string, reactionType: any) => void;
+    onReact: (postId: string, reactionType: ReactionType) => void;
     onComment: (postId: string) => void;
     onShare: (postId: string) => void;
     onSave: (postId: string) => void;
     onDelete: (postId: string) => void;
     onEdit: (postId: string) => void;
-    currentUserLiked?: boolean;
+    currentUserLiked?: boolean; // Legacy
     currentUserSaved?: boolean;
-    currentUserReaction?: any;
+    currentUserReaction?: ReactionType;
     isVisible?: boolean;
 }
+
+const REACTIONS: Record<ReactionType, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
+    like: { icon: 'thumbs-up', color: '#3B82F6', label: 'Like' },
+    celebrate: { icon: 'ribbon', color: '#10B981', label: 'Celebrate' }, // Using ribbon for celebrate/clap equivalent
+    support: { icon: 'heart-circle', color: '#8B5CF6', label: 'Support' },
+    love: { icon: 'heart', color: '#EF4444', label: 'Love' },
+    insightful: { icon: 'bulb', color: '#F59E0B', label: 'Insight' },
+    funny: { icon: 'happy', color: '#06B6D4', label: 'Funny' },
+};
 
 const FeedPost: React.FC<FeedPostProps> = ({
     post,
@@ -35,25 +44,58 @@ const FeedPost: React.FC<FeedPostProps> = ({
     onEdit,
     currentUserLiked,
     currentUserSaved,
+    currentUserReaction,
+    onReact,
     isVisible = true
 }) => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
     const [aspectRatio, setAspectRatio] = useState(1);
-    const [liked, setLiked] = useState(currentUserLiked);
+
+    // State
     const [saved, setSaved] = useState(currentUserSaved);
-    const [likeCount, setLikeCount] = useState(post.likes);
+    const [userReaction, setUserReaction] = useState<ReactionType | null>(
+        currentUserReaction || (currentUserLiked ? 'like' : null)
+    );
+    const [showReactions, setShowReactions] = useState(false);
     const [showOptionsModal, setShowOptionsModal] = useState(false);
+
+    // Animation for picker
+    const [fadeAnim] = useState(new Animated.Value(0));
 
     const isOwnPost = post.userId === currentUserId;
 
-    React.useEffect(() => {
+    // Determine total reactions count (including local optimistic update if needed)
+    // For simplicity, we use post.reactions count + delta or just rely on post.likes (legacy) + post.reactions keys
+    // Since backend structure is hybrid, let's calculate display count.
+    // If post.reactions exists, sum values. Else use post.likes.
+    const getReactionCount = () => {
+        if (post.reactions) {
+            return Object.values(post.reactions).reduce((a, b) => a + b, 0);
+        }
+        return post.likes;
+    };
+    const reactionCount = getReactionCount();
+
+    useEffect(() => {
         if (post.imageUrl) {
             Image.getSize(post.imageUrl, (width, height) => {
                 setAspectRatio(width / height);
             });
         }
     }, [post.imageUrl]);
+
+    useEffect(() => {
+        if (showReactions) {
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }).start();
+        } else {
+            fadeAnim.setValue(0);
+        }
+    }, [showReactions]);
 
     const handleProfilePress = () => {
         router.push({
@@ -62,11 +104,32 @@ const FeedPost: React.FC<FeedPostProps> = ({
         });
     };
 
-    const handleLike = () => {
-        const newLikedState = !liked;
-        setLiked(newLikedState);
-        setLikeCount(prev => newLikedState ? prev + 1 : prev - 1);
-        onLike(post.id);
+    const handleRegularPress = () => {
+        // Always close picker if it's open
+        if (showReactions) {
+            setShowReactions(false);
+            return;
+        }
+
+        if (userReaction) {
+            // If already reacted, remove reaction (toggle off)
+            setUserReaction(null);
+            onReact(post.id, userReaction); // API handles removal if same type
+        } else {
+            // Default to 'like'
+            setUserReaction('like');
+            onReact(post.id, 'like');
+        }
+    };
+
+    const handleLongPress = () => {
+        setShowReactions(true);
+    };
+
+    const handleReactionSelect = (type: ReactionType) => {
+        setUserReaction(type);
+        onReact(post.id, type);
+        setShowReactions(false);
     };
 
     const handleSave = () => {
@@ -94,19 +157,13 @@ const FeedPost: React.FC<FeedPostProps> = ({
 
     const isVideo = post.type === 'video' || post.type === 'clip';
 
-    // Video posts render differently (like explore feed)
+    // Video Post Render
     if (isVideo) {
         return (
             <View style={[styles.container, { backgroundColor: colors.card, marginBottom: 0 }]}>
-                {/* Video Thumbnail */}
                 {post.thumbnailUrl && (
                     <TouchableOpacity onPress={handleVideoPress} activeOpacity={0.9} style={styles.videoContainer}>
-                        <Image
-                            source={{ uri: post.thumbnailUrl }}
-                            style={styles.videoThumbnailFeed}
-                            resizeMode="cover"
-                        />
-                        {/* Duration badge only */}
+                        <Image source={{ uri: post.thumbnailUrl }} style={styles.videoThumbnailFeed} resizeMode="cover" />
                         {post.duration && (
                             <View style={styles.durationBadgeFeed}>
                                 <Text style={styles.durationTextFeed}>{post.duration}</Text>
@@ -114,8 +171,7 @@ const FeedPost: React.FC<FeedPostProps> = ({
                         )}
                     </TouchableOpacity>
                 )}
-
-                {/* Profile Info Below (simplified - just author + time) */}
+                {/* Simplified Video Meta */}
                 <View style={[styles.videoMetaFeed, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
                     <TouchableOpacity onPress={handleProfilePress} style={styles.videoMetaContent}>
                         <View style={[styles.avatarSmall, { backgroundColor: colors.primary }]}>
@@ -126,12 +182,8 @@ const FeedPost: React.FC<FeedPostProps> = ({
                             )}
                         </View>
                         <View style={styles.videoTextFeed}>
-                            <Text style={[styles.videoTitleFeed, { color: colors.text }]} numberOfLines={2}>
-                                {post.content || 'Untitled Video'}
-                            </Text>
-                            <Text style={[styles.videoSubtitleFeed, { color: colors.textSecondary }]}>
-                                {post.userName} • {post.createdAt ? formatDistanceToNow(new Date(post.createdAt)) : 'Just now'} • {post.viewCount || 0} views
-                            </Text>
+                            <Text style={[styles.videoTitleFeed, { color: colors.text }]} numberOfLines={2}>{post.content || 'Untitled Video'}</Text>
+                            <Text style={[styles.videoSubtitleFeed, { color: colors.textSecondary }]}>{post.userName} • {post.viewCount || 0} views</Text>
                         </View>
                     </TouchableOpacity>
                     {isOwnPost && (
@@ -140,19 +192,12 @@ const FeedPost: React.FC<FeedPostProps> = ({
                         </TouchableOpacity>
                     )}
                 </View>
-
-                {/* Post Options Modal */}
-                <PostOptionsModal
-                    visible={showOptionsModal}
-                    onClose={() => setShowOptionsModal(false)}
-                    onEdit={() => onEdit(post.id)}
-                    onDelete={() => onDelete(post.id)}
-                />
+                <PostOptionsModal visible={showOptionsModal} onClose={() => setShowOptionsModal(false)} onEdit={() => onEdit(post.id)} onDelete={() => onDelete(post.id)} />
             </View>
         );
     }
 
-    // Regular posts (images/text) keep the original layout
+    // Regular Post Render
     return (
         <View style={[styles.container, { backgroundColor: colors.card }]}>
             {/* Header */}
@@ -177,324 +222,241 @@ const FeedPost: React.FC<FeedPostProps> = ({
                 )}
             </View>
 
-            {/* Content */}
+            {/* Content (Caption Top) */}
             <View style={styles.content}>
+                {post.content && (
+                    <View style={styles.captionContainer}>
+                        <Text style={[styles.captionText, { color: colors.text }]}>{post.content}</Text>
+                    </View>
+                )}
                 {post.type === 'image' && post.imageUrl && (
-                    <Image
-                        source={{ uri: post.imageUrl }}
-                        style={[styles.postImage, { aspectRatio }]}
-                        resizeMode="cover"
-                    />
+                    <Image source={{ uri: post.imageUrl }} style={[styles.postImage, { aspectRatio }]} resizeMode="cover" />
                 )}
             </View>
 
-            {/* Actions - Unique Circular Style */}
-            <View style={styles.actionsWrapper}>
-                <View style={styles.actions}>
-                    {/* Like Button */}
-                    <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
-                        <View style={[
-                            styles.iconCircle,
-                            liked && styles.likeActive,
-                            { backgroundColor: liked ? '#EF4444' : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)') }
-                        ]}>
-                            <Ionicons
-                                name={liked ? "heart" : "heart-outline"}
-                                size={20}
-                                color={liked ? "#FFF" : colors.text}
-                            />
-                        </View>
-                        {likeCount > 0 && (
-                            <Text style={[styles.actionCount, { color: colors.text }]}>
-                                {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}k` : likeCount}
-                            </Text>
-                        )}
-                    </TouchableOpacity>
+            {/* Footer Wrapper */}
+            <View style={styles.footerWrapper}>
 
-                    {/* Comment Button */}
-                    <TouchableOpacity onPress={() => onComment(post.id)} style={styles.actionButton}>
-                        <View style={[
-                            styles.iconCircle,
-                            post.comments > 0 && styles.commentActive,
-                            { backgroundColor: post.comments > 0 ? '#3B82F6' : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)') }
-                        ]}>
-                            <Ionicons
-                                name="chatbubble-outline"
-                                size={20}
-                                color={post.comments > 0 ? '#FFF' : colors.text}
-                            />
+                {/* 1. Social Stats (Reactions Only) */}
+                {(reactionCount > 0 || (post.viewCount || 0) > 0) && (
+                    <View style={styles.socialCountsContainer}>
+                        <View style={styles.socialCountsLeft}>
+                            {reactionCount > 0 && (
+                                <View style={styles.bgIconContainer}>
+                                    {/* Show first 3 active reactions from global stats if available, else generic icons */}
+                                    <View style={[styles.miniIconBg, { backgroundColor: '#3B82F6', zIndex: 3 }]}>
+                                        <Ionicons name="thumbs-up" size={10} color="#FFF" />
+                                    </View>
+                                    {/* Just generic stack for now */}
+                                    {reactionCount > 1 && (
+                                        <View style={[styles.miniIconBg, { backgroundColor: '#F59E0B', marginLeft: -6, zIndex: 2 }]}>
+                                            <Ionicons name="bulb" size={10} color="#FFF" />
+                                        </View>
+                                    )}
+                                    {reactionCount > 5 && (
+                                        <View style={[styles.miniIconBg, { backgroundColor: '#EF4444', marginLeft: -6, zIndex: 1 }]}>
+                                            <Ionicons name="heart" size={10} color="#FFF" />
+                                        </View>
+                                    )}
+                                    <Text style={[styles.socialCountText, { color: colors.textSecondary }]}>
+                                        {reactionCount}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
-                        {post.comments > 0 && (
-                            <Text style={[styles.actionCount, { color: colors.text }]}>
-                                {post.comments > 999 ? `${(post.comments / 1000).toFixed(1)}k` : post.comments}
-                            </Text>
+                        {/* Views (Right side) */}
+                        {(post.viewCount || 0) > 0 && (
+                            <View style={styles.socialCountsRight}>
+                                <Text style={[styles.socialCountText, { color: colors.textSecondary }]}>
+                                    {post.viewCount} views
+                                </Text>
+                            </View>
                         )}
+                    </View>
+                )}
+
+                <View style={[styles.separator, { backgroundColor: colors.border }]} />
+
+                {/* 2. Action Buttons */}
+                <View style={styles.actionButtonsRow}>
+
+                    {/* Dynamic Like / Reaction Button */}
+                    <View style={{ flex: 1 }}>
+                        <TouchableOpacity
+                            onPress={handleRegularPress}
+                            onLongPress={handleLongPress}
+                            delayLongPress={300} // Fast response
+                            style={styles.newActionButton}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons
+                                name={userReaction ? REACTIONS[userReaction].icon : "thumbs-up-outline"}
+                                size={22}
+                                color={userReaction ? REACTIONS[userReaction].color : colors.textSecondary}
+                            />
+                            <Text style={[
+                                styles.newActionText,
+                                { color: userReaction ? REACTIONS[userReaction].color : colors.textSecondary }
+                            ]}>
+                                {userReaction ? REACTIONS[userReaction].label : "Like"}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {/* Reaction Picker Overlay - Removed Blocking Modal */}
+                        {/* We rely on zIndex for the picker to be clickable. 
+                            Clicking the Like button again will close it via handleRegularPress. 
+                        */}
+                        {/* Inline Absolute Picker (Better for relative positioning) */}
+
+                    </View>
+
+                    {/* Comment Button (With Count) */}
+                    <TouchableOpacity
+                        onPress={() => onComment(post.id)}
+                        style={styles.newActionButton}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name="chatbox-outline"
+                            size={22}
+                            color={colors.textSecondary}
+                        />
+                        <Text style={[styles.newActionText, { color: colors.textSecondary }]}>
+                            Comment {post.comments > 0 ? `• ${post.comments}` : ''}
+                        </Text>
                     </TouchableOpacity>
 
                     {/* Share Button */}
-                    <TouchableOpacity onPress={() => onShare(post.id)} style={styles.actionButton}>
-                        <View style={[
-                            styles.iconCircle,
-                            { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }
-                        ]}>
-                            <Ionicons name="share-outline" size={20} color={colors.text} />
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Save Button */}
-                    <TouchableOpacity onPress={handleSave} style={styles.actionButton}>
-                        <View style={[
-                            styles.iconCircle,
-                            saved && styles.saveActive,
-                            { backgroundColor: saved ? '#10B981' : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)') }
-                        ]}>
-                            <Ionicons
-                                name={saved ? "bookmark" : "bookmark-outline"}
-                                size={20}
-                                color={saved ? '#FFF' : colors.text}
-                            />
-                        </View>
+                    <TouchableOpacity
+                        onPress={() => onShare(post.id)}
+                        style={styles.newActionButton}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name="arrow-redo-outline"
+                            size={22}
+                            color={colors.textSecondary}
+                        />
+                        <Text style={[styles.newActionText, { color: colors.textSecondary }]}>
+                            Share
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Footer */}
+            {/* Footer Time */}
             <View style={styles.footer}>
-                {likeCount > 0 && (
-                    <Text style={[styles.likes, { color: colors.text }]}>
-                        {likeCount.toLocaleString()} {likeCount === 1 ? 'like' : 'likes'}
-                    </Text>
-                )}
-
-                {post.content && (
-                    <View style={styles.captionContainer}>
-                        <Text style={[styles.captionText, { color: colors.text }]}>
-                            <Text style={styles.captionUsername}>{post.userName} </Text>
-                            {post.content}
-                        </Text>
-                    </View>
-                )}
-
                 <Text style={[styles.timeAgo, { color: colors.textSecondary }]}>
                     {post.createdAt ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }) : 'Just now'}
                 </Text>
             </View>
 
-            {/* Post Options Modal */}
             <PostOptionsModal
                 visible={showOptionsModal}
                 onClose={() => setShowOptionsModal(false)}
                 onEdit={() => onEdit(post.id)}
                 onDelete={() => onDelete(post.id)}
             />
+
+            {/* Reaction Picker - Moved to Root for Clickability */}
+            {showReactions && (
+                <Animated.View style={[styles.reactionPicker, { opacity: fadeAnim, backgroundColor: colors.card }]}>
+                    {Object.entries(REACTIONS).map(([type, data]) => (
+                        <TouchableOpacity
+                            key={type}
+                            style={styles.reactionOption}
+                            onPress={() => handleReactionSelect(type as ReactionType)}
+                        >
+                            <View style={[styles.reactionIconCircle, { backgroundColor: data.color + '20' }]}>
+                                <Ionicons name={data.icon} size={24} color={data.color} />
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+                </Animated.View>
+            )}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        marginBottom: 12,
-    },
-    header: {
+    container: { marginBottom: 12 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+    userInfo: { flexDirection: 'row', alignItems: 'center' },
+    avatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' },
+    avatarImage: { width: '100%', height: '100%' },
+    avatarText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+    userName: { fontWeight: '700', fontSize: 14 },
+    userExam: { fontSize: 12, marginTop: 2 },
+    content: { marginBottom: 4 },
+    postImage: { width: '100%' },
+    videoPlaceholder: { width: '100%', aspectRatio: 16 / 9, justifyContent: 'center', alignItems: 'center', gap: 8 },
+    playText: { fontSize: 14, fontWeight: '600' },
+    playButtonOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.3)' },
+    playButton: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255, 255, 255, 0.9)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 5 },
+
+    // New Footer Styles
+    footerWrapper: { paddingHorizontal: 14, zIndex: 10 }, // zIndex for picker
+    socialCountsContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
+    socialCountsLeft: { flexDirection: 'row', alignItems: 'center' },
+    socialCountsRight: { flexDirection: 'row', alignItems: 'center' },
+    bgIconContainer: { flexDirection: 'row', alignItems: 'center' },
+    miniIconBg: { width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#FFF' },
+    socialCountText: { fontSize: 12, marginLeft: 6 },
+    separator: { height: 1, width: '100%' },
+    actionButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, position: 'relative' },
+    newActionButton: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 4, gap: 4 },
+    newActionText: { fontSize: 11, fontWeight: '600' },
+    footer: { paddingHorizontal: 14, paddingBottom: 8 },
+    captionContainer: { marginTop: 4, marginBottom: 8, paddingHorizontal: 14 },
+    captionText: { fontSize: 14, lineHeight: 18 },
+    timeAgo: { fontSize: 11, marginTop: 4 },
+
+    // Reaction Picker Styles
+    reactionPicker: {
+        position: 'absolute',
+        bottom: 60, // Positioned relative to card bottom
+        left: 14,   // Aligned with left padding
+        backgroundColor: 'white',
+        borderRadius: 30,
+        padding: 6,
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-    },
-    userInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    avatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-        overflow: 'hidden',
-    },
-    avatarImage: {
-        width: '100%',
-        height: '100%',
-    },
-    avatarText: {
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: 16,
-    },
-    userName: {
-        fontWeight: '700',
-        fontSize: 14,
-    },
-    userExam: {
-        fontSize: 12,
-        marginTop: 2,
-    },
-    content: {
-        marginBottom: 4,
-    },
-    postImage: {
-        width: '100%',
-    },
-    videoPlaceholder: {
-        width: '100%',
-        aspectRatio: 16 / 9,
-        justifyContent: 'center',
-        alignItems: 'center',
         gap: 8,
-    },
-    playText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    playButtonOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    },
-    playButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        justifyContent: 'center',
-        alignItems: 'center',
+        elevation: 10,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
         shadowRadius: 8,
-        elevation: 5,
+        zIndex: 100,
     },
-    actionsWrapper: {
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-    },
-    actions: {
-        flexDirection: 'row',
+    reactionOption: {
         alignItems: 'center',
-        gap: 12,
+        justifyContent: 'center',
     },
-    actionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    iconCircle: {
+    reactionIconCircle: {
         width: 36,
         height: 36,
         borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    likeActive: {
-        backgroundColor: '#EF4444',
-    },
-    commentActive: {
-        backgroundColor: '#3B82F6',
-    },
-    saveActive: {
-        backgroundColor: '#10B981',
-    },
-    actionCount: {
-        fontSize: 13,
-        fontWeight: '700',
-    },
-    footer: {
-        paddingHorizontal: 14,
-        paddingBottom: 8,
-    },
-    likes: {
-        fontWeight: '700',
-        fontSize: 14,
-        marginBottom: 6,
-    },
-    captionContainer: {
-        marginTop: 4,
-        marginBottom: 6,
-    },
-    captionText: {
-        fontSize: 14,
-        lineHeight: 18,
-    },
-    captionUsername: {
-        fontWeight: '700',
-    },
-    timeAgo: {
-        fontSize: 11,
-        marginTop: 4,
-    },
-    // Video Feed Styles (like explore)
-    videoContainer: {
-        position: 'relative',
-    },
-    videoThumbnailFeed: {
-        width: '100%',
-        height: 230,
-        backgroundColor: '#000',
-    },
-    playIconContainer: {
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: [{ translateX: -28 }, { translateY: -28 }],
-    },
-    durationBadgeFeed: {
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    durationTextFeed: {
-        color: '#FFF',
-        fontSize: 11,
-        fontWeight: '600',
-    },
-    videoMetaFeed: {
-        flexDirection: 'row',
-        padding: 12,
-        paddingTop: 14,
-        paddingBottom: 12,
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    videoMetaContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    reactionOverlayBackdrop: {
         flex: 1,
+        backgroundColor: 'transparent',
     },
-    avatarSmall: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    avatarTextSmall: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#F8FAFC',
-    },
-    videoTextFeed: {
-        flex: 1,
-        marginRight: 8,
-    },
-    videoTitleFeed: {
-        fontSize: 15,
-        fontWeight: '600',
-        lineHeight: 20,
-        marginBottom: 4,
-    },
-    videoSubtitleFeed: {
-        fontSize: 12,
-        fontWeight: '500',
-    },
+
+    // Video Styles
+    videoContainer: { position: 'relative' },
+    videoThumbnailFeed: { width: '100%', height: 230, backgroundColor: '#000' },
+    playIconContainer: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -28 }, { translateY: -28 }] },
+    durationBadgeFeed: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0, 0, 0, 0.75)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    durationTextFeed: { color: '#FFF', fontSize: 11, fontWeight: '600' },
+    videoMetaFeed: { flexDirection: 'row', padding: 12, paddingTop: 14, paddingBottom: 12, alignItems: 'center', justifyContent: 'space-between' },
+    videoMetaContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    avatarSmall: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+    avatarTextSmall: { fontSize: 16, fontWeight: '700', color: '#F8FAFC' },
+    videoTextFeed: { flex: 1, marginRight: 8 },
+    videoTitleFeed: { fontSize: 15, fontWeight: '600', lineHeight: 20, marginBottom: 4 },
+    videoSubtitleFeed: { fontSize: 12, fontWeight: '500' },
 });
 
 export default FeedPost;
