@@ -47,7 +47,7 @@ import { getUserResources, LibraryResource } from '../src/services/libraryServic
 import { deletePost, getAllPosts, incrementViewCount, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
+type ProfileTabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
 
 // Edit Post Modal
 const EditPostModal: React.FC<{
@@ -435,8 +435,8 @@ const ProfileScreen = () => {
     const [loadingProfile, setLoadingProfile] = useState(false);
 
     // UI State
-    const [activeTab, setActiveTab] = useState<TabType>('posts');
-    const [filterType, setFilterType] = useState<'recent' | 'old' | 'popular'>('recent');
+    const [activeTab, setActiveTab] = useState<ProfileTabType>('posts');
+    const [filterType, setFilterType] = useState<'recent' | 'old' | 'popular' | 'random'>('recent');
     const [scrollY, setScrollY] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -509,7 +509,7 @@ const ProfileScreen = () => {
     }, [displayProfile]);
 
     // 6. Data Fetching
-    const loadData = async () => {
+    const loadData = async (randomize: boolean = false) => {
         if (!targetUserId) return;
 
         try {
@@ -529,6 +529,15 @@ const ProfileScreen = () => {
 
             // Filter posts for this user
             const userPosts = allPosts.filter(p => p.userId === targetUserId);
+
+            if (randomize) {
+                // Shuffle posts on refresh
+                for (let i = userPosts.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [userPosts[i], userPosts[j]] = [userPosts[j], userPosts[i]];
+                }
+            }
+
             setPosts(userPosts);
             setResources(userResources);
             setEvents(userEvents);
@@ -726,7 +735,8 @@ const ProfileScreen = () => {
     const handleRefresh = async () => {
         setIsRefreshing(true);
         if (isOwnProfile && refreshProfile) await refreshProfile();
-        await loadData();
+        await loadData(true); // Randomize on refresh
+        setFilterType('random');
         await loadConnectionData();
         setIsRefreshing(false);
     };
@@ -861,6 +871,8 @@ const ProfileScreen = () => {
 
         // 2. Sort
         return content.sort((a, b) => {
+            if (filterType === 'random') return 0; // Use shuffled order
+
             const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
             const likesA = a.likes || 0;

@@ -12,7 +12,7 @@ import { testFirebaseConnection } from '../../src/utils/testFirebase';
 
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { NotificationsModal } from '../../src/components/NotificationsModal';
+
 import { useFriendRequests } from '../../src/hooks/useFriendRequests';
 
 export default function HomeScreen() {
@@ -20,7 +20,7 @@ export default function HomeScreen() {
   const { user, userProfile, loading } = useAuth();
   const { colors, isDark } = useTheme();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
+
 
   // Friend Requests Logic
   const {
@@ -78,7 +78,7 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => setShowNotifications(true)}
+            onPress={() => router.push('/notifications')}
           >
             <Ionicons name="notifications-outline" size={26} color={colors.text} />
             {requestCount > 0 && <View style={styles.notificationDot} />}
@@ -103,14 +103,7 @@ export default function HomeScreen() {
       {/* Main Feed Content */}
       <FeedList />
 
-      {/* Notifications Modal */}
-      <NotificationsModal
-        visible={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        pendingRequests={pendingRequests}
-        onAccept={handleAccept}
-        onReject={handleReject}
-      />
+
     </View>
   );
 }

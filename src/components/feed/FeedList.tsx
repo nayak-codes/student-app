@@ -36,8 +36,17 @@ const FeedList: React.FC = () => {
             // Filter out 'clip' AND 'video' from main feed (LinkedIn style text/image focus)
             const regularPosts = fetchedPosts.filter(p => p.type !== 'clip' && p.type !== 'video');
 
-            setClips(clipPosts);
-            setPosts(regularPosts);
+            // Shuffle both lists for random feed on refresh
+            const shuffle = (array: any[]) => {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            };
+
+            setClips(shuffle(clipPosts));
+            setPosts(shuffle(regularPosts));
         } catch (error) {
             console.error('Error fetching posts:', error);
         } finally {

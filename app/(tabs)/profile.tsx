@@ -13,13 +13,11 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NotificationsModal } from '../../src/components/NotificationsModal';
+
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import {
-    acceptFriendRequest,
-    getPendingFriendRequests,
-    rejectFriendRequest
+    getPendingFriendRequests
 } from '../../src/services/connectionService';
 import { getHistory, HistoryItem } from '../../src/services/historyService';
 import { Playlist } from '../../src/services/playlistService';
@@ -30,7 +28,7 @@ const ProfileMenuScreen = () => {
     const { colors, isDark } = useTheme();
 
     const [recentHistory, setRecentHistory] = useState<HistoryItem[]>([]);
-    const [notificationsVisible, setNotificationsVisible] = useState(false);
+
     const [pendingRequests, setPendingRequests] = useState<any[]>([]);
     const [customPlaylists, setCustomPlaylists] = useState<Playlist[]>([]);
 
@@ -53,15 +51,7 @@ const ProfileMenuScreen = () => {
         }
     };
 
-    const handleAcceptRequest = async (requestId: string) => {
-        await acceptFriendRequest(requestId);
-        loadPendingRequests(); // Refresh
-    };
 
-    const handleRejectRequest = async (requestId: string) => {
-        await rejectFriendRequest(requestId);
-        loadPendingRequests(); // Refresh
-    };
 
     const MenuOption = ({ icon, label, subLabel, onPress, iconBg, iconColor }: any) => {
         // Default colors if not provided, respecting dark mode
@@ -102,7 +92,7 @@ const ProfileMenuScreen = () => {
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.actionButton}
-                            onPress={() => setNotificationsVisible(true)}
+                            onPress={() => router.push('/notifications')}
                         >
                             <View>
                                 <Ionicons name="notifications-outline" size={26} color={colors.text} />
@@ -284,13 +274,6 @@ const ProfileMenuScreen = () => {
 
             </ScrollView >
 
-            <NotificationsModal
-                visible={notificationsVisible}
-                onClose={() => setNotificationsVisible(false)}
-                pendingRequests={pendingRequests}
-                onAccept={handleAcceptRequest}
-                onReject={handleRejectRequest}
-            />
         </View >
     );
 };

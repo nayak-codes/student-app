@@ -114,6 +114,13 @@ const ExploreScreen: React.FC = () => {
       const feedItems = posts
         .map(convertToFeedItem)
         .filter((item): item is FeedItem => item !== null);
+
+      // Shuffle feed for "random" discovery feel
+      for (let i = feedItems.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [feedItems[i], feedItems[j]] = [feedItems[j], feedItems[i]];
+      }
+
       setFeedData(feedItems);
     } catch (error) {
       console.error('Error loading posts:', error);
@@ -365,7 +372,7 @@ const ExploreScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => { /* Handle notifications */ }}
+            onPress={() => router.push('/notifications')}
           >
             <Ionicons name="notifications-outline" size={26} color={colors.text} />
           </TouchableOpacity>

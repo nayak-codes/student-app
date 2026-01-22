@@ -25,14 +25,40 @@ export default function ShortsPlayerScreen() {
     const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
     const [selectedShortCommentCount, setSelectedShortCommentCount] = useState(0);
 
+    const flatListRef = React.useRef<FlatList>(null);
+
     useEffect(() => {
         loadShorts();
     }, []);
 
     const loadShorts = async () => {
-        const posts = await getAllPosts();
-        const shorts = posts.filter(p => p.type === 'clip');
-        setAllShorts(shorts);
+        try {
+            const posts = await getAllPosts();
+            const shorts = posts.filter(p => p.type === 'clip');
+            setAllShorts(shorts);
+
+            console.log('Shorts loaded:', shorts.length);
+            console.log('Target shortId:', shortId);
+
+            const targetId = Array.isArray(shortId) ? shortId[0] : shortId;
+
+            if (targetId) {
+                const index = shorts.findIndex(s => s.id === targetId);
+                console.log('Found index:', index);
+                if (index !== -1) {
+                    setCurrentIndex(index);
+                    // Wait for layout then scroll
+                    setTimeout(() => {
+                        flatListRef.current?.scrollToIndex({ index: index, animated: false });
+                    }, 100);
+                }
+            } else if (startIndex) {
+                const index = parseInt(startIndex as string);
+                setCurrentIndex(index);
+            }
+        } catch (error) {
+            console.error("Error loading shorts:", error);
+        }
     };
 
     const onViewableItemsChanged = React.useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -72,6 +98,20 @@ export default function ShortsPlayerScreen() {
         );
     };
 
+    const getItemLayout = (data: any, index: number) => ({
+        length: SCREEN_HEIGHT,
+        offset: SCREEN_HEIGHT * index,
+        index,
+    });
+
+    const onScrollToIndexFailed = (info: { index: number; highestMeasuredFrameIndex: number; averageItemLength: number }) => {
+        console.warn('Scroll to index failed:', info);
+        const wait = new Promise(resolve => setTimeout(resolve, 500));
+        wait.then(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+        });
+    };
+
     return (
         <View style={styles.container}>
             {/* Header */}
@@ -85,6 +125,7 @@ export default function ShortsPlayerScreen() {
 
             {/* Shorts Feed */}
             <FlatList
+                ref={flatListRef}
                 data={allShorts}
                 renderItem={renderShort}
                 keyExtractor={(item) => item.id}
@@ -95,15 +136,12 @@ export default function ShortsPlayerScreen() {
                 decelerationRate="fast"
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={viewabilityConfig}
-                getItemLayout={(data, index) => ({
-                    length: SCREEN_HEIGHT,
-                    offset: SCREEN_HEIGHT * index,
-                    index,
-                })}
-                initialNumToRender={1}
-                maxToRenderPerBatch={1}
-                windowSize={3}
+                getItemLayout={getItemLayout}
+                initialNumToRender={3}
+                maxToRenderPerBatch={3}
+                windowSize={5}
                 removeClippedSubviews={true}
+                onScrollToIndexFailed={onScrollToIndexFailed}
             />
             {/* Comments Sheet */}
             {selectedShortId && (

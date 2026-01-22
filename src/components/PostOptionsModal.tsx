@@ -14,8 +14,12 @@ import { useTheme } from '../contexts/ThemeContext';
 interface PostOptionsModalProps {
     visible: boolean;
     onClose: () => void;
-    onEdit: () => void;
-    onDelete: () => void;
+    onEdit?: () => void;
+    onDelete?: () => void;
+    onSave?: () => void;
+    onReport: () => void; // Made required as it should always be available
+    isOwnPost: boolean;
+    isSaved?: boolean;
 }
 
 const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
@@ -23,6 +27,10 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
     onClose,
     onEdit,
     onDelete,
+    onSave,
+    onReport,
+    isOwnPost,
+    isSaved = false,
 }) => {
     const { colors, isDark } = useTheme();
 
@@ -40,10 +48,34 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
                     text: 'Delete',
                     style: 'destructive',
                     onPress: () => {
-                        onDelete();
+                        if (onDelete) onDelete();
                         onClose();
                     },
                 },
+            ]
+        );
+    };
+
+    const handleReport = () => {
+        Alert.alert(
+            'Report Post',
+            'Why are you reporting this post?',
+            [
+                { text: 'Cancel', style: 'cancel', onPress: onClose },
+                {
+                    text: 'Inappropriate Content', onPress: () => {
+                        onReport();
+                        onClose();
+                        Alert.alert("Thank you", "We have received your report and will review it shortly.");
+                    }
+                },
+                {
+                    text: 'Spam', onPress: () => {
+                        onReport();
+                        onClose();
+                        Alert.alert("Thank you", "We have received your report and will review it shortly.");
+                    }
+                }
             ]
         );
     };
@@ -68,7 +100,7 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
                     {/* Header */}
                     <View style={styles.header}>
                         <Text style={[styles.title, { color: colors.text }]}>
-                            Post Options
+                            {isOwnPost ? 'Manage Post' : 'Post Options'}
                         </Text>
                         <TouchableOpacity onPress={onClose}>
                             <Ionicons name="close" size={24} color={colors.text} />
@@ -77,49 +109,103 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
 
                     {/* Options */}
                     <View style={styles.options}>
-                        {/* Edit */}
+                        {/* Save (Available for Everyone) */}
+                        {onSave && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.option,
+                                    { borderBottomColor: isDark ? '#334155' : '#E2E8F0' },
+                                ]}
+                                onPress={() => {
+                                    onSave();
+                                    onClose();
+                                }}
+                            >
+                                <View style={[styles.iconCircle, { backgroundColor: isSaved ? '#FCD34D' : colors.cardBorder }]}>
+                                    <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={20} color={isSaved ? "#B45309" : colors.textSecondary} />
+                                </View>
+                                <View style={styles.optionText}>
+                                    <Text style={[styles.optionTitle, { color: colors.text }]}>
+                                        {isSaved ? 'Unsave Post' : 'Save Post'}
+                                    </Text>
+                                    <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
+                                        {isSaved ? 'Remove from your saved items' : 'Save this for later'}
+                                    </Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Edit (Only Own Post) */}
+                        {isOwnPost && onEdit && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.option,
+                                    { borderBottomColor: isDark ? '#334155' : '#E2E8F0' },
+                                ]}
+                                onPress={() => {
+                                    onEdit();
+                                    onClose();
+                                }}
+                            >
+                                <View style={[styles.iconCircle, { backgroundColor: '#3B82F6' }]}>
+                                    <Ionicons name="create-outline" size={20} color="#FFF" />
+                                </View>
+                                <View style={styles.optionText}>
+                                    <Text style={[styles.optionTitle, { color: colors.text }]}>
+                                        Edit Post
+                                    </Text>
+                                    <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
+                                        Modify the caption or details
+                                    </Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Delete (Only Own Post) */}
+                        {isOwnPost && onDelete && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.option,
+                                    { borderBottomColor: isDark ? '#334155' : '#E2E8F0' },
+                                ]}
+                                onPress={handleDelete}
+                            >
+                                <View style={[styles.iconCircle, { backgroundColor: '#EF4444' }]}>
+                                    <Ionicons name="trash-outline" size={20} color="#FFF" />
+                                </View>
+                                <View style={styles.optionText}>
+                                    <Text style={[styles.optionTitle, { color: '#EF4444' }]}>
+                                        Delete Post
+                                    </Text>
+                                    <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
+                                        Remove this post permanently
+                                    </Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Report (Available for Everyone) */}
                         <TouchableOpacity
-                            style={[
-                                styles.option,
-                                { borderBottomColor: isDark ? '#334155' : '#E2E8F0' },
-                            ]}
-                            onPress={() => {
-                                onEdit();
-                                onClose();
-                            }}
+                            style={styles.option}
+                            onPress={handleReport}
                         >
-                            <View style={[styles.iconCircle, { backgroundColor: '#3B82F6' }]}>
-                                <Ionicons name="create-outline" size={20} color="#FFF" />
+                            <View style={[styles.iconCircle, { backgroundColor: colors.cardBorder }]}>
+                                <Ionicons name="flag-outline" size={20} color={colors.textSecondary} />
                             </View>
                             <View style={styles.optionText}>
                                 <Text style={[styles.optionTitle, { color: colors.text }]}>
-                                    Edit Post
+                                    Report Post
                                 </Text>
                                 <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-                                    Modify the caption or details
+                                    I'm concerned about this post
                                 </Text>
                             </View>
                             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
 
-                        {/* Delete */}
-                        <TouchableOpacity
-                            style={styles.option}
-                            onPress={handleDelete}
-                        >
-                            <View style={[styles.iconCircle, { backgroundColor: '#EF4444' }]}>
-                                <Ionicons name="trash-outline" size={20} color="#FFF" />
-                            </View>
-                            <View style={styles.optionText}>
-                                <Text style={[styles.optionTitle, { color: '#EF4444' }]}>
-                                    Delete Post
-                                </Text>
-                                <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-                                    Remove this post permanently
-                                </Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
                     </View>
                 </View>
             </Pressable>

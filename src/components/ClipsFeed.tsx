@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useConditionalVideoPlayer } from '../hooks/useConditionalVideoPlayer';
 import { checkFollowStatus, followUser, unfollowUser } from '../services/connectionService';
+import { addToHistory } from '../services/historyService';
 import { likePost, unlikePost } from '../services/postsService';
 import CommentsSheet from './CommentsSheet';
 import ShareToFriendsModal from './ShareToFriendsModal';
@@ -72,6 +73,17 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
     useEffect(() => {
         if (isActive && player) {
             player.play();
+
+            // Add to history when clip starts playing
+            addToHistory({
+                id: item.id,
+                type: 'clip',
+                title: item.title,
+                subtitle: item.author,
+                image: item.thumbnailUrl || item.imageUrl, // Ensure thumbnail is passed
+                url: item.videoLink
+            }).catch(err => console.error('Failed to add clip to history:', err));
+
         } else if (player) {
             player.pause();
         }

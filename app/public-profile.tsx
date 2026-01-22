@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Dimensions,
     Image,
     KeyboardAvoidingView,
     Linking,
@@ -16,6 +17,7 @@ import {
     Pressable,
     RefreshControl,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TextInput,
@@ -27,22 +29,33 @@ import AddEducationModal from '../src/components/AddEducationModal';
 import ClipsFeed from '../src/components/ClipsFeed';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
+import FeedPost from '../src/components/feed/FeedPost';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { Education } from '../src/services/authService';
 import {
-    acceptFriendRequest,
     followUser,
     getConnectionStatus,
     getPendingFriendRequests,
-    rejectFriendRequest,
     sendFriendRequest,
     subscribeToNetworkStats,
     unfollowUser
 } from '../src/services/connectionService';
 import { EventItem } from '../src/services/eventService';
 import { getUserResources, LibraryResource } from '../src/services/libraryService';
-import { deletePost, getAllPosts, incrementViewCount, Post, updatePost } from '../src/services/postsService';
+import {
+    addReaction,
+    deletePost,
+    getAllPosts,
+    incrementViewCount,
+    likePost,
+    Post,
+    ReactionType,
+    savePost,
+    unlikePost,
+    unsavePost,
+    updatePost
+} from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
 type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
@@ -128,125 +141,7 @@ const EditPostModal: React.FC<{
     );
 };
 
-// Post Card Component
-const PostCard: React.FC<{
-    post: Post;
-    onImagePress: (uri: string) => void;
-    onVideoPress: (link: string, post: Post) => void;
-    onPress?: (post: Post) => void;
-    onDelete?: (post: Post) => void;
-    onEdit?: (post: Post) => void;
-}> = ({ post, onImagePress, onVideoPress, onPress, onDelete, onEdit }) => {
-    const { colors, isDark } = useTheme();
-    const [imageError, setImageError] = React.useState(false);
 
-    const handleOptionsPress = () => {
-        Alert.alert(
-            "Post Options",
-            "Choose an action",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Edit", onPress: () => {
-                        if (onEdit) onEdit(post);
-                    }
-                },
-                {
-                    text: "Delete", style: "destructive", onPress: () => {
-                        if (onDelete) onDelete(post);
-                    }
-                }
-            ]
-        );
-    };
-
-    const Content = (
-        <View style={[styles.postCard, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#000' }]}>
-            <View style={[styles.postHeader, { padding: 0, borderBottomWidth: 0, paddingBottom: 8 }]}>
-                <View style={styles.userInfo}>
-                    <Text style={[styles.userName, { color: colors.text }]}>{post.userName}</Text>
-                    <Text style={[styles.postType, { color: colors.textSecondary }]}>{post.type}</Text>
-                </View>
-                <TouchableOpacity
-                    onPress={handleOptionsPress}
-                    style={{ padding: 8 }}
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                >
-                    <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-            </View>
-
-            {post.imageUrl && (
-                <TouchableOpacity activeOpacity={0.9} onPress={() => { onImagePress(post.imageUrl!); }}>
-                    {!imageError ? (
-                        <Image
-                            source={{ uri: post.imageUrl }}
-                            style={[styles.postImage, { backgroundColor: colors.border }]}
-                            onError={() => setImageError(true)}
-                        />
-                    ) : (
-                        <View style={[styles.postImage, styles.imageFallback, { backgroundColor: colors.border }]}>
-                            <Ionicons name="image-outline" size={36} color={colors.textSecondary} />
-                            <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Image unavailable</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
-            )}
-
-            {post.videoLink && (
-                <TouchableOpacity activeOpacity={0.9} onPress={() => onVideoPress(post.videoLink!, post)}>
-                    <View style={[styles.videoContainer, { backgroundColor: colors.border }]}>
-                        {post.thumbnailUrl && (
-                            <Image
-                                source={{ uri: post.thumbnailUrl }}
-                                style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
-                                resizeMode="cover"
-                            />
-                        )}
-                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: post.thumbnailUrl ? 'rgba(0,0,0,0.3)' : 'transparent' }}>
-                            <Ionicons name="play-circle" size={48} color={post.thumbnailUrl ? "#FFF" : colors.primary} />
-                            {!post.thumbnailUrl && <Text style={[styles.videoText, { color: colors.text }]}>Video Post</Text>}
-                        </View>
-                    </View>
-                </TouchableOpacity>
-            )}
-
-            <View style={styles.postContent}>
-                <Text style={[styles.postText, { color: colors.text }]} numberOfLines={3}>{post.content}</Text>
-
-                {post.tags && post.tags.length > 0 && (
-                    <View style={styles.tagsContainer}>
-                        {post.tags.slice(0, 3).map((tag, index) => (
-                            <View key={index} style={[styles.tag, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
-                                <Text style={[styles.tagText, { color: colors.textSecondary }]}>#{tag}</Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
-            </View>
-
-            <View style={[styles.postFooter, { borderTopColor: colors.border }]}>
-                <View style={styles.footerItem}>
-                    <Ionicons name="heart" size={18} color="#EF4444" />
-                    <Text style={[styles.footerText, { color: colors.textSecondary }]}>{post.likes}</Text>
-                </View>
-                <View style={styles.footerItem}>
-                    <Ionicons name="chatbubble" size={18} color={colors.textSecondary} />
-                    <Text style={[styles.footerText, { color: colors.textSecondary }]}>{post.comments}</Text>
-                </View>
-            </View>
-        </View>
-    );
-
-    if (onPress) {
-        return (
-            <TouchableOpacity activeOpacity={0.95} onPress={() => { console.log('Post tapped:', post.id); onPress(post); }}>
-                {Content}
-            </TouchableOpacity>
-        );
-    }
-    return Content;
-};
 
 
 // ... (existing imports)
@@ -403,7 +298,13 @@ const PostDetailModal: React.FC<{
     onVideoPress: (link: string, post: Post) => void;
     onDelete?: (post: Post) => void | Promise<void>;
     onEdit?: (post: Post) => void | Promise<void>;
-}> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit }) => {
+    onLike: (postId: string) => void;
+    onReact: (postId: string, reaction: ReactionType) => void;
+    onShare: (postId: string) => void;
+    onSave: (postId: string) => void;
+    onComment: (postId: string) => void;
+    currentUserId: string;
+}> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit, onLike, onReact, onShare, onSave, onComment, currentUserId }) => {
     const { colors, isDark } = useTheme();
 
     if (!post) return null;
@@ -419,12 +320,20 @@ const PostDetailModal: React.FC<{
                     <View style={{ width: 40 }} />
                 </View>
                 <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-                    <PostCard
+                    <FeedPost
                         post={post}
-                        onImagePress={onImagePress}
-                        onVideoPress={onVideoPress}
-                        onDelete={onDelete}
-                        onEdit={onEdit}
+                        currentUserId={currentUserId}
+                        onLike={onLike}
+                        onReact={onReact}
+                        onComment={onComment}
+                        onShare={onShare}
+                        onSave={onSave}
+                        onDelete={() => onDelete && onDelete(post)}
+                        onEdit={() => onEdit && onEdit(post)}
+                        currentUserLiked={post.likedBy?.includes(currentUserId || '')}
+                        currentUserSaved={post.savedBy?.includes(currentUserId || '')}
+                        currentUserReaction={post.reactedBy?.[currentUserId || '']}
+                        isVisible={true}
                     />
                 </ScrollView>
             </SafeAreaView>
@@ -475,7 +384,7 @@ const ProfileScreen = () => {
         pendingRequestSentByMe: false,
     });
     const [pendingRequests, setPendingRequests] = useState<any[]>([]);
-    const [showNotifications, setShowNotifications] = useState(false);
+
     const [loadingConnection, setLoadingConnection] = useState(false);
 
     // Data State
@@ -677,26 +586,7 @@ const ProfileScreen = () => {
         }
     };
 
-    const handleAcceptRequest = async (requestId: string) => {
-        try {
-            await acceptFriendRequest(requestId);
-            Alert.alert('Success', 'Friend request accepted!');
-            await loadConnectionData();
-        } catch (error) {
-            console.error('Error accepting request:', error);
-            Alert.alert('Error', 'Failed to accept request');
-        }
-    };
 
-    const handleRejectRequest = async (requestId: string) => {
-        try {
-            await rejectFriendRequest(requestId);
-            await loadConnectionData();
-        } catch (error) {
-            console.error('Error rejecting request:', error);
-            Alert.alert('Error', 'Failed to reject request');
-        }
-    };
 
     useEffect(() => {
         loadData();
@@ -754,6 +644,109 @@ const ProfileScreen = () => {
         } catch (error) {
             Alert.alert("Error", "Failed to update post");
         }
+    };
+
+
+
+
+
+    // Interaction Handlers for FeedPost
+    const handleLike = async (postId: string) => {
+        if (!authUser?.uid) return;
+        try {
+            const post = posts.find(p => p.id === postId);
+            if (!post) return;
+
+            // Optimistic update
+            const isLiked = post.likedBy?.includes(authUser.uid);
+            const newLikedBy = isLiked
+                ? post.likedBy.filter(id => id !== authUser.uid)
+                : [...(post.likedBy || []), authUser.uid];
+
+            setPosts(prev => prev.map(p =>
+                p.id === postId
+                    ? { ...p, likedBy: newLikedBy, likes: newLikedBy.length }
+                    : p
+            ));
+
+            if (isLiked) {
+                await unlikePost(postId, authUser.uid);
+            } else {
+                await likePost(postId, authUser.uid);
+            }
+        } catch (error) {
+            console.error('Like error:', error);
+        }
+    };
+
+    const handleReact = async (postId: string, reaction: ReactionType) => {
+        if (!authUser?.uid) return;
+        try {
+            const post = posts.find(p => p.id === postId);
+            if (!post) return;
+
+            // Optimistic update
+            const currentReactions = post.reactedBy || {};
+            const newReactions = { ...currentReactions, [authUser.uid]: reaction };
+
+            setPosts(prev => prev.map(p =>
+                p.id === postId
+                    ? { ...p, reactedBy: newReactions }
+                    : p
+            ));
+
+            await addReaction(postId, authUser.uid, reaction);
+        } catch (error) {
+            console.error('Reaction error:', error);
+        }
+    };
+
+    const handleSavePost = async (postId: string) => {
+        if (!authUser?.uid) return;
+        try {
+            const post = posts.find(p => p.id === postId);
+            if (!post) return;
+
+            const isSaved = post.savedBy?.includes(authUser.uid);
+            const newSavedBy = isSaved
+                ? post.savedBy.filter(id => id !== authUser.uid)
+                : [...(post.savedBy || []), authUser.uid];
+
+            setPosts(prev => prev.map(p =>
+                p.id === postId
+                    ? { ...p, savedBy: newSavedBy }
+                    : p
+            ));
+
+            if (isSaved) {
+                await unsavePost(postId, authUser.uid);
+            } else {
+                await savePost(postId, authUser.uid);
+            }
+        } catch (error) {
+            console.error('Save error:', error);
+        }
+    };
+
+    const handleShare = async (postId: string) => {
+        try {
+            const post = posts.find(p => p.id === postId);
+            if (!post) return;
+
+            await Share.share({
+                title: 'Share Post',
+                message: `Check out this post by ${post.userName}: ${post.content.substring(0, 50)}...`,
+                url: `studentverse://post/${postId}`
+            });
+            await incrementViewCount(postId);
+        } catch (error) {
+            console.log('Share dismissed or error');
+        }
+    };
+
+    const handleComment = (postId: string) => {
+        const post = posts.find(p => p.id === postId);
+        if (post) openPostModal(post);
     };
 
     const openImageViewer = (uri: string) => {
@@ -904,7 +897,7 @@ const ProfileScreen = () => {
                             {/* Notification Bell with Badge */}
                             <TouchableOpacity
                                 style={[styles.iconButtonBlur, { marginLeft: 8 }]}
-                                onPress={() => setShowNotifications(true)}
+                                onPress={() => router.push('/notifications')}
                             >
                                 <Ionicons name="notifications-outline" size={20} color="#FFF" />
                                 {pendingRequests.length > 0 && (
@@ -976,67 +969,156 @@ const ProfileScreen = () => {
                         <View style={styles.ytActionsRow}>
                             {/* Action Buttons (Public Profile - Follow/Message Only) */}
                             <View style={styles.actionButtonsContainer}>
-                                {/* Follow Button */}
-                                <TouchableOpacity
-                                    style={[styles.ytPrimaryButton, { flex: 1, backgroundColor: colors.primary, paddingHorizontal: 4 }]}
-                                    onPress={handleFollow}
-                                    disabled={loadingConnection}
-                                >
-                                    {loadingConnection ? (
-                                        <ActivityIndicator size="small" color="#FFF" />
-                                    ) : (
-                                        <>
-                                            <Ionicons
-                                                name={connectionStatus.isFollowing ? "checkmark" : "person-add"}
-                                                size={20}
-                                                color="#FFF"
-                                            />
-                                            <Text style={[styles.ytSecondaryButtonText, { color: '#FFF', marginLeft: 4, fontSize: 13 }]} numberOfLines={1}>
-                                                {connectionStatus.isFollowing ? 'Following' : 'Follow'}
-                                            </Text>
-                                        </>
-                                    )}
-                                </TouchableOpacity>
+                                {/* DUAL ACCOUNT SYSTEM LOGIC */}
 
-                                {/* Message Button */}
-                                <TouchableOpacity
-                                    style={[styles.ytSecondaryButton, { flex: 1, backgroundColor: isDark ? '#334155' : '#EFF6FF', borderColor: colors.border, paddingHorizontal: 4 }]}
-                                    onPress={async () => {
-                                        if (!targetUserId || !authUser) {
-                                            Alert.alert('Error', 'Please log in to send messages');
-                                            return;
-                                        }
+                                {/* 1. CREATOR ACCOUNT: Show Follow + Connect + Message */}
+                                {role === 'creator' ? (
+                                    <>
+                                        {/* Follow Button (Primary for Creators) */}
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.ytPrimaryButton,
+                                                { flex: 1, backgroundColor: colors.primary, paddingHorizontal: 4 },
+                                                connectionStatus.isFollowing && { backgroundColor: isDark ? '#334155' : '#E2E8F0' }
+                                            ]}
+                                            onPress={handleFollow}
+                                            disabled={loadingConnection}
+                                        >
+                                            {loadingConnection ? (
+                                                <ActivityIndicator size="small" color={connectionStatus.isFollowing ? colors.text : "#FFF"} />
+                                            ) : (
+                                                <>
+                                                    <Ionicons
+                                                        name={connectionStatus.isFollowing ? "checkmark" : "add"}
+                                                        size={20}
+                                                        color={connectionStatus.isFollowing ? colors.text : "#FFF"}
+                                                    />
+                                                    <Text style={[
+                                                        styles.ytSecondaryButtonText,
+                                                        { color: connectionStatus.isFollowing ? colors.text : '#FFF', marginLeft: 4, fontSize: 13 }
+                                                    ]} numberOfLines={1}>
+                                                        {connectionStatus.isFollowing ? 'Following' : 'Follow'}
+                                                    </Text>
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
 
-                                        try {
-                                            const { getOrCreateConversation } = await import('../src/services/chatService');
-                                            const conversationId = await getOrCreateConversation(
-                                                authUser.uid,
-                                                targetUserId,
-                                                {
-                                                    name: displayName,
-                                                    photoURL: photoURL || '',
-                                                    email: (displayProfile as any)?.email || '',
-                                                }
-                                            );
-
-                                            router.push({
-                                                pathname: '/chat-screen',
-                                                params: {
-                                                    conversationId,
-                                                    otherUserId: targetUserId,
-                                                    otherUserName: displayName,
-                                                    otherUserPhoto: photoURL || '',
-                                                },
-                                            });
-                                        } catch (error) {
-                                            console.error('Error starting conversation:', error);
-                                            Alert.alert('Error', 'Failed to start conversation');
-                                        }
-                                    }}
-                                >
-                                    <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
-                                    <Text style={[styles.ytSecondaryButtonText, { color: colors.primary, marginLeft: 4, fontSize: 13 }]}>Message</Text>
-                                </TouchableOpacity>
+                                        {/* Connect / Message Button */}
+                                        {connectionStatus.isFriend ? (
+                                            <TouchableOpacity
+                                                style={[styles.ytSecondaryButton, { flex: 1, backgroundColor: isDark ? '#334155' : '#EFF6FF', borderColor: colors.border, paddingHorizontal: 4 }]}
+                                                onPress={async () => {
+                                                    if (!targetUserId || !authUser) return;
+                                                    try {
+                                                        const { getOrCreateConversation } = await import('../src/services/chatService');
+                                                        const conversationId = await getOrCreateConversation(
+                                                            authUser.uid,
+                                                            targetUserId,
+                                                            {
+                                                                name: displayName,
+                                                                photoURL: photoURL || '',
+                                                                email: (displayProfile as any)?.email || '',
+                                                            }
+                                                        );
+                                                        router.push({
+                                                            pathname: '/chat-screen',
+                                                            params: { conversationId, otherUserId: targetUserId, otherUserName: displayName, otherUserPhoto: photoURL || '' },
+                                                        });
+                                                    } catch (error) {
+                                                        console.error('Error starting conversation:', error);
+                                                        Alert.alert('Error', 'Failed to start conversation');
+                                                    }
+                                                }}
+                                            >
+                                                <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+                                                <Text style={[styles.ytSecondaryButtonText, { color: colors.primary, marginLeft: 4, fontSize: 13 }]}>Message</Text>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.ytSecondaryButton,
+                                                    { flex: 1, backgroundColor: isDark ? '#334155' : '#FFF', borderColor: colors.border, paddingHorizontal: 4 },
+                                                    connectionStatus.friendshipStatus === 'pending' && { opacity: 0.7 }
+                                                ]}
+                                                onPress={handleConnect}
+                                                disabled={connectionStatus.friendshipStatus === 'pending' || loadingConnection}
+                                            >
+                                                <Ionicons
+                                                    name={connectionStatus.friendshipStatus === 'pending' ? "time-outline" : "person-add-outline"}
+                                                    size={20}
+                                                    color={colors.text}
+                                                />
+                                                <Text style={[styles.ytSecondaryButtonText, { color: colors.text, marginLeft: 4, fontSize: 13 }]}>
+                                                    {connectionStatus.friendshipStatus === 'pending' ? "Requested" : "Connect"}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </>
+                                ) : (
+                                    /* 2. STUDENT ACCOUNT: Show Connect (Primary) + Message (if friend) - NO FOLLOW */
+                                    <>
+                                        {connectionStatus.isFriend ? (
+                                            /* If Connected: Show Message (Primary) */
+                                            <TouchableOpacity
+                                                style={[styles.ytPrimaryButton, { flex: 1, backgroundColor: colors.primary, paddingHorizontal: 4 }]}
+                                                onPress={async () => {
+                                                    if (!targetUserId || !authUser) return;
+                                                    try {
+                                                        const { getOrCreateConversation } = await import('../src/services/chatService');
+                                                        const conversationId = await getOrCreateConversation(
+                                                            authUser.uid,
+                                                            targetUserId,
+                                                            {
+                                                                name: displayName,
+                                                                photoURL: photoURL || '',
+                                                                email: (displayProfile as any)?.email || '',
+                                                            }
+                                                        );
+                                                        router.push({
+                                                            pathname: '/chat-screen',
+                                                            params: { conversationId, otherUserId: targetUserId, otherUserName: displayName, otherUserPhoto: photoURL || '' },
+                                                        });
+                                                    } catch (error) {
+                                                        console.error('Error starting conversation:', error);
+                                                        Alert.alert('Error', 'Failed to start conversation');
+                                                    }
+                                                }}
+                                            >
+                                                <Ionicons name="chatbubble-ellipses" size={20} color="#FFF" />
+                                                <Text style={[styles.ytSecondaryButtonText, { color: '#FFF', marginLeft: 4, fontSize: 13 }]}>Message</Text>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            /* If Not Connected: Show Connect (Primary) */
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.ytPrimaryButton,
+                                                    { flex: 1, backgroundColor: colors.primary, paddingHorizontal: 4 },
+                                                    connectionStatus.friendshipStatus === 'pending' && { backgroundColor: isDark ? '#334155' : '#E2E8F0' }
+                                                ]}
+                                                onPress={handleConnect}
+                                                disabled={connectionStatus.friendshipStatus === 'pending' || loadingConnection}
+                                            >
+                                                {loadingConnection ? (
+                                                    <ActivityIndicator size="small" color="#FFF" />
+                                                ) : (
+                                                    <>
+                                                        <Ionicons
+                                                            name={connectionStatus.friendshipStatus === 'pending' ? "time" : "person-add"}
+                                                            size={20}
+                                                            color={connectionStatus.friendshipStatus === 'pending' ? colors.text : "#FFF"}
+                                                        />
+                                                        <Text style={[
+                                                            styles.ytSecondaryButtonText,
+                                                            { color: connectionStatus.friendshipStatus === 'pending' ? colors.text : '#FFF', marginLeft: 4, fontSize: 13 }
+                                                        ]} numberOfLines={1}>
+                                                            {connectionStatus.friendshipStatus === 'pending' ? "Requested" : "Connect"}
+                                                        </Text>
+                                                    </>
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
+                                    </>
+                                )}
                             </View>
                         </View>
                     </View>
@@ -1144,7 +1226,12 @@ const ProfileScreen = () => {
                         ) : (
                             <View style={[
                                 styles.gridContainer,
-                                (activeTab === 'videos' || activeTab === 'posts') && viewMode === 'list' && { flexDirection: 'column', flexWrap: 'nowrap', paddingHorizontal: 16 }
+                                (activeTab === 'videos' || activeTab === 'posts') && viewMode === 'list' && {
+                                    flexDirection: 'column',
+                                    flexWrap: 'nowrap',
+                                    width: Dimensions.get('window').width,
+                                    alignSelf: 'center'
+                                }
                             ]}>
                                 {activeTab === 'home' ? (
                                     <View>
@@ -1157,13 +1244,20 @@ const ProfileScreen = () => {
                                         </View>
                                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
                                             {posts.filter(p => !p.videoLink && p.type !== 'video').slice(0, 5).map((item) => (
-                                                <View key={item.id} style={{ width: 320, marginRight: 16 }}>
-                                                    <PostCard
+                                                <View key={item.id} style={{ width: 350, marginRight: 16 }}>
+                                                    <FeedPost
                                                         post={item}
-                                                        onPress={openPostModal}
-                                                        onImagePress={openImageViewer}
-                                                        onVideoPress={openVideo}
-                                                    // Minimal props for preview
+                                                        currentUserId={authUser?.uid || ''}
+                                                        onLike={handleLike}
+                                                        onReact={handleReact}
+                                                        onComment={handleComment}
+                                                        onShare={handleShare}
+                                                        onSave={handleSavePost}
+                                                        onDelete={() => handleDeletePost(item)}
+                                                        onEdit={() => handleEditPost(item)}
+                                                        currentUserLiked={item.likedBy?.includes(authUser?.uid || '')}
+                                                        currentUserSaved={item.savedBy?.includes(authUser?.uid || '')}
+                                                        currentUserReaction={item.reactedBy?.[authUser?.uid || '']}
                                                     />
                                                 </View>
                                             ))}
@@ -1339,14 +1433,21 @@ const ProfileScreen = () => {
                                 ) : activeTab === 'posts' ? (
                                     viewMode === 'list' ? (
                                         getFilteredAndSortedContent().map((item: any) => (
-                                            <PostCard
+                                            <FeedPost
                                                 key={item.id}
                                                 post={item}
-                                                onImagePress={openImageViewer}
-                                                onVideoPress={openVideo}
-                                                onPress={openPostModal}
-                                                onDelete={isOwnProfile ? handleDeletePost : undefined}
-                                                onEdit={isOwnProfile ? handleEditPost : undefined}
+                                                currentUserId={authUser?.uid || ''}
+                                                onLike={handleLike}
+                                                onReact={handleReact}
+                                                onComment={handleComment}
+                                                onShare={handleShare}
+                                                onSave={handleSavePost}
+                                                onDelete={isOwnProfile ? () => handleDeletePost(item) : undefined}
+                                                onEdit={isOwnProfile ? () => savePostEdit(item.id, item.content) : undefined}
+                                                currentUserLiked={item.likedBy?.includes(authUser?.uid || '')}
+                                                currentUserSaved={item.savedBy?.includes(authUser?.uid || '')}
+                                                currentUserReaction={item.reactedBy?.[authUser?.uid || '']}
+                                                isVisible={true}
                                             />
                                         ))
                                     ) : (
@@ -1406,6 +1507,12 @@ const ProfileScreen = () => {
                 onVideoPress={openVideo}
                 onDelete={isOwnProfile ? handleDeletePost : undefined}
                 onEdit={isOwnProfile ? handleEditPost : undefined}
+                onLike={handleLike}
+                onReact={handleReact}
+                onComment={handleComment}
+                onShare={handleShare}
+                onSave={handleSavePost}
+                currentUserId={authUser?.uid || ''}
             />
 
             <Modal visible={viewerVisible} transparent={true} onRequestClose={closeImageViewer}>
@@ -1447,89 +1554,7 @@ const ProfileScreen = () => {
                 />
             </Modal>
 
-            {/* Notifications Modal */}
-            <Modal
-                visible={showNotifications}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setShowNotifications(false)}
-            >
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <View style={{
-                        backgroundColor: colors.card,
-                        borderTopLeftRadius: 20,
-                        borderTopRightRadius: 20,
-                        maxHeight: '80%',
-                        paddingTop: 20
-                    }}>
-                        {/* Header */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>Friend Requests</Text>
-                            <TouchableOpacity onPress={() => setShowNotifications(false)}>
-                                <Ionicons name="close" size={24} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                        </View>
 
-                        {/* Requests List */}
-                        <ScrollView style={{ maxHeight: '100%' }}>
-                            {pendingRequests.length === 0 ? (
-                                <View style={{ padding: 40, alignItems: 'center' }}>
-                                    <Ionicons name="mail-outline" size={64} color={colors.border} />
-                                    <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '600', color: colors.textSecondary }}>
-                                        No pending requests
-                                    </Text>
-                                </View>
-                            ) : (
-                                pendingRequests.map((request) => (
-                                    <View key={request.id} style={{
-                                        flexDirection: 'row',
-                                        padding: 16,
-                                        borderBottomWidth: 1,
-                                        borderBottomColor: colors.border,
-                                        alignItems: 'center'
-                                    }}>
-                                        {/* Avatar */}
-                                        {request.photoURL ? (
-                                            <Image source={{ uri: request.photoURL }} style={{ width: 56, height: 56, borderRadius: 28 }} />
-                                        ) : (
-                                            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' }}>
-                                                <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '700' }}>
-                                                    {request.name?.charAt(0).toUpperCase() || 'U'}
-                                                </Text>
-                                            </View>
-                                        )}
-
-                                        {/* Info */}
-                                        <View style={{ flex: 1, marginLeft: 12 }}>
-                                            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{request.name || 'Unknown'}</Text>
-                                            <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 2 }}>{request.exam || 'Student'}</Text>
-                                        </View>
-
-                                        {/* Actions */}
-                                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                                            <TouchableOpacity
-                                                style={{ backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
-                                                onPress={() => {
-                                                    handleAcceptRequest(request.id);
-                                                    setShowNotifications(false);
-                                                }}
-                                            >
-                                                <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '600' }}>Accept</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={{ backgroundColor: isDark ? '#334155' : '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
-                                                onPress={() => handleRejectRequest(request.id)}
-                                            >
-                                                <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>Reject</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                ))
-                            )}
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
 
             <DocumentViewer
                 visible={docViewerVisible}

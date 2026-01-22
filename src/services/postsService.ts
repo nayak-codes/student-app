@@ -20,7 +20,7 @@ import { db } from '../config/firebase';
 
 export type PostCategory = 'achievement' | 'internship' | 'project' | 'notes' | 'question' | 'announcement' | 'general';
 
-export type ReactionType = 'like' | 'celebrate' | 'support' | 'insightful' | 'love' | 'funny';
+export type ReactionType = 'like' | 'celebrate' | 'support' | 'insightful' | 'love' | 'funny' | 'doubt';
 
 export interface Reactions {
     like: number;
@@ -29,6 +29,7 @@ export interface Reactions {
     insightful: number;
     love: number;
     funny: number;
+    doubt: number;
 }
 
 export interface Post {
@@ -36,10 +37,13 @@ export interface Post {
     userId: string;
     userName: string;
     userExam: string;
+    userHeadline?: string; // Added for "About" status (e.g., "Helping EAMCET Students")
     userProfilePhoto?: string;
+    title?: string; // Added for professional video/resource titles
     content: string;
     type: 'image' | 'video' | 'note' | 'news' | 'clip';
     imageUrl?: string;
+    imageUrls?: string[]; // Added for multi-photo support
     videoLink?: string;
     thumbnailUrl?: string;
     duration?: string; // Video duration in format "3:45"
@@ -85,8 +89,16 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt' | 'like
             userId: postData.userId,
             userName: postData.userName,
             userExam: postData.userExam,
+            userHeadline: postData.userHeadline,
+            userProfilePhoto: postData.userProfilePhoto, // Save profile photo
+            title: postData.title || null, // Sanitize: pass null if undefined
             content: postData.content,
             type: postData.type,
+            imageUrl: postData.imageUrl || null,
+            imageUrls: postData.imageUrls || [], // Add multi-photo array
+            videoLink: postData.videoLink || null,
+            thumbnailUrl: postData.thumbnailUrl || null,
+            duration: postData.duration || null,
             tags: postData.tags || [],
             likes: 0,
             comments: 0,
@@ -95,16 +107,14 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt' | 'like
             createdAt: Timestamp.now(),
         };
 
-        // Only add optional fields if they have values
-        if (postData.videoLink) {
-            cleanData.videoLink = postData.videoLink;
-        }
-        if (postData.imageUrl) {
-            cleanData.imageUrl = postData.imageUrl;
-        }
-        if (postData.thumbnailUrl) {
-            cleanData.thumbnailUrl = postData.thumbnailUrl;
-        }
+        // If we want to strictly remove undefined/null keys to save space:
+        Object.keys(cleanData).forEach(key => {
+            if (cleanData[key] === undefined) {
+                delete cleanData[key];
+            }
+        });
+        // Note: Firestore supports null, but throws on undefined.
+        // The above initialization with || null safety should prevent crashes.
 
         console.log('📤 Sending to Firestore:', cleanData);
 
@@ -139,10 +149,13 @@ export const getAllPosts = async (limitCount: number = 50): Promise<Post[]> => {
                 userId: data.userId,
                 userName: data.userName,
                 userExam: data.userExam,
+                userHeadline: data.userHeadline,
                 userProfilePhoto: data.userProfilePhoto,
+                title: data.title,
                 content: data.content,
                 type: data.type,
                 imageUrl: data.imageUrl,
+                imageUrls: data.imageUrls || [],
                 videoLink: data.videoLink,
                 thumbnailUrl: data.thumbnailUrl,
                 duration: data.duration, // Map duration from Firestore
@@ -660,6 +673,7 @@ export const getLikedPosts = async (userId: string): Promise<Post[]> => {
                 userId: data.userId,
                 userName: data.userName,
                 userExam: data.userExam,
+                userHeadline: data.userHeadline,
                 content: data.content,
                 type: data.type,
                 imageUrl: data.imageUrl,
@@ -703,6 +717,7 @@ export const getSavedPosts = async (userId: string): Promise<Post[]> => {
                 userId: data.userId,
                 userName: data.userName,
                 userExam: data.userExam,
+                userHeadline: data.userHeadline,
                 content: data.content,
                 type: data.type,
                 imageUrl: data.imageUrl,

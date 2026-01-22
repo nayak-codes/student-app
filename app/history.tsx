@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
+    Alert,
     FlatList,
     Image,
     StatusBar,
@@ -59,23 +60,56 @@ const HistoryScreen = () => {
         return new Date(timestamp).toLocaleDateString();
     };
 
+    const handlePress = (item: HistoryItem) => {
+        if (item.type === 'clip') {
+            // Find index if possible, but for now just open specific short
+            // Passing shortId for ShortsPlayer to fetch or filter
+            router.push({
+                pathname: '/screens/shorts-player',
+                params: { shortId: item.id }
+            });
+        } else if (item.type === 'video') {
+            router.push({
+                pathname: '/screens/video-player',
+                params: {
+                    postId: item.id,
+                    videoUri: item.url,
+                    title: item.title,
+                    description: item.subtitle, // Using subtitle as desc fallback
+                    thumbnail: item.image
+                }
+            });
+        } else if (item.type === 'post') {
+            // Navigate to post details (assuming route exists or handled via feed)
+            // For now, maybe just show alert or navigate to profile?
+            // Ideally: router.push(`/post/${item.id}`);
+            // But let's try opening it in a feed view or standard post view if available
+            Alert.alert('Post', 'Opening post details...');
+        }
+    };
+
     const renderItem = ({ item }: { item: HistoryItem }) => (
-        <TouchableOpacity style={styles.itemContainer}>
+        <TouchableOpacity style={styles.itemContainer} onPress={() => handlePress(item)}>
             <View style={styles.thumbnailContainer}>
                 {item.image ? (
-                    <Image source={{ uri: item.image }} style={styles.thumbnail} />
+                    <Image source={{ uri: item.image }} style={styles.thumbnail} resizeMode="cover" />
                 ) : (
                     <View style={[styles.thumbnail, styles.placeholderThumb, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#F1F5F9' }]}>
                         <Ionicons
-                            name={item.type === 'pdf' ? 'document-text' : 'newspaper'}
-                            size={24}
+                            name={item.type === 'pdf' ? 'document-text' : item.type === 'video' ? 'play-circle' : 'images'}
+                            size={32}
                             color={colors.textSecondary}
                         />
                     </View>
                 )}
                 {item.type === 'video' && (
                     <View style={styles.durationBadge}>
-                        <Text style={styles.durationText}>10:05</Text>
+                        <Text style={styles.durationText}>Video</Text>
+                    </View>
+                )}
+                {item.type === 'clip' && (
+                    <View style={styles.durationBadge}>
+                        <Text style={styles.durationText}>Short</Text>
                     </View>
                 )}
             </View>

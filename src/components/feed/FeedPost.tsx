@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Post, ReactionType } from '../../services/postsService';
 import PostOptionsModal from '../PostOptionsModal';
@@ -16,8 +16,8 @@ interface FeedPostProps {
     onComment: (postId: string) => void;
     onShare: (postId: string) => void;
     onSave: (postId: string) => void;
-    onDelete: (postId: string) => void;
-    onEdit: (postId: string) => void;
+    onDelete?: (postId: string) => void;
+    onEdit?: (postId: string) => void;
     currentUserLiked?: boolean; // Legacy
     currentUserSaved?: boolean;
     currentUserReaction?: ReactionType;
@@ -31,6 +31,7 @@ const REACTIONS: Record<ReactionType, { icon: keyof typeof Ionicons.glyphMap; co
     love: { icon: 'heart', color: '#EF4444', label: 'Love' },
     insightful: { icon: 'bulb', color: '#F59E0B', label: 'Insight' },
     funny: { icon: 'happy', color: '#06B6D4', label: 'Funny' },
+    doubt: { icon: 'hand-left', color: '#F59E0B', label: 'Doubt' },
 };
 
 const FeedPost: React.FC<FeedPostProps> = ({
@@ -59,11 +60,18 @@ const FeedPost: React.FC<FeedPostProps> = ({
     );
     const [showReactions, setShowReactions] = useState(false);
     const [showOptionsModal, setShowOptionsModal] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const screenWidth = Dimensions.get('window').width;
+    const [sliderWidth, setSliderWidth] = useState(screenWidth);
 
     // Animation for picker
     const [fadeAnim] = useState(new Animated.Value(0));
 
     const isOwnPost = post.userId === currentUserId;
+
+    // Unified Image Logic
+    const galleryImages = (post.imageUrls && post.imageUrls.length > 0) ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []);
 
     // Determine total reactions count (including local optimistic update if needed)
     // For simplicity, we use post.reactions count + delta or just rely on post.likes (legacy) + post.reactions keys
@@ -150,7 +158,8 @@ const FeedPost: React.FC<FeedPostProps> = ({
                 likes: post.likes,
                 views: post.viewCount || 0,
                 date: post.createdAt ? new Date(post.createdAt).toLocaleDateString() : '',
-                thumbnail: post.thumbnailUrl || post.imageUrl,
+                thumbnail: post.thumbnailUrl || post.imageUrl || post.userProfilePhoto, // Capture thumbnail
+                authorImage: post.userProfilePhoto // Pass author image too
             },
         });
     };
@@ -186,13 +195,20 @@ const FeedPost: React.FC<FeedPostProps> = ({
                             <Text style={[styles.videoSubtitleFeed, { color: colors.textSecondary }]}>{post.userName} • {post.viewCount || 0} views</Text>
                         </View>
                     </TouchableOpacity>
-                    {isOwnPost && (
-                        <TouchableOpacity onPress={() => setShowOptionsModal(true)} style={{ padding: 8 }}>
-                            <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    )}
+                    <TouchableOpacity onPress={() => setShowOptionsModal(true)} style={{ padding: 8 }}>
+                        <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
+                    </TouchableOpacity>
                 </View>
-                <PostOptionsModal visible={showOptionsModal} onClose={() => setShowOptionsModal(false)} onEdit={() => onEdit(post.id)} onDelete={() => onDelete(post.id)} />
+                <PostOptionsModal
+                    visible={showOptionsModal}
+                    onClose={() => setShowOptionsModal(false)}
+                    onDelete={() => onDelete?.(post.id)}
+                    onEdit={() => onEdit?.(post.id)}
+                    onSave={handleSave}
+                    onReport={() => console.log('Reported')}
+                    isOwnPost={isOwnPost}
+                    isSaved={saved}
+                />
             </View>
         );
     }
@@ -212,26 +228,124 @@ const FeedPost: React.FC<FeedPostProps> = ({
                     </View>
                     <View>
                         <Text style={[styles.userName, { color: colors.text }]}>{post.userName}</Text>
-                        <Text style={[styles.userExam, { color: colors.textSecondary }]}>{post.userExam}</Text>
+                        <Text style={[styles.userExam, { color: colors.textSecondary }]}>
+                            {post.userHeadline || post.userExam}
+                        </Text>
                     </View>
                 </TouchableOpacity>
-                {isOwnPost && (
-                    <TouchableOpacity onPress={() => setShowOptionsModal(true)}>
-                        <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                )}
+                <TouchableOpacity onPress={() => setShowOptionsModal(true)}>
+                    <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
+                </TouchableOpacity>
             </View>
 
             {/* Content (Caption Top) */}
             <View style={styles.content}>
                 {post.content && (
-                    <View style={styles.captionContainer}>
-                        <Text style={[styles.captionText, { color: colors.text }]}>{post.content}</Text>
+                    <TouchableOpacity
+                        style={styles.captionContainer}
+                        activeOpacity={1}
+                        onPress={() => setExpanded(!expanded)}
+                    >
+                        <Text
+                            style={[styles.captionText, { color: colors.text }]}
+                            numberOfLines={expanded ? undefined : 2}
+                        >
+                            {expanded ? post.content : post.content.replace(/\n/g, ' ')}
+                        </Text>
+                        {expanded && post.content.length > 100 && (
+                            <Text style={{ color: colors.textSecondary, marginTop: 2, fontSize: 13 }}>View less</Text>
+                        )}
+                    </TouchableOpacity>
+                )}
+                {/* Multi-Photo Carousel or Single Image */}
+                {galleryImages.length > 0 ? (
+                    <View>
+                        {galleryImages.length > 1 ? (
+                            <ScrollView
+                                horizontal
+                                pagingEnabled
+                                showsHorizontalScrollIndicator={false}
+                                scrollEventThrottle={16}
+                                onScroll={(e) => {
+                                    const offset = e.nativeEvent.contentOffset.x;
+                                    if (screenWidth > 0) {
+                                        const index = Math.round(offset / screenWidth);
+                                        setCurrentImageIndex(index);
+                                    }
+                                }}
+                                style={{ width: screenWidth, aspectRatio: aspectRatio || 4 / 3 }}
+                            >
+                                {galleryImages.map((url, index) => (
+                                    <TouchableOpacity
+                                        key={index}
+                                        activeOpacity={0.95}
+                                        onPress={() => {
+                                            router.push({
+                                                pathname: '/image-viewer' as any,
+                                                params: {
+                                                    images: JSON.stringify(galleryImages),
+                                                    index: index
+                                                }
+                                            });
+                                        }}
+                                    >
+                                        <Image
+                                            source={{ uri: url }}
+                                            style={{ width: screenWidth, height: '100%', aspectRatio: aspectRatio }}
+                                            resizeMode="cover"
+                                        />
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        ) : (
+                            <TouchableOpacity
+                                activeOpacity={0.95}
+                                onPress={() => {
+                                    router.push({
+                                        pathname: '/image-viewer' as any,
+                                        params: {
+                                            images: JSON.stringify(galleryImages),
+                                            index: 0
+                                        }
+                                    });
+                                }}
+                            >
+                                <Image source={{ uri: galleryImages[0] }} style={{ width: screenWidth, aspectRatio: aspectRatio || 4 / 3 }} resizeMode="cover" />
+                            </TouchableOpacity>
+                        )}
+
+                        {/* 1/N Badge */}
+                        {galleryImages.length > 1 && (
+                            <View style={{
+                                position: 'absolute',
+                                top: 10,
+                                right: 10,
+                                backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                                borderRadius: 12,
+                                paddingHorizontal: 10,
+                                paddingVertical: 4
+                            }}>
+                                <Text style={{ color: 'white', fontSize: 12, fontWeight: '700' }}>
+                                    {currentImageIndex + 1}/{galleryImages.length}
+                                </Text>
+                            </View>
+                        )}
+                        {/* Pagination Dots */}
+                        {galleryImages.length > 1 && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'center', position: 'absolute', bottom: 10, width: '100%' }}>
+                                {galleryImages.map((_, i) => (
+                                    <View
+                                        key={i}
+                                        style={{
+                                            width: 8, height: 8, borderRadius: 4, marginHorizontal: 4,
+                                            backgroundColor: i === currentImageIndex ? colors.primary : 'rgba(255,255,255,0.6)'
+                                        }}
+                                    />
+                                ))}
+                            </View>
+                        )}
                     </View>
-                )}
-                {post.type === 'image' && post.imageUrl && (
-                    <Image source={{ uri: post.imageUrl }} style={[styles.postImage, { aspectRatio }]} resizeMode="cover" />
-                )}
+                ) : null}
             </View>
 
             {/* Footer Wrapper */}
@@ -307,7 +421,6 @@ const FeedPost: React.FC<FeedPostProps> = ({
                             Clicking the Like button again will close it via handleRegularPress. 
                         */}
                         {/* Inline Absolute Picker (Better for relative positioning) */}
-
                     </View>
 
                     {/* Comment Button (With Count) */}
@@ -323,6 +436,25 @@ const FeedPost: React.FC<FeedPostProps> = ({
                         />
                         <Text style={[styles.newActionText, { color: colors.textSecondary }]}>
                             Comment {post.comments > 0 ? `• ${post.comments}` : ''}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {/* Doubt (Raise Hand) Button - NEW FEATURE */}
+                    <TouchableOpacity
+                        onPress={() => onReact(post.id, 'doubt')}
+                        style={styles.newActionButton}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name={userReaction === 'doubt' ? "hand-left" : "hand-left-outline"}
+                            size={22}
+                            color={userReaction === 'doubt' ? "#F59E0B" : colors.textSecondary}
+                        />
+                        <Text style={[
+                            styles.newActionText,
+                            { color: userReaction === 'doubt' ? "#F59E0B" : colors.textSecondary }
+                        ]}>
+                            Doubt
                         </Text>
                     </TouchableOpacity>
 
@@ -354,8 +486,12 @@ const FeedPost: React.FC<FeedPostProps> = ({
             <PostOptionsModal
                 visible={showOptionsModal}
                 onClose={() => setShowOptionsModal(false)}
-                onEdit={() => onEdit(post.id)}
-                onDelete={() => onDelete(post.id)}
+                onDelete={() => onDelete?.(post.id)}
+                onEdit={() => onEdit?.(post.id)}
+                onSave={handleSave}
+                onReport={() => console.log('Reported')}
+                isOwnPost={isOwnPost}
+                isSaved={saved}
             />
 
             {/* Reaction Picker - Moved to Root for Clickability */}

@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { getUserProfile } from '../../src/services/authService';
+import { addToHistory } from '../../src/services/historyService';
 import { addComment, Comment, getAllPosts, getComments, getPostById, incrementViewCount, likeComment, Post, unlikeComment } from '../../src/services/postsService';
 
 const { width, height } = Dimensions.get('window');
@@ -103,9 +104,19 @@ const VideoPlayerScreen = () => {
         loadRelatedContent();
         fetchComments();
 
-        // Track view
+        // Track view and add to history
         if (postId) {
             incrementViewCount(postId).catch(err => console.log('View tracking failed:', err));
+
+            // Add to history
+            addToHistory({
+                id: postId,
+                type: 'video',
+                title: initialTitle || 'Untitled Video',
+                subtitle: authorName || 'Unknown Creator',
+                image: thumbnail || authorImage, // Best effort thumbnail
+                url: videoUri
+            }).catch((err: any) => console.error('Failed to add video to history:', err));
         }
     }, [postId]);
 
