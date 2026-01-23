@@ -2,15 +2,16 @@
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
+    Animated,
     Image,
     ScrollView,
     StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -72,41 +73,67 @@ const ProfileMenuScreen = () => {
         );
     };
 
+    // Collapsible Header Logic
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const diffClamp = Animated.diffClamp(scrollY, 0, 110);
+    const translateY = diffClamp.interpolate({
+        inputRange: [0, 110],
+        outputRange: [0, -110],
+    });
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
             {/* App Header (Matches Home Screen) */}
-            <SafeAreaView edges={['top']} style={[styles.safeHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-                <View style={styles.headerContent}>
-                    <View style={styles.brandContainer}>
-                        <Text style={[styles.brandText]}>Vidhyarthi</Text>
-                    </View>
+            <Animated.View style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 1000,
+                transform: [{ translateY }],
+                backgroundColor: colors.background,
+            }}>
+                <SafeAreaView edges={['top']} style={[styles.safeHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                    <View style={styles.headerContent}>
+                        <View style={styles.brandContainer}>
+                            <Text style={[styles.brandText]}>Vidhyardhi</Text>
+                        </View>
 
-                    <View style={styles.headerActions}>
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => router.push('/screens/universal-search')}
-                        >
-                            <Ionicons name="search-outline" size={26} color={colors.text} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => router.push('/notifications')}
-                        >
-                            <View>
-                                <Ionicons name="notifications-outline" size={26} color={colors.text} />
-                                {pendingRequests.length > 0 && <View style={styles.notificationDot} />}
-                            </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => router.push('/conversations')}>
-                            <Ionicons name="chatbubble-ellipses-outline" size={26} color={colors.text} />
-                        </TouchableOpacity>
+                        <View style={styles.headerActions}>
+                            <TouchableOpacity
+                                style={styles.actionButton}
+                                onPress={() => router.push('/screens/universal-search')}
+                            >
+                                <Ionicons name="search-outline" size={26} color={colors.text} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.actionButton}
+                                onPress={() => router.push('/notifications')}
+                            >
+                                <View>
+                                    <Ionicons name="notifications-outline" size={26} color={colors.text} />
+                                    {pendingRequests.length > 0 && <View style={styles.notificationDot} />}
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/conversations')}>
+                                <Ionicons name="chatbubble-ellipses-outline" size={26} color={colors.text} />
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
-            </SafeAreaView>
+                </SafeAreaView>
+            </Animated.View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 40, paddingTop: 110 }}
+                onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                    { useNativeDriver: false }
+                )}
+                scrollEventThrottle={16}
+            >
 
                 {/* User Profile Snippet */}
                 <TouchableOpacity

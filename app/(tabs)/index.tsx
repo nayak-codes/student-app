@@ -2,8 +2,8 @@
 import { useRouter } from 'expo-router';
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import FeedList from '../../src/components/feed/FeedList';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
@@ -15,12 +15,13 @@ import { useCallback } from 'react';
 
 import { useFriendRequests } from '../../src/hooks/useFriendRequests';
 
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 export default function HomeScreen() {
   const router = useRouter();
   const { user, userProfile, loading } = useAuth();
   const { colors, isDark } = useTheme();
   const [unreadCount, setUnreadCount] = useState(0);
-
 
   // Friend Requests Logic
   const {
@@ -58,50 +59,83 @@ export default function HomeScreen() {
     }
   }, [user]);
 
+  // Collapsible Header Logic
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const diffClamp = Animated.diffClamp(scrollY, 0, 110); // Header height approx 110 (Status Bar + Header)
+  const translateY = diffClamp.interpolate({
+    inputRange: [0, 110],
+    outputRange: [0, -110],
+  });
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Standard App Header */}
-      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={styles.brandContainer}>
-          <Text style={styles.brandText}>Vidhyardi</Text>
-        </View>
+      {/* Collapsible Header */}
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.background,
+            borderBottomColor: isDark ? '#333' : colors.border,
+            transform: [{ translateY }],
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            elevation: 4,
+          }
+        ]}
+      >
+        <SafeAreaView edges={['top']}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
+            <View style={styles.brandContainer}>
+              <Text style={styles.brandText}>Vidhyardi</Text>
+            </View>
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/screens/universal-search')}
-          >
-            <Ionicons name="search-outline" size={26} color={colors.text} />
-          </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => router.push('/screens/universal-search')}
+              >
+                <Ionicons name="search-outline" size={26} color={colors.text} />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/notifications')}
-          >
-            <Ionicons name="notifications-outline" size={26} color={colors.text} />
-            {requestCount > 0 && <View style={styles.notificationDot} />}
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => router.push('/notifications')}
+              >
+                <Ionicons name="notifications-outline" size={26} color={colors.text} />
+                {requestCount > 0 && <View style={styles.notificationDot} />}
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/conversations')}
-          >
-            <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
-            {unreadCount > 0 && (
-              <View style={[styles.chatBadge, { borderColor: isDark ? colors.background : '#FFF' }]}>
-                <Text style={styles.chatBadgeText}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => router.push('/conversations')}
+              >
+                <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
+                {unreadCount > 0 && (
+                  <View style={[styles.chatBadge, { borderColor: isDark ? colors.background : '#FFF' }]}>
+                    <Text style={styles.chatBadgeText}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Animated.View>
 
       {/* Main Feed Content */}
-      <FeedList />
+      <FeedList
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        contentContainerStyle={{ paddingTop: 110 }}
+      />
 
 
     </View>
@@ -117,8 +151,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingBottom: 6,
     borderBottomWidth: 1,
     // borderBottomColor: '#F1F5F9', // Dynamic
     // backgroundColor: '#fff', // Dynamic

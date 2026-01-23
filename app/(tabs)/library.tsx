@@ -1,18 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   FlatList,
   Image,
   Modal,
   RefreshControl,
-  SafeAreaView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import UploadResourceModal from '../../src/components/UploadResourceModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
@@ -256,75 +258,108 @@ const LibraryScreen = () => {
     );
   };
 
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const diffClamp = Animated.diffClamp(scrollY, 0, 120); // Header height approx 120
+  const translateY = diffClamp.interpolate({
+    inputRange: [0, 120],
+    outputRange: [0, -120],
+  });
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Library</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Study Resources</Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.uploadButton, { backgroundColor: colors.primary }]}
-          onPress={() => setShowUploadModal(true)}
-        >
-          <Ionicons name="add" size={20} color="#FFF" />
-          <Text style={styles.uploadButtonText}>Upload</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Search & Filter */}
-      <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Search resources..."
-          placeholderTextColor={colors.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        <TouchableOpacity style={styles.filterButtonIcon} onPress={() => setShowFilterModal(true)}>
-          <Ionicons name="filter" size={20} color={(activeFilter !== 'all' || examFilter !== 'ALL') ? colors.primary : colors.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Tabs */}
-      <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
-          onPress={() => setActiveTab('home')}
-        >
-          <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.primary, fontWeight: '700' }]}>Home</Text>
-          {activeTab === 'home' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'suggested' && styles.tabItemActive]}
-          onPress={() => setActiveTab('suggested')}
-        >
-          <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'suggested' && { color: colors.primary, fontWeight: '700' }]}>Suggested</Text>
-          {activeTab === 'suggested' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'network' && styles.tabItemActive]}
-          onPress={() => setActiveTab('network')}
-        >
-          <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'network' && { color: colors.primary, fontWeight: '700' }]}>Your Network</Text>
-          {activeTab === 'network' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
-        </TouchableOpacity>
-      </View>
+      {/* Collapsible Header */}
+      <Animated.View style={[
+        styles.header,
+        {
+          backgroundColor: colors.background,
+          borderBottomColor: isDark ? '#333' : colors.border,
+          transform: [{ translateY }],
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          elevation: 4,
+        }
+      ]}>
+        <SafeAreaView edges={['top']}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10 }}>
+            <View>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>Library</Text>
+              <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Study Resources</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.uploadButton, { backgroundColor: colors.primary }]}
+              onPress={() => setShowUploadModal(true)}
+            >
+              <Ionicons name="add" size={20} color="#FFF" />
+              <Text style={styles.uploadButtonText}>Upload</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Animated.View>
 
       {/* Resources List */}
       <FlatList
         data={filteredResources}
         renderItem={renderResource}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingTop: 120 }]}
         showsVerticalScrollIndicator={false}
         numColumns={2}
         key={2}
         columnWrapperStyle={{ justifyContent: 'space-between' }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        ListHeaderComponent={
+          <>
+            {/* Search & Filter */}
+            <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}>
+              <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder="Search resources..."
+                placeholderTextColor={colors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              <TouchableOpacity style={styles.filterButtonIcon} onPress={() => setShowFilterModal(true)}>
+                <Ionicons name="filter" size={20} color={(activeFilter !== 'all' || examFilter !== 'ALL') ? colors.primary : colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Tabs */}
+            <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity
+                style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
+                onPress={() => setActiveTab('home')}
+              >
+                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.primary, fontWeight: '700' }]}>Home</Text>
+                {activeTab === 'home' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tabItem, activeTab === 'suggested' && styles.tabItemActive]}
+                onPress={() => setActiveTab('suggested')}
+              >
+                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'suggested' && { color: colors.primary, fontWeight: '700' }]}>Suggested</Text>
+                {activeTab === 'suggested' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tabItem, activeTab === 'network' && styles.tabItemActive]}
+                onPress={() => setActiveTab('network')}
+              >
+                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'network' && { color: colors.primary, fontWeight: '700' }]}>Your Network</Text>
+                {activeTab === 'network' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
+              </TouchableOpacity>
+            </View>
+          </>
+        }
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
         }
@@ -417,7 +452,7 @@ const LibraryScreen = () => {
         onClose={() => setShowUploadModal(false)}
         onUploadComplete={loadResources}
       />
-    </SafeAreaView>
+    </View >
   );
 };
 
@@ -431,7 +466,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 0,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
     backgroundColor: '#FFF',
   },
   headerTitle: {

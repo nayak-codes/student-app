@@ -1,6 +1,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, RefreshControl, Share, StyleSheet, Text, View, ViewToken } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, Share, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
 import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -9,7 +9,12 @@ import CommentsBottomSheet from '../CommentsBottomSheet';
 import FeedPost from './FeedPost';
 import ShortsGrid from './ShortsGrid';
 
-const FeedList: React.FC = () => {
+interface FeedListProps {
+    onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+    contentContainerStyle?: StyleProp<ViewStyle>;
+}
+
+const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) => {
     const { colors } = useTheme();
     const [allPosts, setAllPosts] = useState<Post[]>([]);
     const [posts, setPosts] = useState<Post[]>([]); // Regular posts (not clips)
@@ -270,8 +275,12 @@ const FeedList: React.FC = () => {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
                 }
                 onViewableItemsChanged={onViewableItemsChanged}
+                onScroll={onScroll} // Pass scroll event up
                 viewabilityConfig={viewabilityConfig}
-                contentContainerStyle={posts.length === 0 ? styles.emptyContainer : styles.listContent}
+                contentContainerStyle={[
+                    posts.length === 0 ? styles.emptyContainer : styles.listContent,
+                    contentContainerStyle // Append external styles (e.g. padding for header)
+                ]}
                 ListEmptyComponent={
                     <View style={styles.emptyView}>
                         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No posts yet. Be the first to share!</Text>

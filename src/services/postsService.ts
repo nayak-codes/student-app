@@ -227,14 +227,50 @@ export const getPostsByType = async (type: string): Promise<Post[]> => {
 /**
  * Like a post
  */
+
+
+/**
+ * Like a post with notification
+ */
 export const likePost = async (postId: string, userId: string): Promise<void> => {
     try {
         const postRef = doc(db, POSTS_COLLECTION, postId);
+
+        // 1. Update Post
         await updateDoc(postRef, {
             likes: increment(1),
             likedBy: arrayUnion(userId),
         });
         console.log('Post liked');
+
+        // 2. Send Notification
+        // Fetch User details (Sender) and Post details (Recipient)
+        const [postSnap, userSnap] = await Promise.all([
+            getDoc(postRef),
+            getDoc(doc(db, 'users', userId))
+        ]);
+
+        if (postSnap.exists() && userSnap.exists()) {
+            const postData = postSnap.data();
+            const userData = userSnap.data();
+
+            // Notify post owner
+            if (postData.userId !== userId) {
+                // Import this dynamically or at top to avoid circular deps if any
+                const { sendNotification } = require('./notificationService');
+
+                await sendNotification(
+                    postData.userId, // recipient
+                    userId, // sender
+                    userData.displayName || 'User',
+                    userData.photoURL,
+                    'like',
+                    'liked your post',
+                    { postId }
+                );
+            }
+        }
+
     } catch (error) {
         console.error('Error liking post:', error);
         throw error;
@@ -793,6 +829,28 @@ export const addReaction = async (postId: string, userId: string, reactionType: 
         });
 
         console.log('Reaction added:', reactionType);
+
+        // Send Notification
+        const currentUserRef = doc(db, 'users', userId);
+        const currentUserSnap = await getDoc(currentUserRef);
+
+        if (currentUserSnap.exists() && data.userId !== userId) {
+            const userData = currentUserSnap.data();
+
+            // Import dynamically
+            const { sendNotification } = require('./notificationService');
+
+            await sendNotification(
+                data.userId, // recipient
+                userId, // sender
+                userData.displayName || 'User',
+                userData.photoURL,
+                'like', // Use 'like' generic type or map reactionType to specific notification types if supported
+                `reacted with ${reactionType} to your post`,
+                { postId, reactionType }
+            );
+        }
+
     } catch (error) {
         console.error('Error adding reaction:', error);
         throw error;

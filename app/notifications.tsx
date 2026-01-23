@@ -2,12 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../src/config/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { acceptFriendRequest, rejectFriendRequest } from '../src/services/connectionService';
-import { getNotifications, NotificationItem } from '../src/services/notificationService';
+import { NotificationItem, subscribeToNotifications } from '../src/services/notificationService';
 
 type TabType = 'all' | 'requests' | 'activity';
 
@@ -62,14 +63,15 @@ export default function NotificationsScreen() {
         return () => unsubscribe();
     }, [user]);
 
-    // 2. Fetch Activity (Mock for now)
+    // 2. Fetch Activity (Real-time)
     useEffect(() => {
         if (!user) return;
-        getNotifications(user.uid).then(data => {
-            // Filter out any potential real requests if the service added them, 
-            // but for now the service only returns mock activity.
+
+        const unsubscribe = subscribeToNotifications(user.uid, (data) => {
             setNotifications(data);
         });
+
+        return () => unsubscribe();
     }, [user]);
 
 
@@ -82,6 +84,7 @@ export default function NotificationsScreen() {
             actorId: req.senderId,
             actorName: req.senderName,
             actorPhotoURL: req.senderPhoto,
+            recipientId: user!.uid, // Required by new type
             message: `sent you a ${req.senderRole === 'creator' ? 'network' : 'friend'} request`,
             timestamp: req.timestamp,
             read: false,
@@ -198,9 +201,9 @@ export default function NotificationsScreen() {
     const displayData = getDisplayData();
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+            <View style={[styles.header, { borderBottomColor: isDark ? '#333' : colors.border, backgroundColor: colors.background }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
@@ -265,7 +268,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingTop: 0,
+        paddingBottom: 6,
         borderBottomWidth: 1,
     },
     backButton: {

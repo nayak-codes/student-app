@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   Dimensions,
   FlatList,
   Image,
@@ -11,14 +12,14 @@ import {
   Linking,
   Modal,
   RefreshControl,
-  SafeAreaView,
   Share,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import ClipsFeed from '../../src/components/ClipsFeed';
 import CreatePostModal from '../../src/components/CreatePostModal';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -105,6 +106,14 @@ const ExploreScreen: React.FC = () => {
   // New state for Clips Feed
   const [showClipsFeed, setShowClipsFeed] = useState(false);
   const [initialClipIndex, setInitialClipIndex] = useState(0);
+
+  // Collapsible Header Logic
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const diffClamp = Animated.diffClamp(scrollY, 0, 110);
+  const translateY = diffClamp.interpolate({
+    inputRange: [0, 110],
+    outputRange: [0, -110],
+  });
 
   // Load posts
   const loadPosts = async () => {
@@ -353,54 +362,58 @@ const ExploreScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <View style={[styles.safeArea, { backgroundColor: colors.background }]} >
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Universal Header */}
-      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={styles.brandContainer}>
-          <Text style={styles.brandText}>Vidhyardi</Text>
-        </View>
+      {/* Collapsible Header */}
+      <Animated.View
+        style={
+          [
+            styles.header,
+            {
+              backgroundColor: colors.background,
+              borderBottomColor: isDark ? '#333' : colors.border,
+              transform: [{ translateY }],
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 1000,
+              elevation: 4,
+            }
+          ]}
+      >
+        <SafeAreaView edges={['top']}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
+            <View style={styles.brandContainer}>
+              <Text style={styles.brandText}>Vidhyardi</Text>
+            </View>
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push({ pathname: '/screens/universal-search', params: { category: 'posts' } })}
-          >
-            <Ionicons name="search-outline" size={26} color={colors.text} />
-          </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => router.push({ pathname: '/screens/universal-search', params: { category: 'posts' } })}
+              >
+                <Ionicons name="search-outline" size={26} color={colors.text} />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/notifications')}
-          >
-            <Ionicons name="notifications-outline" size={26} color={colors.text} />
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => router.push('/notifications')}
+              >
+                <Ionicons name="notifications-outline" size={26} color={colors.text} />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => router.push('/conversations')}
-          >
-            <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Tabs */}
-      <View style={[styles.tabContainer, { backgroundColor: colors.background }]}>
-        <TouchableOpacity
-          style={[styles.segmentBtn, activeTab === 'video' && styles.segmentBtnActive, { backgroundColor: activeTab === 'video' ? colors.primary : colors.card }]}
-          onPress={() => setActiveTab('video')}
-        >
-          <Text style={[styles.segmentText, { color: activeTab === 'video' ? '#FFF' : colors.textSecondary }]}>Videos</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.segmentBtn, activeTab === 'clip' && styles.segmentBtnActive, { backgroundColor: activeTab === 'clip' ? colors.primary : colors.card }]}
-          onPress={() => setActiveTab('clip')}
-        >
-          <Text style={[styles.segmentText, { color: activeTab === 'clip' ? '#FFF' : colors.textSecondary }]}>Clips</Text>
-        </TouchableOpacity>
-      </View>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => router.push('/conversations')}
+              >
+                <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Animated.View >
 
       <FlatList
         key={activeTab}
@@ -408,9 +421,31 @@ const ExploreScreen: React.FC = () => {
         renderItem={activeTab === 'clip' ? renderClipItem : renderVideoItem}
         keyExtractor={item => item.id}
         numColumns={activeTab === 'clip' ? 2 : 1}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        ListHeaderComponent={
+          /* Tabs moved here */
+          <View style={[styles.tabContainer, { backgroundColor: colors.background }]}>
+            <TouchableOpacity
+              style={[styles.segmentBtn, activeTab === 'video' && styles.segmentBtnActive, { backgroundColor: activeTab === 'video' ? colors.primary : colors.card }]}
+              onPress={() => setActiveTab('video')}
+            >
+              <Text style={[styles.segmentText, { color: activeTab === 'video' ? '#FFF' : colors.textSecondary }]}>Videos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.segmentBtn, activeTab === 'clip' && styles.segmentBtnActive, { backgroundColor: activeTab === 'clip' ? colors.primary : colors.card }]}
+              onPress={() => setActiveTab('clip')}
+            >
+              <Text style={[styles.segmentText, { color: activeTab === 'clip' ? '#FFF' : colors.textSecondary }]}>Clips</Text>
+            </TouchableOpacity>
+          </View>
+        }
         contentContainerStyle={[
           styles.listContent,
-          activeTab === 'clip' ? { paddingHorizontal: 16 } : { paddingHorizontal: 0 } // Adjusted padding
+          { paddingTop: 110 }, // Add padding for header
+          activeTab === 'clip' ? { paddingHorizontal: 16, paddingBottom: 100 } : { paddingHorizontal: 0, paddingBottom: 100 }
         ]}
         columnWrapperStyle={activeTab === 'clip' ? { justifyContent: 'space-between', marginBottom: 16 } : undefined}
         showsVerticalScrollIndicator={false}
@@ -448,7 +483,7 @@ const ExploreScreen: React.FC = () => {
           onClose={() => setShowClipsFeed(false)}
         />
       </Modal>
-    </SafeAreaView>
+    </View >
   );
 };
 
@@ -458,8 +493,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingBottom: 6,
     borderBottomWidth: 1,
   },
   brandContainer: {

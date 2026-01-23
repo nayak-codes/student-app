@@ -69,10 +69,15 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
 }) => {
     // Use conditional player that only loads when within buffer window
     const player = useConditionalVideoPlayer(item.videoLink || null, shouldLoad);
+    const [isPlaying, setIsPlaying] = useState(false);
 
     useEffect(() => {
         if (isActive && player) {
             player.play();
+
+            const subscription = player.addListener('playingChange', (event) => {
+                setIsPlaying(event.isPlaying);
+            });
 
             // Add to history when clip starts playing
             addToHistory({
@@ -84,27 +89,35 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
                 url: item.videoLink
             }).catch(err => console.error('Failed to add clip to history:', err));
 
+            return () => {
+                subscription.remove();
+            };
+
         } else if (player) {
             player.pause();
+            setIsPlaying(false);
         }
     }, [isActive, player]);
 
     return (
         <View style={styles.container}>
             <View style={styles.videoContainer}>
-                {player && (
+                {player ? (
                     <VideoView
                         player={player}
                         style={styles.video}
                         contentFit="cover"
                         nativeControls={false}
                     />
+                ) : (
+                    <View style={styles.videoPlaceholder} />
                 )}
-                {/* Thumbnail Overlay - Show if provided and not playing/active logic could be refined but overlays are tricky with VideoView */}
-                {item.thumbnailUrl && !isActive && (
+
+                {/* Thumbnail Overlay - Bridging: Keep visible until actually playing */}
+                {(!isPlaying || !player) && (item.thumbnailUrl || item.imageUrl) && (
                     <Image
-                        source={{ uri: item.thumbnailUrl }}
-                        style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+                        source={{ uri: item.thumbnailUrl || item.imageUrl }}
+                        style={[StyleSheet.absoluteFill, { width: '100%', height: '100%', zIndex: 1 }]}
                         resizeMode="cover"
                     />
                 )}
@@ -433,6 +446,11 @@ const styles = StyleSheet.create({
     video: {
         width: '100%',
         height: '100%',
+    },
+    videoPlaceholder: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#000',
     },
     overlay: {
         position: 'absolute',

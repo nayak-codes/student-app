@@ -106,7 +106,7 @@ const ConversationsScreen = () => {
 
         return (
             <TouchableOpacity
-                style={[styles.conversationItem, { backgroundColor: colors.card, borderBottomColor: isDark ? colors.border : '#F8FAFC' }]}
+                style={[styles.conversationItem, { backgroundColor: colors.card, borderBottomColor: isDark ? '#333' : '#F1F5F9' }]}
                 onPress={() => {
                     router.push({
                         pathname: '/chat-screen',
@@ -138,24 +138,26 @@ const ConversationsScreen = () => {
                     )}
                 </View>
 
+                {/* Right Content */}
                 <View style={styles.conversationContent}>
-                    <View style={styles.conversationHeader}>
+                    {/* Top Row: Name and Time Separated */}
+                    <View style={styles.topRow}>
                         <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
                             {otherUser.name}
                         </Text>
                         {item.lastMessage && (
-                            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+                            <Text style={[styles.timestamp, { color: unreadCount > 0 ? colors.primary : colors.textSecondary }]}>
                                 {formatTimestamp(item.lastMessage.timestamp)}
                             </Text>
                         )}
                     </View>
 
-                    <View style={styles.messageRow}>
+                    {/* Bottom Row: Message and Badge */}
+                    <View style={styles.bottomRow}>
                         <Text
                             style={[
                                 styles.lastMessage,
-                                { color: unreadCount > 0 ? colors.text : colors.textSecondary },
-                                unreadCount > 0 && styles.unreadMessage,
+                                { color: unreadCount > 0 ? colors.text : colors.textSecondary, fontWeight: unreadCount > 0 ? '600' : '400' },
                             ]}
                             numberOfLines={1}
                         >
@@ -311,15 +313,13 @@ const styles = StyleSheet.create({
     conversationItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        backgroundColor: '#FFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F8FAFC',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        marginBottom: 1, // Slight separation
     },
     avatarContainer: {
         position: 'relative',
-        marginRight: 12,
+        marginRight: 16,
     },
     avatar: {
         width: 52,
@@ -327,7 +327,9 @@ const styles = StyleSheet.create({
         borderRadius: 26,
     },
     avatarPlaceholder: {
-        backgroundColor: '#4F46E5',
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -349,37 +351,35 @@ const styles = StyleSheet.create({
     },
     conversationContent: {
         flex: 1,
+        justifyContent: 'center',
     },
-    conversationHeader: {
+    topRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center', // Align center vertically
+        marginBottom: 6,
+    },
+    bottomRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 4,
+        justifyContent: 'space-between',
     },
     userName: {
         fontSize: 16,
-        fontWeight: '600',
-        color: '#1E293B',
+        fontWeight: '700', // Stronger weight
         flex: 1,
+        marginRight: 8,
     },
     timestamp: {
         fontSize: 12,
-        color: '#94A3B8',
-        marginLeft: 8,
-    },
-    messageRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        fontWeight: '500',
+        minWidth: 50, // Minimum width
+        textAlign: 'right',
     },
     lastMessage: {
         fontSize: 14,
-        color: '#64748B',
         flex: 1,
-    },
-    unreadMessage: {
-        color: '#1E293B',
-        fontWeight: '600',
+        marginRight: 16, // Space before badge
     },
     unreadBadge: {
         backgroundColor: '#4F46E5',
@@ -389,7 +389,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 6,
-        marginLeft: 8,
     },
     unreadBadgeText: {
         fontSize: 11,

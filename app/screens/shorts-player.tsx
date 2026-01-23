@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
-import { Alert, Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View, ViewToken } from 'react-native';
+import { Alert, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View, ViewToken } from 'react-native';
 import CommentsSheet from '../../src/components/CommentsSheet';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useConditionalVideoPlayer } from '../../src/hooks/useConditionalVideoPlayer';
@@ -115,7 +115,7 @@ export default function ShortsPlayerScreen() {
     return (
         <View style={styles.container}>
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+            <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="chevron-down" size={32} color="#FFF" />
                 </TouchableOpacity>
@@ -167,13 +167,19 @@ function ShortItem({ short, isActive, shouldLoad, onComments }: ShortItemProps) 
     const { colors } = useTheme();
     const router = useRouter();
     const player = useConditionalVideoPlayer(short.videoLink || null, shouldLoad);
+    const [isPlaying, setIsPlaying] = useState(false);
 
     // Only play when active
     useEffect(() => {
         if (isActive && player) {
             player.play();
+            const subscription = player.addListener('playingChange', (event) => {
+                setIsPlaying(event.isPlaying);
+            });
+            return () => subscription.remove();
         } else if (player) {
             player.pause();
+            setIsPlaying(false);
         }
     }, [isActive, player]);
 
@@ -190,6 +196,21 @@ function ShortItem({ short, isActive, shouldLoad, onComments }: ShortItemProps) 
                     />
                 ) : (
                     <View style={styles.video} />
+                )}
+
+                {/* Thumbnail Bridging */}
+                {(!isPlaying || !player) && (
+                    <View style={[StyleSheet.absoluteFill, { zIndex: 1 }]}>
+                        {short.thumbnailUrl || short.imageUrl ? (
+                            <Image
+                                source={{ uri: short.thumbnailUrl || short.imageUrl }}
+                                style={{ width: '100%', height: '100%' }}
+                                resizeMode="cover"
+                            />
+                        ) : (
+                            <View style={{ flex: 1, backgroundColor: '#000' }} />
+                        )}
+                    </View>
                 )}
             </View>
 

@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     Dimensions,
     FlatList,
     Image,
     Modal,
     RefreshControl,
-    SafeAreaView,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -17,6 +17,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../../src/config/firebase';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { getUserProfile } from '../../src/services/authService';
@@ -484,40 +485,62 @@ const EventsScreen = () => {
         </View>
     );
 
+    // Collapsible Header Logic
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const diffClamp = Animated.diffClamp(scrollY, 0, 160);
+    const translateY = diffClamp.interpolate({
+        inputRange: [0, 160],
+        outputRange: [0, -160],
+    });
+
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-            {/* Sticky Header with Tab */}
-            <View style={[styles.stickyHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-                <View style={styles.tabContainer}>
-                    <View style={[styles.activeTab, { borderBottomColor: colors.primary }]}>
-                        <Text style={[styles.tabText, { color: colors.primary }]}>For You</Text>
+            {/* Collapsible Top Section (Tab + Search) */}
+            <Animated.View style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 1000,
+                backgroundColor: colors.background,
+                transform: [{ translateY }],
+                elevation: 4,
+            }}>
+                <SafeAreaView edges={['top']}>
+                    {/* Sticky Header with Tab */}
+                    <View style={[styles.stickyHeader, { backgroundColor: colors.background, borderBottomColor: isDark ? '#333' : colors.border }]}>
+                        <View style={styles.tabContainer}>
+                            <View style={[styles.activeTab, { borderBottomColor: colors.primary }]}>
+                                <Text style={[styles.tabText, { color: colors.primary }]}>For You</Text>
+                            </View>
+                        </View>
                     </View>
-                </View>
-            </View>
 
-            {/* Search Bar */}
-            <View style={[styles.searchContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-                <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border }]}>
-                    <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
-                    <TextInput
-                        style={[styles.searchInput, { color: colors.text }]}
-                        placeholder="Search events..."
-                        placeholderTextColor={colors.textSecondary}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                    {/* Search Bar */}
+                    <View style={[styles.searchContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                        <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border }]}>
+                            <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.text }]}
+                                placeholder="Search events..."
+                                placeholderTextColor={colors.textSecondary}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                                    <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <TouchableOpacity onPress={() => setModalVisible(true)} style={[styles.filterButton, { backgroundColor: isDark ? colors.card : '#EEF2FF', borderColor: isDark ? colors.border : '#C7D2FE' }]}>
+                            <Ionicons name="options-outline" size={20} color={colors.primary} />
                         </TouchableOpacity>
-                    )}
-                </View>
-                <TouchableOpacity onPress={() => setModalVisible(true)} style={[styles.filterButton, { backgroundColor: isDark ? colors.card : '#EEF2FF', borderColor: isDark ? colors.border : '#C7D2FE' }]}>
-                    <Ionicons name="options-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-            </View>
+                    </View>
+                </SafeAreaView>
+            </Animated.View>
 
             {/* Main Feed */}
             {loading ? (
@@ -529,7 +552,11 @@ const EventsScreen = () => {
                     data={filteredEvents}
                     renderItem={renderEventCard}
                     keyExtractor={(item) => item.id || `event-${Math.random()}`}
-                    contentContainerStyle={styles.feed}
+                    contentContainerStyle={[styles.feed, { paddingTop: 160 }]}
+                    onScroll={Animated.event(
+                        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                        { useNativeDriver: false }
+                    )}
                     ListHeaderComponent={renderHeader}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
@@ -720,7 +747,7 @@ const EventsScreen = () => {
             >
                 <Ionicons name="add" size={32} color="#FFF" />
             </TouchableOpacity>
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -733,6 +760,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
+        paddingTop: 0,
     },
     tabContainer: {
         paddingHorizontal: 20,

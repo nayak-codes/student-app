@@ -70,7 +70,7 @@ export const sendFriendRequest = async (targetUserId: string): Promise<void> => 
         }
 
         // Create friend request
-        await addDoc(collection(db, 'friends'), {
+        const requestRef = await addDoc(collection(db, 'friends'), {
             userId: currentUser.uid,
             friendId: targetUserId,
             status: 'pending',
@@ -79,6 +79,27 @@ export const sendFriendRequest = async (targetUserId: string): Promise<void> => 
         });
 
         console.log('Friend request sent successfully');
+
+        // Send Notification
+        try {
+            // Fetch current user details properly to ensure valid name/photo
+            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+            const userData = userDoc.exists() ? userDoc.data() : {};
+
+            const { sendNotification } = require('./notificationService');
+            await sendNotification(
+                targetUserId,
+                currentUser.uid,
+                userData.displayName || currentUser.displayName || 'User',
+                userData.photoURL || currentUser.photoURL,
+                'friend_request', // We use this type to link to the request
+                'sent you a connection request',
+                { requestId: requestRef.id }
+            );
+        } catch (notifError) {
+            console.error('Error sending notification:', notifError);
+            // Don't fail the request if notification fails
+        }
     } catch (error) {
         console.error('Error sending friend request:', error);
         throw error;

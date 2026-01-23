@@ -11,8 +11,9 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { EventItem } from '../src/services/eventService';
 
@@ -74,11 +75,11 @@ export default function EventDetailScreen() {
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-            // Header
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            {/* Header */}
+            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: isDark ? '#333' : colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
@@ -89,32 +90,32 @@ export default function EventDetailScreen() {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                // Event Image
+                {/* Event Image */}
                 {event.image && (
                     <Image source={{ uri: event.image }} style={styles.eventImage} resizeMode="cover" />
                 )}
 
-                // Category Badge
+                {/* Category Badge */}
                 <View style={[styles.categoryBadge, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF', borderColor: isDark ? '#334155' : '#C7D2FE' }]}>
                     <Text style={[styles.categoryText, { color: isDark ? '#818CF8' : '#4F46E5' }]}>{event.category}</Text>
                 </View>
 
-                // Event Title
+                {/* Event Title */}
                 <Text style={[styles.eventTitle, { color: colors.text }]}>{event.title}</Text>
 
-                // Organization
+                {/* Organization */}
                 <View style={styles.infoRow}>
                     <Ionicons name="business-outline" size={20} color={colors.textSecondary} />
                     <Text style={[styles.infoText, { color: colors.text }]}>{event.organization}</Text>
                 </View>
 
-                // Date & Time
+                {/* Date & Time */}
                 <View style={styles.infoRow}>
                     <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
                     <Text style={[styles.infoText, { color: colors.text }]}>{event.date}</Text>
                 </View>
 
-                // Location
+                {/* Location */}
                 <View style={styles.infoRow}>
                     <Ionicons
                         name={event.isOnline ? "globe-outline" : "location-outline"}
@@ -129,13 +130,13 @@ export default function EventDetailScreen() {
                     )}
                 </View>
 
-                // Description
+                {/* Description */}
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>About This Event</Text>
                     <Text style={[styles.description, { color: colors.textSecondary }]}>{event.description}</Text>
                 </View>
 
-                // Registration Link
+                {/* Registration Link */}
                 {event.link && (
                     <TouchableOpacity
                         style={[
@@ -153,7 +154,7 @@ export default function EventDetailScreen() {
                     </TouchableOpacity>
                 )}
 
-                // Action Buttons
+                {/* Action Buttons */}
                 <View style={styles.actionButtons}>
                     <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary }]}>
                         <Ionicons name="bookmark-outline" size={20} color="#FFF" />
@@ -177,7 +178,7 @@ export default function EventDetailScreen() {
 
                 <View style={{ height: 40 }} />
             </ScrollView>
-        </View>
+        </SafeAreaView>
     );
 }
 
@@ -215,8 +216,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingTop: 60,
-        paddingBottom: 16,
+        paddingTop: 0,
+        paddingBottom: 6,
         borderBottomWidth: 1,
     },
     headerButton: {
