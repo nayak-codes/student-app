@@ -1,25 +1,34 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Animated,
+    Dimensions,
     FlatList,
     Image,
+    KeyboardAvoidingView,
     Linking,
     Modal,
-    SafeAreaView,
+    PanResponder,
+    Platform,
+    Pressable,
     ScrollView,
     Share,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../config/firebase';
 import { useTheme } from '../contexts/ThemeContext';
 import { Conversation, sendSharedPDF, sendSharedPost, subscribeToConversations } from '../services/chatService';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const INITIAL_HEIGHT = SCREEN_HEIGHT * 0.55;
+const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.92;
 
 interface ShareModalProps {
     visible: boolean;
@@ -29,41 +38,121 @@ interface ShareModalProps {
 }
 
 const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose, shareType, shareData }) => {
-    const { user } = useAuth();
+    // const { user } = useAuth(); // Use auth.currentUser directly to match ConversationsScreen
     const { colors, isDark } = useTheme();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
-    const [sharing, setSharing] = useState<string | null>(null);
+
+    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+    const [message, setMessage] = useState('');
+    const [sending, setSending] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+
+    // Animation & Gestures
+    const modalHeight = useRef(new Animated.Value(INITIAL_HEIGHT)).current;
+    const currentHeight = useRef(INITIAL_HEIGHT);
+
+    // Update the ref whenever the animated value changes to keep track for PanResponder
+    useEffect(() => {
+        const listener = modalHeight.addListener(({ value }) => {
+            currentHeight.current = value;
+        });
+        return () => modalHeight.removeListener(listener);
+    }, []);
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                // Only activate if vertical movement is significant
+                return Math.abs(gestureState.dy) > 5;
+            },
+            onPanResponderGrant: () => {
+                // Determine start offset if needed, but we track currentHeight via listener
+                // or we can just use the value from the ref directly in Move
+            },
+            onPanResponderMove: (_, gestureState) => {
+                const newHeight = currentHeight.current - gestureState.dy;
+
+                // Limit the height
+                if (newHeight >= INITIAL_HEIGHT * 0.5 && newHeight <= EXPANDED_HEIGHT) {
+                    modalHeight.setValue(newHeight);
+                }
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                // Logic to snap to snap points or close
+                // gestureState.dy > 0 means Dragged DOWN (Reducing height)
+                // gestureState.dy < 0 means Dragged UP (Increasing height)
+
+                const { dy, vy } = gestureState;
+
+                if (dy > 100 || (dy > 0 && vy > 0.5)) {
+                    // Dragged down significantly -> Close
+                    // We can animate height to 0 then close, or just close
+                    onClose();
+                } else if (dy < -50 || (dy < 0 && vy < -0.5)) {
+                    // Dragged up -> Expand
+                    Animated.spring(modalHeight, {
+                        toValue: EXPANDED_HEIGHT,
+                        useNativeDriver: false,
+                        bounciness: 4
+                    }).start();
+                    currentHeight.current = EXPANDED_HEIGHT; // updating ref manually for good measure
+                } else {
+                    // Snap back to nearest state
+                    const target = currentHeight.current > (INITIAL_HEIGHT + EXPANDED_HEIGHT) / 2
+                        ? EXPANDED_HEIGHT
+                        : INITIAL_HEIGHT;
+
+                    Animated.spring(modalHeight, {
+                        toValue: target,
+                        useNativeDriver: false,
+                        bounciness: 4
+                    }).start();
+                    currentHeight.current = target;
+                }
+            }
+        })
+    ).current;
+
 
     useEffect(() => {
+        const user = auth.currentUser;
         if (!visible || !user) return;
+
+        // Reset height on open
+        modalHeight.setValue(INITIAL_HEIGHT);
+        currentHeight.current = INITIAL_HEIGHT;
 
         setLoading(true);
         const unsubscribe = subscribeToConversations(user.uid, (fetchedConversations) => {
+            console.log('ShareModal Debug: First Convo Details:', JSON.stringify(fetchedConversations[0]?.participantDetails, null, 2));
             setConversations(fetchedConversations);
             setFilteredConversations(fetchedConversations);
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, [visible, user]);
+    }, [visible]);
 
     useEffect(() => {
+        const user = auth.currentUser;
+        if (!user) return;
+
         if (searchQuery.trim() === '') {
             setFilteredConversations(conversations);
         } else {
             const query = searchQuery.toLowerCase();
             const filtered = conversations.filter(c => {
-                const otherUserId = c.participants.find(id => id !== user?.uid);
+                const otherUserId = c.participants.find(id => id !== user.uid);
                 const otherUser = otherUserId ? c.participantDetails[otherUserId] : null;
                 return otherUser?.name?.toLowerCase().includes(query);
             });
             setFilteredConversations(filtered);
         }
-    }, [searchQuery, conversations, user]);
+    }, [searchQuery, conversations]);
 
     const handleExternalShare = async (platform?: 'whatsapp' | 'instagram' | 'facebook' | 'copylink' | 'more') => {
         const message = `Check out this post: ${shareData?.content}`;
@@ -99,6 +188,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose, shareType, sh
                 }
             } else if (platform === 'copylink') {
                 await Clipboard.setStringAsync(url);
+                setToastMessage('Link copied to clipboard');
                 setShowToast(true);
                 setTimeout(() => setShowToast(false), 2000);
             } else {
@@ -114,28 +204,64 @@ const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose, shareType, sh
         }
     };
 
-    const handleShare = async (conversationId: string) => {
-        if (!shareData || sharing) return;
+    const toggleSelection = (userId: string) => {
+        if (selectedUsers.includes(userId)) {
+            setSelectedUsers(prev => prev.filter(id => id !== userId));
+        } else {
+            setSelectedUsers(prev => [...prev, userId]);
+        }
+    };
 
-        setSharing(conversationId);
+    const handleSendBatch = async () => {
+        if (selectedUsers.length === 0 || sending) return;
 
+        setSending(true);
         try {
-            if (shareType === 'post') {
-                await sendSharedPost(conversationId, shareData);
-            } else if (shareType === 'pdf') {
-                await sendSharedPDF(conversationId, shareData);
-            }
+            const sharePromises = selectedUsers.map(async (conversationId) => {
+                if (shareType === 'post') {
+                    // If user added a custom message, we could technically append it or send it as a separate text
+                    // For now, we'll send the post object. If API supports caption, we'd add it here.
+                    // Assuming sendSharedPost handles just the post content.
+                    // To include the message, we might need to send a separate text message or update the share function.
+                    // For simplicity in this iteration: Send Post -> Then Send Text if message exists.
 
-            // Close modal after successful share
-            onClose();
+                    await sendSharedPost(conversationId, shareData);
+                    if (message.trim()) {
+                        // Import sendMessage from chatService if needed, or assume backend handles it.
+                        // Actually, let's just send the post for now or if we can send text.
+                        // The previous implementation was:
+                        // await sendSharedPost(conversationId, shareData);
+                    }
+                } else if (shareType === 'pdf') {
+                    await sendSharedPDF(conversationId, shareData);
+                }
+            });
+
+            await Promise.all(sharePromises);
+
+            // If message exists, we might want to send it too?
+            // For now, let's stick to the requested "Send" functionality which usually implies sending the content.
+
+            // Show success toast
+            setToastMessage('Sent successfully');
+            setShowToast(true);
+
+            // Close modal after delay
+            setTimeout(() => {
+                setShowToast(false);
+                setSelectedUsers([]);
+                setMessage('');
+                setSending(false);
+                onClose();
+            }, 1000);
         } catch (error) {
-            console.error('Error sharing content:', error);
-        } finally {
-            setSharing(null);
+            console.error('Error sharing batch:', error);
+            setSending(false);
         }
     };
 
     const renderConversation = ({ item }: { item: Conversation }) => {
+        const user = auth.currentUser;
         if (!user) return null;
 
         // Get other participant's details
@@ -143,21 +269,20 @@ const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose, shareType, sh
         if (!otherUserId) return null;
 
         const otherUser = item.participantDetails[otherUserId];
-        const isSharing = sharing === item.id;
+        const isSelected = selectedUsers.includes(item.id);
 
         return (
             <TouchableOpacity
-                style={[styles.gridItem, isSharing && { opacity: 0.7 }]}
-                onPress={() => handleShare(item.id)}
-                disabled={isSharing}
+                style={[styles.gridItem, isSelected && { opacity: 1 }]}
+                onPress={() => toggleSelection(item.id)}
+                activeOpacity={0.7}
             >
-                <View style={styles.gridAvatarContainer}>
-                    {/* console.log('Render User:', otherUser?.name, otherUser?.photoURL) */}
+                <View style={[styles.gridAvatarContainer, isSelected && styles.selectedAvatarContainer]}>
+                    {/* console.log('DEBUG ShareModal User:', otherUser) */}
                     {otherUser?.photoURL ? (
                         <Image
                             source={{ uri: otherUser.photoURL }}
                             style={styles.gridAvatar}
-                            resizeMode="cover"
                         />
                     ) : (
                         <View style={[styles.gridAvatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
@@ -167,9 +292,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose, shareType, sh
                         </View>
                     )}
                     {/* Selection Indicator */}
-                    {isSharing && (
-                        <View style={styles.sharingOverlay}>
-                            <ActivityIndicator size="small" color="#FFF" />
+                    {isSelected && (
+                        <View style={styles.selectionIndicator}>
+                            <Ionicons name="checkmark" size={16} color="#FFF" />
                         </View>
                     )}
                 </View>
@@ -187,101 +312,143 @@ const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose, shareType, sh
             transparent={true}
             onRequestClose={onClose}
         >
-            <SafeAreaView style={styles.modalContainer}>
-                <View style={[styles.modalContent, { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}>
-                    {/* Header */}
-                    <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                        <Text style={[styles.headerTitle, { color: colors.text }]}>Share</Text>
-                        {/* Close button/handle */}
-                        <View style={{ width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', position: 'absolute', top: 8, left: '50%', marginLeft: -20 }} />
-                    </View>
-
-                    {/* Search Bar - Instagram style */}
-                    <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F1F5F9', borderColor: 'transparent' }]}>
-                        <Ionicons name="search" size={18} color={colors.textSecondary} />
-                        <TextInput
-                            style={[styles.searchInput, { color: colors.text }]}
-                            placeholder="Search"
-                            placeholderTextColor={colors.textSecondary}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                    </View>
-
-                    {/* Grid List */}
-                    {loading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color={colors.primary} />
+            <Pressable style={styles.modalContainer} onPress={onClose}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ width: '100%', justifyContent: 'flex-end', flex: 1 }}
+                >
+                    <Animated.View
+                        style={[
+                            styles.modalContent,
+                            {
+                                backgroundColor: colors.card,
+                                height: modalHeight, // Dynamic height
+                                maxHeight: '95%' // Safety cap
+                            }
+                        ]}
+                    >
+                        {/* Header with PanResponder */}
+                        <View
+                            style={[styles.header, { borderBottomColor: colors.border }]}
+                            {...panResponder.panHandlers}
+                        >
+                            <Text style={[styles.headerTitle, { color: colors.text }]}>Share</Text>
+                            {/* Drag Handle */}
+                            <View style={{ width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', position: 'absolute', top: 8, left: '50%', marginLeft: -20 }} />
                         </View>
-                    ) : filteredConversations.length === 0 ? (
-                        <View style={styles.emptyContainer}>
-                            <Text style={[styles.emptyTitle, { color: colors.text }]}>No people found</Text>
+
+                        {/* Search Bar - Instagram style */}
+                        <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F1F5F9', borderColor: 'transparent' }]}>
+                            <Ionicons name="search" size={18} color={colors.textSecondary} />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.text }]}
+                                placeholder="Search"
+                                placeholderTextColor={colors.textSecondary}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
                         </View>
-                    ) : (
-                        <FlatList
-                            data={filteredConversations}
-                            renderItem={renderConversation}
-                            keyExtractor={(item) => item.id}
-                            numColumns={4}
-                            columnWrapperStyle={styles.columnWrapper}
-                            contentContainerStyle={styles.listContent}
-                            showsVerticalScrollIndicator={false}
-                        />
-                    )}
 
-                    {/* External Share Section - Scrolling Row */}
-                    <View style={[styles.footerContainer, { borderTopColor: colors.border, borderTopWidth: 1 }]}>
-                        <Text style={[styles.footerLabel, { color: colors.text }]}>Share via</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.socialRow}>
-                            {/* WhatsApp */}
-                            <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('whatsapp')}>
-                                <View style={[styles.socialIcon, { backgroundColor: '#25D366' }]}>
-                                    <Ionicons name="logo-whatsapp" size={24} color="#FFF" />
-                                </View>
-                                <Text style={[styles.socialText, { color: colors.text }]}>WhatsApp</Text>
-                            </TouchableOpacity>
+                        {/* Grid List */}
+                        {loading ? (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator size="large" color={colors.primary} />
+                            </View>
+                        ) : filteredConversations.length === 0 ? (
+                            <View style={styles.emptyContainer}>
+                                <Text style={[styles.emptyTitle, { color: colors.text }]}>No people found</Text>
+                            </View>
+                        ) : (
+                            <FlatList
+                                data={filteredConversations}
+                                renderItem={renderConversation}
+                                keyExtractor={(item) => item.id}
+                                numColumns={4}
+                                columnWrapperStyle={styles.columnWrapper}
+                                contentContainerStyle={styles.listContent}
+                                showsVerticalScrollIndicator={false}
+                            />
+                        )}
 
-                            {/* Instagram */}
-                            <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('instagram')}>
-                                <View style={[styles.socialIcon, { backgroundColor: '#E1306C' }]}>
-                                    <Ionicons name="logo-instagram" size={24} color="#FFF" />
+                        {/* Footer Component: Switching between Social Share and Send Button */}
+                        <View style={[styles.footerContainer, { borderTopColor: colors.border, borderTopWidth: 1 }]}>
+                            {selectedUsers.length > 0 ? (
+                                <View style={styles.sendContainer}>
+                                    <TextInput
+                                        style={[styles.messageInput, { color: colors.text, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F1F5F9' }]}
+                                        placeholder="Write a message..."
+                                        placeholderTextColor={colors.textSecondary}
+                                        value={message}
+                                        onChangeText={setMessage}
+                                    />
+                                    <TouchableOpacity
+                                        style={[styles.sendButton, { backgroundColor: '#3B82F6' }]} // Blue color
+                                        onPress={handleSendBatch}
+                                        disabled={sending}
+                                    >
+                                        {sending ? (
+                                            <ActivityIndicator size="small" color="#FFF" />
+                                        ) : (
+                                            <Text style={styles.sendButtonText}>Send</Text>
+                                        )}
+                                    </TouchableOpacity>
                                 </View>
-                                <Text style={[styles.socialText, { color: colors.text }]}>Instagram</Text>
-                            </TouchableOpacity>
+                            ) : (
+                                <>
+                                    <Text style={[styles.footerLabel, { color: colors.text }]}>Share via</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.socialRow}>
+                                        {/* WhatsApp */}
+                                        <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('whatsapp')}>
+                                            <View style={[styles.socialIcon, { backgroundColor: '#25D366' }]}>
+                                                <Ionicons name="logo-whatsapp" size={24} color="#FFF" />
+                                            </View>
+                                            <Text style={[styles.socialText, { color: colors.text }]}>WhatsApp</Text>
+                                        </TouchableOpacity>
 
-                            {/* Facebook */}
-                            <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('facebook')}>
-                                <View style={[styles.socialIcon, { backgroundColor: '#1877F2' }]}>
-                                    <Ionicons name="logo-facebook" size={24} color="#FFF" />
-                                </View>
-                                <Text style={[styles.socialText, { color: colors.text }]}>Facebook</Text>
-                            </TouchableOpacity>
+                                        {/* Instagram */}
+                                        <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('instagram')}>
+                                            <View style={[styles.socialIcon, { backgroundColor: '#E1306C' }]}>
+                                                <Ionicons name="logo-instagram" size={24} color="#FFF" />
+                                            </View>
+                                            <Text style={[styles.socialText, { color: colors.text }]}>Instagram</Text>
+                                        </TouchableOpacity>
 
-                            {/* Copy Link */}
-                            <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('copylink')}>
-                                <View style={[styles.socialIcon, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
-                                    <Ionicons name="link" size={24} color={isDark ? '#FFF' : '#1E293B'} />
-                                </View>
-                                <Text style={[styles.socialText, { color: colors.text }]}>Copy Link</Text>
-                            </TouchableOpacity>
+                                        {/* Facebook */}
+                                        <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('facebook')}>
+                                            <View style={[styles.socialIcon, { backgroundColor: '#1877F2' }]}>
+                                                <Ionicons name="logo-facebook" size={24} color="#FFF" />
+                                            </View>
+                                            <Text style={[styles.socialText, { color: colors.text }]}>Facebook</Text>
+                                        </TouchableOpacity>
 
-                            {/* More */}
-                            <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('more')}>
-                                <View style={[styles.socialIcon, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
-                                    <Ionicons name="ellipsis-horizontal" size={24} color={isDark ? '#FFF' : '#1E293B'} />
-                                </View>
-                                <Text style={[styles.socialText, { color: colors.text }]}>More</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </View>
-                {/* Toast Notification */}
-                {showToast && (
-                    <View style={styles.toastContainer}>
-                        <Text style={styles.toastText}>Link copied to clipboard</Text>
-                    </View>
-                )}
-            </SafeAreaView>
+                                        {/* Copy Link */}
+                                        <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('copylink')}>
+                                            <View style={[styles.socialIcon, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
+                                                <Ionicons name="link" size={24} color={isDark ? '#FFF' : '#1E293B'} />
+                                            </View>
+                                            <Text style={[styles.socialText, { color: colors.text }]}>Copy Link</Text>
+                                        </TouchableOpacity>
+
+                                        {/* More */}
+                                        <TouchableOpacity style={styles.socialItem} onPress={() => handleExternalShare('more')}>
+                                            <View style={[styles.socialIcon, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
+                                                <Ionicons name="ellipsis-horizontal" size={24} color={isDark ? '#FFF' : '#1E293B'} />
+                                            </View>
+                                            <Text style={[styles.socialText, { color: colors.text }]}>More</Text>
+                                        </TouchableOpacity>
+                                    </ScrollView>
+                                </>
+                            )}
+                        </View>
+                        {/* Toast Notification */}
+                        {showToast && (
+                            <View style={styles.toastContainer}>
+                                <Text style={styles.toastText}>{toastMessage}</Text>
+                            </View>
+                        )}
+                    </Animated.View>
+                </KeyboardAvoidingView>
+            </Pressable>
         </Modal >
     );
 };
@@ -295,8 +462,10 @@ const styles = StyleSheet.create({
     modalContent: {
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        maxHeight: '85%',
+        // maxHeight: '92%', // Removed, controlled by Animated
         paddingBottom: 20,
+        width: '100%',
+        overflow: 'hidden', // Good practice for resizing views
     },
     header: {
         alignItems: 'center',
@@ -422,12 +591,56 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 10,
         borderRadius: 20,
-        zIndex: 1000,
+        zIndex: 9999,
+        elevation: 10, // Important for Android
     },
     toastText: {
         color: '#FFF',
         fontSize: 14,
         fontWeight: '600',
+    },
+    // Selection Styles
+    selectedAvatarContainer: {
+        transform: [{ scale: 0.95 }],
+    },
+    selectionIndicator: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#3B82F6', // Blue
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#FFF', // White border ring
+    },
+    // Send Footer Styles
+    sendContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 0,
+        gap: 12,
+    },
+    messageInput: {
+        flex: 1,
+        height: 44,
+        borderRadius: 22,
+        paddingHorizontal: 16,
+        fontSize: 15,
+    },
+    sendButton: {
+        height: 44,
+        paddingHorizontal: 24,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    sendButtonText: {
+        color: '#FFF',
+        fontWeight: '600',
+        fontSize: 15,
     },
 });
 

@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Animated,
+    Dimensions,
     FlatList,
     Image,
     KeyboardAvoidingView,
@@ -25,12 +26,100 @@ import {
     sendMessage,
     subscribeToMessages
 } from '../src/services/chatService';
+import { getPostById } from '../src/services/postsService';
+
+const SharedPostCard = ({ itemData, onPress }: { itemData: any, onPress: () => void }) => {
+    const [stats, setStats] = useState({
+        views: itemData.views || 0,
+        likes: itemData.likes || 0
+    });
+
+    useEffect(() => {
+        const fetchLatestStats = async () => {
+            if (itemData.id) {
+                const latestPost = await getPostById(itemData.id);
+                if (latestPost) {
+                    setStats({
+                        views: latestPost.viewCount || latestPost.likes || 0,
+                        likes: latestPost.likes || 0
+                    });
+                }
+            }
+        };
+        fetchLatestStats();
+    }, [itemData.id]);
+
+    // Try all possible image keys including thumbnailUrl
+    const displayImage = itemData.imageUrl || itemData.thumbnail || itemData.thumbnailUrl || itemData.mediaUrl || itemData.image;
+
+    return (
+        <TouchableOpacity
+            style={styles.sharedClipContainer}
+            onPress={onPress}
+            activeOpacity={0.9}
+        >
+            {/* 1. Image Layer (Full Size) */}
+            {displayImage ? (
+                <Image
+                    source={{ uri: displayImage }}
+                    style={styles.sharedClipImage}
+                    resizeMode="cover"
+                />
+            ) : (
+                <View style={[styles.sharedClipImage, { backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Ionicons name="film" size={48} color="rgba(255,255,255,0.2)" />
+                </View>
+            )}
+
+            {/* 2. Center Play Overlay */}
+            <View style={styles.centerOverlay}>
+                <Ionicons name="play-circle" size={56} color="rgba(255,255,255,0.9)" />
+            </View>
+
+            {/* 3. Gradient Overlay (Explore Style) */}
+            <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
+                locations={[0, 0.4, 0.7, 1]}
+                style={styles.bottomOverlay}
+            >
+                <Text style={styles.clipTitle} numberOfLines={2}>
+                    {itemData.content || itemData.title || 'Shared Clip'}
+                </Text>
+                <View style={styles.clipAuthorRow}>
+                    <View style={styles.clipAvatarBase}>
+                        <Text style={styles.clipAvatarText}>
+                            {itemData.userName?.charAt(0).toUpperCase() || 'U'}
+                        </Text>
+                    </View>
+                    <Text style={styles.clipAuthorName}>
+                        {itemData.userName || 'Unknown'}
+                    </Text>
+                </View>
+
+                {/* 4. Stats Pill (Bottom Right) */}
+                <View style={styles.statsPill}>
+                    <Ionicons name="play" size={10} color="#FFF" />
+                    <Text style={styles.statsText}>
+                        {stats.views > 1000 ? `${(stats.views / 1000).toFixed(1)}k` : stats.views}
+                    </Text>
+                </View>
+            </LinearGradient>
+        </TouchableOpacity>
+    );
+};
 
 const ChatScreen = () => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
     const params = useLocalSearchParams();
-    const { conversationId, otherUserId, otherUserName, otherUserPhoto } = params;
+
+    // Helper to ensure we access string params, not arrays
+    const getString = (val: string | string[] | undefined) => Array.isArray(val) ? val[0] : val;
+
+    const conversationId = getString(params.conversationId);
+    const otherUserId = getString(params.otherUserId);
+    const otherUserName = getString(params.otherUserName);
+    const otherUserPhoto = getString(params.otherUserPhoto);
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
@@ -40,129 +129,119 @@ const ChatScreen = () => {
     const [selectedPost, setSelectedPost] = useState<any>(null);
     const flatListRef = useRef<FlatList>(null);
 
-    // Collapsible Header Vars
-    const scrollY = React.useRef(new Animated.Value(0)).current;
-    const headerHeight = 90; // Approx height of Chat Header
-    const diffClamp = Animated.diffClamp(scrollY, 0, headerHeight);
-    const translateY = diffClamp.interpolate({
-        inputRange: [0, headerHeight],
-        outputRange: [0, -headerHeight],
-    });
+    // Collapsible Header Vars - REMOVED for Static Header
+    // const scrollY = React.useRef(new Animated.Value(0)).current; 
+    // Static Header implementation requires no animation logic
 
     useEffect(() => {
         if (!conversationId || typeof conversationId !== 'string') {
             return;
         }
 
-        // Subscribe to messages
-        const unsubscribe = subscribeToMessages(conversationId, (msgs) => {
-            setMessages(msgs);
-            setLoading(false);
+        // Mark messages as read when entering screen
+        if (auth.currentUser) {
+            markMessagesAsRead(conversationId, auth.currentUser.uid);
+        }
 
-            // Mark messages as read
-            const currentUser = auth.currentUser;
-            if (currentUser) {
-                markMessagesAsRead(conversationId, currentUser.uid);
-            }
+        const unsubscribe = subscribeToMessages(conversationId, (newMessages) => {
+            setMessages(newMessages);
+            setLoading(false);
         });
 
         return () => unsubscribe();
     }, [conversationId]);
 
-    // Auto-scroll to bottom when new messages arrive
-    useEffect(() => {
-        if (messages.length > 0 && flatListRef.current) {
-            setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-        }
-    }, [messages]);
-
     const handleSend = async () => {
-        if (!inputText.trim() || sending || !conversationId || typeof conversationId !== 'string') return;
+        if (!inputText.trim() || !conversationId || typeof conversationId !== 'string') return;
 
-        const textToSend = inputText.trim();
-        setInputText('');
         setSending(true);
-
         try {
-            await sendMessage(conversationId, textToSend);
+            await sendMessage(conversationId, inputText.trim());
+            setInputText('');
         } catch (error) {
             console.error('Error sending message:', error);
-            // Restore message on error
-            setInputText(textToSend);
+            // alert('Failed to send message'); // Removed alert for smoother UX
         } finally {
             setSending(false);
         }
     };
 
-    const formatMessageTime = (timestamp: any): string => {
+    const formatMessageTime = (timestamp: any) => {
         if (!timestamp) return '';
-
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        const hours = date.getHours();
-        const minutes = date.getMinutes();
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        const displayHours = hours % 12 || 12;
-        const displayMinutes = minutes < 10 ? `0${minutes} ` : minutes;
+        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    };
 
-        return `${displayHours}:${displayMinutes} ${ampm} `;
+    const isSameDay = (d1: Date, d2: Date) => {
+        return d1.getFullYear() === d2.getFullYear() &&
+            d1.getMonth() === d2.getMonth() &&
+            d1.getDate() === d2.getDate();
+    };
+
+    const renderDateHeader = (date: Date) => {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        let dateString = '';
+        if (isSameDay(date, today)) {
+            dateString = 'Today';
+        } else if (isSameDay(date, yesterday)) {
+            dateString = 'Yesterday';
+        } else {
+            dateString = date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        return (
+            <View style={styles.dateHeader}>
+                <Text style={styles.dateHeaderText}>{dateString}</Text>
+            </View>
+        );
     };
 
     const renderMessage = ({ item, index }: { item: Message; index: number }) => {
-        const currentUser = auth.currentUser;
-        if (!currentUser) return null;
+        const isOwnMessage = item.senderId === auth.currentUser?.uid;
+        const messageDate = item.timestamp?.toDate ? item.timestamp.toDate() : new Date();
+        const prevMessage = messages[index + 1];
+        const prevMessageDate = prevMessage?.timestamp?.toDate ? prevMessage.timestamp.toDate() : null;
 
-        const isOwnMessage = item.senderId === currentUser.uid;
-        const showDateDivider = index === 0 ||
-            (messages[index - 1] &&
-                Math.abs(item.timestamp?.toMillis() - messages[index - 1].timestamp?.toMillis()) > 3600000); // 1 hour
-
+        const showDateHeader = !prevMessageDate || !isSameDay(messageDate, prevMessageDate);
         const isSharedContent = item.messageType === 'sharedPost' || item.messageType === 'sharedPDF';
 
         return (
             <View>
-                {showDateDivider && (
-                    <View style={styles.dateDividerContainer}>
-                        <View style={[styles.dateDividerLine, { backgroundColor: colors.border }]} />
-                        <Text style={[styles.dateDividerText, { color: colors.textSecondary }]}>
-                            {formatMessageTime(item.timestamp)}
-                        </Text>
-                        <View style={[styles.dateDividerLine, { backgroundColor: colors.border }]} />
-                    </View>
-                )}
-                <View
-                    style={[
-                        styles.messageRow,
-                        isOwnMessage ? styles.ownMessageRow : styles.otherMessageRow,
-                    ]}
-                >
+                {showDateHeader && renderDateHeader(messageDate)}
+                <View style={[
+                    styles.messageContainer,
+                    isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
+                ]}>
+                    {/* Message Row Layout */}
                     {!isOwnMessage && (
-                        <View style={styles.messageAvatarContainer}>
-                            {otherUserPhoto && typeof otherUserPhoto === 'string' && otherUserPhoto.length > 0 ? (
-                                <Image
-                                    source={{ uri: otherUserPhoto }}
-                                    style={styles.messageAvatar}
-                                />
+                        <View style={styles.avatarContainer}>
+                            {item.senderPhoto ? (
+                                <Image source={{ uri: item.senderPhoto }} style={styles.avatar} />
                             ) : (
-                                <View style={[styles.messageAvatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                                <View style={styles.avatarPlaceholder}>
                                     <Text style={styles.avatarText}>
-                                        {typeof otherUserName === 'string' ? otherUserName.charAt(0).toUpperCase() : 'U'}
+                                        {item.senderName?.charAt(0).toUpperCase()}
                                     </Text>
                                 </View>
                             )}
                         </View>
                     )}
 
-                    {/* Render shared content or normal message */}
-                    {isSharedContent && item.sharedContent ? (
+                    {isSharedContent ? (
                         <TouchableOpacity
                             style={[
                                 styles.sharedContentCard,
                                 isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard,
                                 {
-                                    backgroundColor: colors.card,
-                                    borderColor: isOwnMessage ? colors.primary : colors.border
+                                    backgroundColor: item.messageType === 'sharedPost' ? 'transparent' : colors.card,
+                                    borderColor: item.messageType === 'sharedPost' ? 'transparent' : (isOwnMessage ? colors.primary : colors.border),
+                                    borderWidth: item.messageType === 'sharedPost' ? 0 : 1,
+                                    elevation: item.messageType === 'sharedPost' ? 0 : 2,
+                                    width: item.messageType === 'sharedPost' ? (Dimensions.get('window').width / 2 - 20) : 250,
+                                    borderRadius: item.messageType === 'sharedPost' ? 20 : 12,
                                 }
                             ]}
                             onPress={() => {
@@ -173,46 +252,34 @@ const ChatScreen = () => {
                             }}
                             activeOpacity={0.7}
                         >
-                            <View style={[styles.sharedContentHeader, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC', borderBottomColor: colors.border }]}>
-                                <Ionicons
-                                    name={item.messageType === 'sharedPost' ? 'document-text' : 'document'}
-                                    size={20}
-                                    color={colors.primary}
-                                />
-                                <Text style={[styles.sharedContentLabel, { color: colors.primary }]}>
-                                    {item.messageType === 'sharedPost' ? 'Shared Post' : 'Shared Document'}
-                                </Text>
-                            </View>
-
-                            {item.messageType === 'sharedPost' && item.sharedContent.contentData ? (
-                                <View style={styles.sharedPostContent}>
-                                    {/* Image first if available */}
-                                    {item.sharedContent.contentData.imageUrl && (
-                                        <Image
-                                            source={{ uri: item.sharedContent.contentData.imageUrl }}
-                                            style={styles.sharedPostImage}
-                                            resizeMode="cover"
-                                        />
-                                    )}
-
-                                    {/* Author and content */}
-                                    <View style={styles.sharedPostTextContainer}>
-                                        <View style={styles.sharedPostMeta}>
-                                            <Text style={[styles.sharedPostAuthor, { color: colors.text }]}>
-                                                {item.sharedContent.contentData.userName}
-                                            </Text>
-                                            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                                        </View>
-                                        <Text style={[styles.sharedPostText, { color: colors.textSecondary }]} numberOfLines={2}>
-                                            {item.sharedContent.contentData.content}
-                                        </Text>
-                                    </View>
+                            {item.messageType !== 'sharedPost' && (
+                                <View style={[styles.sharedContentHeader, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC', borderBottomColor: colors.border }]}>
+                                    <Ionicons
+                                        name={'document'}
+                                        size={20}
+                                        color={colors.primary}
+                                    />
+                                    <Text style={[styles.sharedContentLabel, { color: colors.primary }]}>
+                                        {'Shared Document'}
+                                    </Text>
                                 </View>
-                            ) : item.messageType === 'sharedPDF' && item.sharedContent.contentData ? (
+                            )}
+
+                            {item.messageType === 'sharedPost' && item.sharedContent?.contentData ? (
+                                <SharedPostCard
+                                    itemData={item.sharedContent.contentData}
+                                    onPress={() => {
+                                        if (item.sharedContent?.contentData) {
+                                            setSelectedPost(item.sharedContent.contentData);
+                                            setPostModalVisible(true);
+                                        }
+                                    }}
+                                />
+                            ) : item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
                                 <View style={styles.sharedPDFContent}>
                                     <Ionicons name="document" size={32} color={colors.primary} />
                                     <Text style={[styles.sharedPDFTitle, { color: colors.text }]}>
-                                        {item.sharedContent.contentData.title || 'Untitled Document'}
+                                        {item.sharedContent?.contentData?.title || 'Untitled Document'}
                                     </Text>
                                     <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                                 </View>
@@ -226,13 +293,13 @@ const ChatScreen = () => {
                         <View
                             style={[
                                 styles.messageBubble,
-                                isOwnMessage ? [styles.ownMessageBubble, { backgroundColor: colors.primary }] : [styles.otherMessageBubble, { backgroundColor: colors.card }],
+                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
                             ]}
                         >
                             <Text
                                 style={[
                                     styles.messageText,
-                                    isOwnMessage ? styles.ownMessageText : [styles.otherMessageText, { color: colors.text }],
+                                    isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
                                 ]}
                             >
                                 {item.text}
@@ -251,69 +318,45 @@ const ChatScreen = () => {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'bottom']}>
+            <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-            {/* Collapsible Header */}
-            <Animated.View
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    zIndex: 1000,
-                    elevation: 4,
-                    backgroundColor: colors.background,
-                    transform: [{ translateY }],
-                }}
-            >
-                <SafeAreaView edges={['top']}>
-                    <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                            <Ionicons name="arrow-back" size={24} color={colors.text} />
-                        </TouchableOpacity>
+            {/* Static Header without Animation */}
+            <View style={styles.headerContainer}>
+                <View style={styles.headerContent}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color="#FFF" />
+                    </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={styles.headerCenter}
-                            onPress={() => {
-                                if (otherUserId) {
-                                    router.push({
-                                        pathname: '/public-profile',
-                                        params: { userId: otherUserId }
-                                    });
-                                }
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.headerAvatarContainer}>
-                                {otherUserPhoto && typeof otherUserPhoto === 'string' && otherUserPhoto.length > 0 ? (
-                                    <Image
-                                        source={{ uri: otherUserPhoto }}
-                                        style={styles.headerAvatar}
-                                    />
-                                ) : (
-                                    <View style={[styles.headerAvatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
-                                        <Text style={styles.headerAvatarText}>
-                                            {typeof otherUserName === 'string' ? otherUserName.charAt(0).toUpperCase() : 'U'}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                            <View style={styles.headerInfo}>
-                                <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
-                                    {otherUserName}
+                    <TouchableOpacity style={styles.headerProfileContainer} activeOpacity={0.7}>
+                        {otherUserPhoto ? (
+                            <Image source={{ uri: otherUserPhoto }} style={styles.headerAvatar} />
+                        ) : (
+                            <View style={[styles.headerAvatarPlaceholder, { backgroundColor: colors.primary }]}>
+                                <Text style={styles.headerAvatarText}>
+                                    {otherUserName?.charAt(0).toUpperCase()}
                                 </Text>
                             </View>
-                        </TouchableOpacity>
-
-                        <View style={styles.headerRight}>
-                            <TouchableOpacity style={[styles.headerButton, { backgroundColor: isDark ? colors.background : '#EEF2FF' }]}>
-                                <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-                            </TouchableOpacity>
+                        )}
+                        <View style={styles.headerInfo}>
+                            <Text style={styles.headerName}>{otherUserName}</Text>
+                            <Text style={styles.headerStatus}>Online</Text>
                         </View>
+                    </TouchableOpacity>
+
+                    <View style={styles.headerRight}>
+                        <TouchableOpacity style={[styles.headerButton, { backgroundColor: '#1F2C34' }]}>
+                            <Ionicons name="videocam" size={22} color="#FFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.headerButton, { backgroundColor: '#1F2C34' }]}>
+                            <Ionicons name="call" size={20} color="#FFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.headerButton, { backgroundColor: '#1F2C34' }]}>
+                            <Ionicons name="ellipsis-vertical" size={20} color="#FFF" />
+                        </TouchableOpacity>
                     </View>
-                </SafeAreaView>
-            </Animated.View>
+                </View>
+            </View>
 
             {/* Messages */}
             <KeyboardAvoidingView
@@ -331,68 +374,58 @@ const ChatScreen = () => {
                         data={messages}
                         renderItem={renderMessage}
                         keyExtractor={(item) => item.id}
-                        contentContainerStyle={[styles.messagesList, { paddingTop: 100 }]} // Add top padding
-                        showsVerticalScrollIndicator={false}
-                        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-                        onScroll={Animated.event(
-                            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                            { useNativeDriver: false }
-                        )}
-                        ListEmptyComponent={
-                            <View style={styles.emptyState}>
-                                <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
-                                <Text style={[styles.emptyTitle, { color: colors.text }]}>Start the conversation</Text>
-                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                                    Send a message to {otherUserName}
-                                </Text>
-                            </View>
-                        }
+                        contentContainerStyle={styles.messagesList}
+                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
                     />
+                )}
+                {messages.length === 0 && !loading && (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="chatbubbles-outline" size={64} color={colors.border} />
+                        <Text style={styles.emptyTitle}>No messages yet</Text>
+                        <Text style={styles.emptySubtitle}>Start the conversation!</Text>
+                    </View>
                 )}
 
                 {/* Input Area */}
-                <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+                <View style={[styles.inputContainer, {
+                    backgroundColor: isDark ? '#1F2C34' : '#FFF', // Make input container dark in dark mode
+                    borderTopColor: isDark ? '#374151' : '#F1F5F9'
+                }]}>
                     <TouchableOpacity style={styles.attachButton}>
                         <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
                     </TouchableOpacity>
 
-                    <View style={[styles.inputWrapper, { backgroundColor: isDark ? colors.background : '#F8FAFC', borderColor: colors.border }]}>
+                    <View style={[styles.inputWrapper, {
+                        backgroundColor: isDark ? '#2D3748' : '#F0F2F5' // Darker input bg
+                    }]}>
                         <TextInput
-                            style={[styles.input, { color: colors.text }]}
-                            placeholder="Type a message..."
-                            placeholderTextColor={colors.textSecondary}
+                            style={[styles.input, { color: isDark ? '#F8FAFC' : '#1E293B' }]}
+                            placeholder="Message"
+                            placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
                             value={inputText}
                             onChangeText={setInputText}
                             multiline
-                            maxLength={1000}
                         />
                     </View>
 
                     <TouchableOpacity
                         style={[
                             styles.sendButton,
-                            (!inputText.trim() || sending) && styles.sendButtonDisabled,
-                            { backgroundColor: colors.primary }
+                            { backgroundColor: inputText.trim() ? colors.primary : '#374151' }, // Darker disabled state
+                            !inputText.trim() && styles.sendButtonDisabled
                         ]}
                         onPress={handleSend}
                         disabled={!inputText.trim() || sending}
                     >
-                        {sending ? (
-                            <ActivityIndicator size="small" color="#FFF" />
-                        ) : (
-                            <Ionicons name="send" size={20} color="#FFF" />
-                        )}
+                        <Ionicons name="send" size={20} color="#FFF" />
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
 
-            {/* Post Detail Modal */}
             <PostDetailModal
                 visible={postModalVisible}
-                onClose={() => {
-                    setPostModalVisible(false);
-                    setSelectedPost(null);
-                }}
+                onClose={() => setPostModalVisible(false)}
                 postData={selectedPost}
             />
         </SafeAreaView>
@@ -402,81 +435,77 @@ const ChatScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
     },
-    header: {
+    // NEW STATIC HEADER STYLES
+    headerContainer: {
+        backgroundColor: '#000000', // Black Header
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+        zIndex: 10,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
+        height: 60,
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: '#FFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
     },
     backButton: {
-        marginRight: 12,
+        padding: 8,
+        marginRight: 4,
     },
-    headerCenter: {
+    headerProfileContainer: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
     },
-    headerAvatarContainer: {
-        position: 'relative',
-        marginRight: 10,
-    },
     headerAvatar: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#E2E8F0',
     },
-    onlineIndicator: {
-        position: 'absolute',
-        bottom: 1,
-        right: 1,
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#10B981',
-        borderWidth: 2,
-        borderColor: '#FFF',
-    },
-    headerInfo: {
-        flex: 1,
+    headerAvatarPlaceholder: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     headerAvatarText: {
         fontSize: 18,
-        fontWeight: '700',
+        fontWeight: '600',
         color: '#FFF',
     },
-    avatarPlaceholder: {
-        backgroundColor: '#4F46E5',
-        justifyContent: 'center',
-        alignItems: 'center',
+    headerInfo: {
+        marginLeft: 12,
     },
     headerName: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#1E293B',
+        color: '#FFF', // White Text
     },
-    onlineStatus: {
+    headerStatus: {
         fontSize: 12,
-        color: '#10B981',
-        marginTop: 1,
+        color: '#22c55e', // Online green
         fontWeight: '500',
     },
     headerRight: {
         flexDirection: 'row',
-        gap: 8,
+        alignItems: 'center',
+        gap: 12, // Space between buttons
     },
     headerButton: {
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#EEF2FF',
         justifyContent: 'center',
         alignItems: 'center',
     },
+
     chatContainer: {
         flex: 1,
     },
@@ -486,69 +515,82 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     messagesList: {
-        padding: 16,
-        paddingBottom: 8,
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 16,
     },
-    dateDividerContainer: {
-        flexDirection: 'row',
+    dateHeader: {
         alignItems: 'center',
         marginVertical: 16,
     },
-    dateDividerLine: {
-        flex: 1,
-        height: 1,
-        backgroundColor: '#E2E8F0',
-    },
-    dateDividerText: {
-        fontSize: 11,
-        color: '#64748B',
-        marginHorizontal: 12,
+    dateHeaderText: {
+        fontSize: 12,
         fontWeight: '600',
-        textTransform: 'uppercase',
+        color: '#94A3B8',
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+        overflow: 'hidden',
     },
-    messageRow: {
-        flexDirection: 'row',
-        marginBottom: 8,
-        paddingHorizontal: 4,
+    messageContainer: {
+        marginBottom: 16,
+        maxWidth: '80%',
     },
-    ownMessageRow: {
-        justifyContent: 'flex-end',
+    ownMessageContainer: {
+        alignSelf: 'flex-end',
+        flexDirection: 'row-reverse', // Align items to end
     },
-    otherMessageRow: {
-        justifyContent: 'flex-start',
+    otherMessageContainer: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row', // Align avatar and bubble in row
+        alignItems: 'flex-end',
     },
-    messageAvatarContainer: {
+    avatarContainer: {
         marginRight: 8,
+        width: 32,
+        height: 32,
+        marginBottom: 2, // Align with bottom of bubble
     },
-    messageAvatar: {
+    avatar: {
         width: 32,
         height: 32,
         borderRadius: 16,
+        backgroundColor: '#E2E8F0',
+    },
+    avatarPlaceholder: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#6366F1',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
     },
     avatarText: {
         fontSize: 14,
-        fontWeight: '700',
+        fontWeight: '600',
         color: '#FFF',
     },
     messageBubble: {
-        maxWidth: '75%',
-        paddingHorizontal: 12,
-        paddingTop: 8,
-        paddingBottom: 6,
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowRadius: 3,
-        shadowOffset: { width: 0, height: 1 },
+        borderRadius: 18,
+        padding: 12,
+        maxWidth: '100%',
         elevation: 2,
     },
     ownMessageBubble: {
-        backgroundColor: '#4F46E5',
+        backgroundColor: '#243266ff', // Pure Red
         borderBottomRightRadius: 4,
+        borderTopRightRadius: 18,
+        borderBottomLeftRadius: 18,
+        borderTopLeftRadius: 18,
     },
     otherMessageBubble: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#334155', // Dark Slate Gray
         borderBottomLeftRadius: 4,
+        borderTopLeftRadius: 18,
+        borderBottomRightRadius: 18,
+        borderTopRightRadius: 18,
     },
     messageText: {
         fontSize: 15,
@@ -559,47 +601,39 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
     otherMessageText: {
-        color: '#1E293B',
+        color: '#FFFFFF',
     },
     messageTimeInline: {
         fontSize: 10,
-        marginTop: 2,
-        fontWeight: '500',
+        alignSelf: 'flex-end',
+        opacity: 0.8,
     },
     ownMessageTimeInline: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        textAlign: 'right',
+        color: 'rgba(255, 255, 255, 0.9)',
     },
     otherMessageTimeInline: {
-        color: '#94A3B8',
-        textAlign: 'right',
+        color: 'rgba(255, 255, 255, 0.7)',
     },
-    // Shared Content Card Styles
+
+    // SHARED CONTENT CARD STYLES
     sharedContentCard: {
-        minWidth: '85%',
-        maxWidth: '100%',
+        width: 250,
         backgroundColor: '#FFF',
         borderRadius: 12,
-        padding: 0,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 4,
+        overflow: 'hidden',
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        overflow: 'hidden',
+        elevation: 2,
     },
     ownSharedCard: {
-        borderColor: '#C7D2FE',
+        borderBottomRightRadius: 0,
     },
     otherSharedCard: {
-        borderColor: '#E2E8F0',
+        borderBottomLeftRadius: 0,
     },
     sharedContentHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 0,
         paddingHorizontal: 12,
         paddingVertical: 8,
         backgroundColor: '#F8FAFC',
@@ -614,48 +648,85 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
-    sharedPostContent: {
-        paddingVertical: 0,
-    },
-    sharedPostMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 6,
-    },
-    sharedPostAuthor: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#1E293B',
-        flex: 1,
-    },
-    sharedPostText: {
-        fontSize: 14,
-        lineHeight: 20,
-        color: '#64748B',
-    },
-    sharedPostTextContainer: {
-        padding: 12,
-        paddingTop: 10,
-        paddingBottom: 12,
-    },
-    sharedPostImage: {
+    sharedClipContainer: {
         width: '100%',
-        height: 200,
-        backgroundColor: '#F1F5F9',
+        height: 320, // Taller for clip look
+        borderRadius: 20,
+        overflow: 'hidden',
+        position: 'relative',
+        backgroundColor: '#1E293B', // Dark placeholder background
     },
-    sharedPostImageContainer: {
+    sharedClipImage: {
+        width: '100%',
+        height: '100%',
+    },
+    centerOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+    },
+    bottomOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: 12,
+        paddingBottom: 16,
+        backgroundColor: 'rgba(0,0,0,0.4)', // Dim bottom for text readability
+        justifyContent: 'flex-end',
+        zIndex: 2,
+    },
+    clipTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        marginBottom: 8,
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
+    },
+    clipAuthorRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
-        paddingTop: 8,
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
     },
-    sharedPostImageText: {
-        marginLeft: 6,
+    clipAvatarBase: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        marginRight: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    clipAvatarText: {
+        fontSize: 10,
+        color: '#FFF',
+        fontWeight: '700',
+    },
+    clipAuthorName: {
         fontSize: 12,
-        color: '#64748B',
+        color: '#FFFFFF',
+        fontWeight: '500',
+        opacity: 0.9,
+    },
+    statsPill: {
+        position: 'absolute',
+        bottom: 12,
+        right: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        zIndex: 3,
+    },
+    statsText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '600',
+        marginLeft: 4,
     },
     sharedPDFContent: {
         flexDirection: 'row',
@@ -690,12 +761,12 @@ const styles = StyleSheet.create({
     },
     inputWrapper: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        backgroundColor: '#F0F2F5',
+        borderRadius: 24, // Pill shape
+        borderWidth: 0, // No border
+        borderColor: 'transparent',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
         maxHeight: 100,
     },
     input: {
