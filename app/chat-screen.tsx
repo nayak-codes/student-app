@@ -108,6 +108,48 @@ const SharedPostCard = ({ itemData, onPress }: { itemData: any, onPress: () => v
     );
 };
 
+// Component for Standard Post (Image/Text) display in chat
+const StandardSharedPostCard = ({ itemData }: { itemData: any }) => {
+    const { colors, isDark } = useTheme();
+    const displayImage = itemData.imageUrl || itemData.thumbnail || itemData.thumbnailUrl || itemData.mediaUrl || itemData.image;
+
+    return (
+        <View style={{ width: '100%', overflow: 'hidden' }}>
+            {/* Image Section */}
+            {displayImage ? (
+                <Image
+                    source={{ uri: displayImage }}
+                    style={{ width: '100%', height: 200, backgroundColor: isDark ? '#334155' : '#E2E8F0' }}
+                    resizeMode="cover"
+                />
+            ) : (
+                <View style={{ width: '100%', height: 140, backgroundColor: isDark ? '#334155' : '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="image-outline" size={32} color={isDark ? '#94A3B8' : '#94A3B8'} />
+                </View>
+            )}
+
+            {/* Content Section */}
+            <View style={{ padding: 12, backgroundColor: isDark ? '#1E293B' : '#FFF' }}>
+                <Text numberOfLines={2} style={{ fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 8 }}>
+                    {itemData.content || itemData.title || 'Shared Post'}
+                </Text>
+
+                {/* Author User Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: isDark ? '#334155' : '#E2E8F0', justifyContent: 'center', alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: isDark ? '#475569' : '#E2E8F0' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#F8FAFC' : '#64748B' }}>
+                            {itemData.userName?.charAt(0).toUpperCase() || 'U'}
+                        </Text>
+                    </View>
+                    <Text style={{ fontSize: 13, color: colors.textSecondary, fontWeight: '500' }} numberOfLines={1}>
+                        {itemData.userName || 'Unknown'}
+                    </Text>
+                </View>
+            </View>
+        </View>
+    );
+};
+
 const ChatScreen = () => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
@@ -208,6 +250,13 @@ const ChatScreen = () => {
         const showDateHeader = !prevMessageDate || !isSameDay(messageDate, prevMessageDate);
         const isSharedContent = item.messageType === 'sharedPost' || item.messageType === 'sharedPDF';
 
+        // Determine if it's a "Clip" (vertical video) or just a regular post
+        const sharedData = item.sharedContent?.contentData;
+        const isClip = item.messageType === 'sharedPost' && sharedData && (
+            sharedData.type === 'clip' ||
+            (sharedData.videoLink && (sharedData.videoLink.includes('/shorts/') || sharedData.videoLink.includes('#shorts')))
+        );
+
         return (
             <View>
                 {showDateHeader && renderDateHeader(messageDate)}
@@ -236,18 +285,50 @@ const ChatScreen = () => {
                                 styles.sharedContentCard,
                                 isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard,
                                 {
-                                    backgroundColor: item.messageType === 'sharedPost' ? 'transparent' : colors.card,
-                                    borderColor: item.messageType === 'sharedPost' ? 'transparent' : (isOwnMessage ? colors.primary : colors.border),
-                                    borderWidth: item.messageType === 'sharedPost' ? 0 : 1,
-                                    elevation: item.messageType === 'sharedPost' ? 0 : 2,
-                                    width: item.messageType === 'sharedPost' ? (Dimensions.get('window').width / 2 - 20) : 250,
-                                    borderRadius: item.messageType === 'sharedPost' ? 20 : 12,
+                                    backgroundColor: isClip ? 'transparent' : colors.card,
+                                    borderColor: isClip ? 'transparent' : (isOwnMessage ? colors.primary : colors.border),
+                                    borderWidth: isClip ? 0 : 1,
+                                    elevation: isClip ? 0 : 2,
+                                    width: isClip ? (Dimensions.get('window').width / 2 - 20) : (Dimensions.get('window').width * 0.75),
+                                    borderRadius: isClip ? 20 : 12,
                                 }
                             ]}
                             onPress={() => {
                                 if (item.messageType === 'sharedPost' && item.sharedContent?.contentData) {
-                                    setSelectedPost(item.sharedContent.contentData);
-                                    setPostModalVisible(true);
+                                    const data = item.sharedContent.contentData;
+
+                                    // If it's a clip/video, check type
+                                    // If strictly 'clip', use ShortsPlayer
+                                    if (data.type === 'clip') {
+                                        router.push({
+                                            pathname: '/screens/shorts-player' as any,
+                                            params: {
+                                                shortId: data.id,
+                                            },
+                                        });
+                                    }
+                                    // If 'video' (long form), use VideoPlayer
+                                    else if (isClip && data.videoLink) {
+                                        router.push({
+                                            pathname: '/screens/video-player' as any,
+                                            params: {
+                                                videoUri: data.videoLink,
+                                                postId: data.id,
+                                                title: data.content || 'Untitled Video',
+                                                description: data.content || '',
+                                                authorName: data.userName,
+                                                authorId: data.userId,
+                                                likes: data.likes,
+                                                views: data.viewCount || 0,
+                                                date: data.createdAt ? new Date(data.createdAt).toISOString() : '', // Pass string to be safe
+                                                thumbnail: data.thumbnailUrl || data.imageUrl || data.userProfilePhoto,
+                                                authorImage: data.userProfilePhoto
+                                            },
+                                        });
+                                    } else {
+                                        setSelectedPost(data);
+                                        setPostModalVisible(true);
+                                    }
                                 }
                             }}
                             activeOpacity={0.7}
@@ -265,16 +346,47 @@ const ChatScreen = () => {
                                 </View>
                             )}
 
+                            {/* Render either the Clip Card or Standard Post Card */}
                             {item.messageType === 'sharedPost' && item.sharedContent?.contentData ? (
-                                <SharedPostCard
-                                    itemData={item.sharedContent.contentData}
-                                    onPress={() => {
-                                        if (item.sharedContent?.contentData) {
-                                            setSelectedPost(item.sharedContent.contentData);
-                                            setPostModalVisible(true);
-                                        }
-                                    }}
-                                />
+                                isClip ? (
+                                    <SharedPostCard
+                                        itemData={item.sharedContent.contentData}
+                                        onPress={() => {
+                                            if (item.sharedContent?.contentData) {
+                                                const data = item.sharedContent.contentData;
+                                                // Should match parent onPress but explicit here for safety
+                                                if (data.type === 'clip') {
+                                                    router.push({
+                                                        pathname: '/screens/shorts-player' as any,
+                                                        params: {
+                                                            shortId: data.id,
+                                                        },
+                                                    });
+                                                }
+                                                else if (data.videoLink) {
+                                                    router.push({
+                                                        pathname: '/screens/video-player' as any,
+                                                        params: {
+                                                            videoUri: data.videoLink,
+                                                            postId: data.id,
+                                                            title: data.content || 'Untitled Video',
+                                                            description: data.content || '',
+                                                            authorName: data.userName,
+                                                            authorId: data.userId,
+                                                            likes: data.likes,
+                                                            views: data.viewCount || 0,
+                                                            date: data.createdAt ? new Date(data.createdAt).toISOString() : '',
+                                                            thumbnail: data.thumbnailUrl || data.imageUrl || data.userProfilePhoto,
+                                                            authorImage: data.userProfilePhoto
+                                                        },
+                                                    });
+                                                }
+                                            }
+                                        }}
+                                    />
+                                ) : (
+                                    <StandardSharedPostCard itemData={item.sharedContent.contentData} />
+                                )
                             ) : item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
                                 <View style={styles.sharedPDFContent}>
                                     <Ionicons name="document" size={32} color={colors.primary} />
@@ -285,7 +397,7 @@ const ChatScreen = () => {
                                 </View>
                             ) : null}
 
-                            <Text style={[styles.sharedContentTime, { color: colors.textSecondary }]}>
+                            <Text style={[styles.sharedContentTime, { color: isClip ? '#FFF' : colors.textSecondary, textShadowColor: isClip ? 'rgba(0,0,0,0.5)' : undefined, textShadowRadius: isClip ? 4 : 0 }]}>
                                 {formatMessageTime(item.timestamp)}
                             </Text>
                         </TouchableOpacity>

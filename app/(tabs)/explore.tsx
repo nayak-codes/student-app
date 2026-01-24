@@ -450,7 +450,7 @@ const ExploreScreen: React.FC = () => {
         )}
         contentContainerStyle={[
           styles.listContent,
-          { paddingTop: 130 }, // Padding for header height
+          { paddingTop: 160 }, // Padding for header height
           activeTab === 'clip' ? { paddingHorizontal: 16, paddingBottom: 100 } : { paddingHorizontal: 0, paddingBottom: 100 }
         ]}
 

@@ -3,11 +3,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
-import { Alert, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View, ViewToken } from 'react-native';
+import { Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View, ViewToken } from 'react-native';
 import CommentsSheet from '../../src/components/CommentsSheet';
+import ShareModal from '../../src/components/ShareModal';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useConditionalVideoPlayer } from '../../src/hooks/useConditionalVideoPlayer';
-import { Post, getAllPosts, incrementViewCount } from '../../src/services/postsService';
+import { checkFollowStatus, followUser, unfollowUser } from '../../src/services/connectionService';
+import { Post, getAllPosts, incrementViewCount, likePost, unlikePost } from '../../src/services/postsService';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -24,6 +27,10 @@ export default function ShortsPlayerScreen() {
     const [commentsVisible, setCommentsVisible] = useState(false);
     const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
     const [selectedShortCommentCount, setSelectedShortCommentCount] = useState(0);
+
+    // Share State
+    const [shareModalVisible, setShareModalVisible] = useState(false);
+    const [shareData, setShareData] = useState<any>(null);
 
     const flatListRef = React.useRef<FlatList>(null);
 
@@ -94,6 +101,10 @@ export default function ShortsPlayerScreen() {
                     setSelectedShortCommentCount(item.comments || 0);
                     setCommentsVisible(true);
                 }}
+                onShare={(short) => {
+                    setShareData(short);
+                    setShareModalVisible(true);
+                }}
             />
         );
     };
@@ -152,6 +163,17 @@ export default function ShortsPlayerScreen() {
                     commentCount={selectedShortCommentCount}
                 />
             )}
+
+            {/* Share Modal */}
+            <ShareModal
+                visible={shareModalVisible}
+                onClose={() => {
+                    setShareModalVisible(false);
+                    setShareData(null);
+                }}
+                shareType="post"
+                shareData={shareData}
+            />
         </View>
     );
 }
@@ -161,13 +183,37 @@ interface ShortItemProps {
     isActive: boolean;
     shouldLoad: boolean;
     onComments: () => void;
+    onShare: (short: Post) => void;
 }
 
-function ShortItem({ short, isActive, shouldLoad, onComments }: ShortItemProps) {
+function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortItemProps) {
     const { colors } = useTheme();
     const router = useRouter();
     const player = useConditionalVideoPlayer(short.videoLink || null, shouldLoad);
     const [isPlaying, setIsPlaying] = useState(false);
+
+    // Auth
+    const { user } = useAuth();
+
+    // Local State for interactions
+    const [isLiked, setIsLiked] = useState(false);
+    const [likesCount, setLikesCount] = useState(0);
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [isFollowLoading, setIsFollowLoading] = useState(false);
+
+    useEffect(() => {
+        if (short) {
+            setIsLiked(short.likedBy?.includes(user?.uid || '') || false);
+            setLikesCount(short.likes || 0);
+
+            // Check follow status
+            if (user && short.userId && user.uid !== short.userId) {
+                checkFollowStatus(user.uid, short.userId).then(status => {
+                    setIsFollowing(status);
+                });
+            }
+        }
+    }, [short, user]);
 
     // Only play when active
     useEffect(() => {
@@ -182,6 +228,69 @@ function ShortItem({ short, isActive, shouldLoad, onComments }: ShortItemProps) 
             setIsPlaying(false);
         }
     }, [isActive, player]);
+
+    const handleLike = async () => {
+        if (!user) return;
+
+        const previousLiked = isLiked;
+        const previousCount = likesCount;
+
+        // Optimistic
+        if (isLiked) {
+            setIsLiked(false);
+            setLikesCount(prev => Math.max(0, prev - 1));
+        } else {
+            setIsLiked(true);
+            setLikesCount(prev => prev + 1);
+        }
+
+        try {
+            if (previousLiked) {
+                await unlikePost(short.id, user.uid);
+            } else {
+                await likePost(short.id, user.uid);
+            }
+        } catch (error) {
+            // Revert
+            setIsLiked(previousLiked);
+            setLikesCount(previousCount);
+            console.error('Like error:', error);
+        }
+    };
+
+    const handleFollow = async () => {
+        if (!user || isFollowLoading) return;
+        if (user.uid === short.userId) return; // Cannot follow self
+
+        setIsFollowLoading(true);
+        const previousStatus = isFollowing;
+
+        // Optimistic Update
+        setIsFollowing(!previousStatus);
+
+        try {
+            if (previousStatus) {
+                // Was following, now unfollow
+                await unfollowUser(short.userId);
+            } else {
+                // Was not following, now follow
+                await followUser(short.userId);
+            }
+        } catch (error) {
+            console.error('Follow error:', error);
+            setIsFollowing(previousStatus); // Revert
+        } finally {
+            setIsFollowLoading(false);
+        }
+    };
+
+    const handleShare = async () => {
+        try {
+            onShare(short);
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     return (
         <View style={styles.shortContainer}>
@@ -233,20 +342,32 @@ function ShortItem({ short, isActive, shouldLoad, onComments }: ShortItemProps) 
                                 <Text style={styles.authorName}>{short.userName}</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={styles.followBtn}
-                                onPress={() => Alert.alert('Follow', 'Follow feature coming soon!')}
-                            >
-                                <Text style={styles.followText}>Follow</Text>
-                            </TouchableOpacity>
+                            {user?.uid !== short.userId && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.followBtn,
+                                        isFollowing && { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#FFF' },
+                                        !isFollowing && { backgroundColor: colors.primary, borderWidth: 0 }
+                                    ]}
+                                    onPress={handleFollow}
+                                >
+                                    <Text style={[styles.followText, { fontWeight: '600' }]}>
+                                        {isFollowing ? 'Following' : 'Follow'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                         <Text style={styles.title} numberOfLines={2}>{short.content || 'Untitled'}</Text>
                     </View>
 
                     <View style={styles.rightActions}>
-                        <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Like', 'Like feature coming soon!')}>
-                            <Ionicons name="heart-outline" size={32} color="#FFF" />
-                            <Text style={styles.actionText}>{short.likes || 0}</Text>
+                        <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
+                            <Ionicons
+                                name={isLiked ? "heart" : "heart-outline"}
+                                size={32}
+                                color={isLiked ? "#EF4444" : "#FFF"}
+                            />
+                            <Text style={styles.actionText}>{likesCount}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.actionBtn} onPress={onComments}>
@@ -254,7 +375,7 @@ function ShortItem({ short, isActive, shouldLoad, onComments }: ShortItemProps) 
                             <Text style={styles.actionText}>{short.comments || 0}</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Share', 'Share feature coming soon!')}>
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => onShare(short)}>
                             <Ionicons name="arrow-redo-outline" size={30} color="#FFF" />
                             <Text style={styles.actionText}>Share</Text>
                         </TouchableOpacity>
