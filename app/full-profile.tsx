@@ -907,7 +907,11 @@ const ProfileScreen = () => {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScrollView
                 refreshControl={
-                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        progressViewOffset={120}
+                    />
                 }
             >
                 {/* Banner & Header */}
@@ -1606,7 +1610,7 @@ const ProfileScreen = () => {
                 documentName={selectedDoc?.title || 'Document'}
                 documentType={selectedDoc?.type || 'pdf'}
             />
-        </SafeAreaView>
+        </SafeAreaView >
     );
 };
 

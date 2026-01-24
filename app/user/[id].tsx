@@ -451,7 +451,10 @@ const UserProfileScreen = () => {
 
     const savePostEdit = async (postId: string, newContent: string) => {
         try {
-            await updatePost(postId, { content: newContent });
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+
+            await updatePost(postId, currentUser.uid, { content: newContent });
             // Close detail modal if open
             if (detailModalVisible && selectedPost?.id === postId) {
                 // Update selected post efficiently
@@ -471,7 +474,10 @@ const UserProfileScreen = () => {
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete", style: "destructive", onPress: async () => {
-                        await deletePost(post.id);
+                        const currentUser = auth.currentUser;
+                        if (!currentUser) return;
+
+                        await deletePost(post.id, currentUser.uid);
                         if (detailModalVisible) closePostModal();
                         handleRefresh();
                     }
@@ -507,7 +513,11 @@ const UserProfileScreen = () => {
         <SafeAreaView style={styles.container} edges={['top']}>
             <ScrollView
                 refreshControl={
-                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        progressViewOffset={120}
+                    />
                 }
             >
                 {/* YouTube-Style Banner & Header */}
@@ -721,7 +731,7 @@ const UserProfileScreen = () => {
                 documentType={selectedDoc?.type || 'pdf'}
             />
 
-        </SafeAreaView>
+        </SafeAreaView >
     );
 };
 

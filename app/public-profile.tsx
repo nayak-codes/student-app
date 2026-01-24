@@ -871,7 +871,12 @@ const ProfileScreen = () => {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScrollView
                 refreshControl={
-                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        tintColor={colors.primary}
+                        progressViewOffset={120}
+                    />
                 }
                 contentContainerStyle={{ paddingBottom: 100 }}
             >

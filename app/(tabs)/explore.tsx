@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -108,11 +108,12 @@ const ExploreScreen: React.FC = () => {
   const [initialClipIndex, setInitialClipIndex] = useState(0);
 
   // Collapsible Header Logic
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const diffClamp = Animated.diffClamp(scrollY, 0, 110);
+  const scrollY = React.useRef(new Animated.Value(0)).current;
+  const headerHeight = 130; // approx height of header + tabs
+  const diffClamp = Animated.diffClamp(scrollY, 0, headerHeight);
   const translateY = diffClamp.interpolate({
-    inputRange: [0, 110],
-    outputRange: [0, -110],
+    inputRange: [0, headerHeight],
+    outputRange: [0, -headerHeight],
   });
 
   // Load posts
@@ -365,55 +366,77 @@ const ExploreScreen: React.FC = () => {
     <View style={[styles.safeArea, { backgroundColor: colors.background }]} >
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Collapsible Header */}
       <Animated.View
-        style={
-          [
-            styles.header,
-            {
-              backgroundColor: colors.background,
-              borderBottomColor: isDark ? '#333' : colors.border,
-              transform: [{ translateY }],
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 1000,
-              elevation: 4,
-            }
-          ]}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          elevation: 4,
+          backgroundColor: colors.background,
+          transform: [{ translateY }],
+        }}
       >
-        <SafeAreaView edges={['top']}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
-            <View style={styles.brandContainer}>
-              <Text style={styles.brandText}>Vidhyardi</Text>
+        <View
+          style={
+            [
+              styles.header,
+              {
+                backgroundColor: colors.background,
+                borderBottomColor: isDark ? '#333' : colors.border,
+                borderBottomWidth: 0, // Remove border from main header as it's now wrapped
+              }
+            ]}
+        >
+          <SafeAreaView edges={['top']}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
+              <View style={styles.brandContainer}>
+                <Text style={styles.brandText}>Vidhyardi</Text>
+              </View>
+
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push({ pathname: '/screens/universal-search', params: { category: 'posts' } })}
+                >
+                  <Ionicons name="search-outline" size={26} color={colors.text} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push('/notifications')}
+                >
+                  <Ionicons name="notifications-outline" size={26} color={colors.text} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push('/conversations')}
+                >
+                  <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
+                </TouchableOpacity>
+              </View>
             </View>
+          </SafeAreaView>
+        </View >
 
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => router.push({ pathname: '/screens/universal-search', params: { category: 'posts' } })}
-              >
-                <Ionicons name="search-outline" size={26} color={colors.text} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => router.push('/notifications')}
-              >
-                <Ionicons name="notifications-outline" size={26} color={colors.text} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => router.push('/conversations')}
-              >
-                <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </SafeAreaView>
-      </Animated.View >
+        {/* Tabs inside Animated Header */}
+        <View style={[styles.tabContainer, { backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: isDark ? '#333' : colors.border }]}>
+          <TouchableOpacity
+            style={[styles.segmentBtn, activeTab === 'video' && styles.segmentBtnActive, { backgroundColor: activeTab === 'video' ? colors.primary : colors.card }]}
+            onPress={() => setActiveTab('video')}
+          >
+            <Text style={[styles.segmentText, { color: activeTab === 'video' ? '#FFF' : colors.textSecondary }]}>Videos</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentBtn, activeTab === 'clip' && styles.segmentBtnActive, { backgroundColor: activeTab === 'clip' ? colors.primary : colors.card }]}
+            onPress={() => setActiveTab('clip')}
+          >
+            <Text style={[styles.segmentText, { color: activeTab === 'clip' ? '#FFF' : colors.textSecondary }]}>Clips</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
 
       <FlatList
         key={activeTab}
@@ -425,32 +448,21 @@ const ExploreScreen: React.FC = () => {
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
-        ListHeaderComponent={
-          /* Tabs moved here */
-          <View style={[styles.tabContainer, { backgroundColor: colors.background }]}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, activeTab === 'video' && styles.segmentBtnActive, { backgroundColor: activeTab === 'video' ? colors.primary : colors.card }]}
-              onPress={() => setActiveTab('video')}
-            >
-              <Text style={[styles.segmentText, { color: activeTab === 'video' ? '#FFF' : colors.textSecondary }]}>Videos</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentBtn, activeTab === 'clip' && styles.segmentBtnActive, { backgroundColor: activeTab === 'clip' ? colors.primary : colors.card }]}
-              onPress={() => setActiveTab('clip')}
-            >
-              <Text style={[styles.segmentText, { color: activeTab === 'clip' ? '#FFF' : colors.textSecondary }]}>Clips</Text>
-            </TouchableOpacity>
-          </View>
-        }
         contentContainerStyle={[
           styles.listContent,
-          { paddingTop: 110 }, // Add padding for header
+          { paddingTop: 130 }, // Padding for header height
           activeTab === 'clip' ? { paddingHorizontal: 16, paddingBottom: 100 } : { paddingHorizontal: 0, paddingBottom: 100 }
         ]}
+
         columnWrapperStyle={activeTab === 'clip' ? { justifyContent: 'space-between', marginBottom: 16 } : undefined}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            progressViewOffset={120}
+          />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>

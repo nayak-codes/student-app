@@ -272,7 +272,13 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
                     </>
                 )}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={[colors.primary]}
+                        tintColor={colors.primary}
+                        progressViewOffset={120}
+                    />
                 }
                 onViewableItemsChanged={onViewableItemsChanged}
                 onScroll={onScroll} // Pass scroll event up

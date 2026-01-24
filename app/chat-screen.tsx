@@ -3,11 +3,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     FlatList,
     Image,
     KeyboardAvoidingView,
     Platform,
-    SafeAreaView,
     StatusBar,
     StyleSheet,
     Text,
@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import PostDetailModal from '../src/components/PostDetailModal';
 import { auth } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -38,6 +39,15 @@ const ChatScreen = () => {
     const [postModalVisible, setPostModalVisible] = useState(false);
     const [selectedPost, setSelectedPost] = useState<any>(null);
     const flatListRef = useRef<FlatList>(null);
+
+    // Collapsible Header Vars
+    const scrollY = React.useRef(new Animated.Value(0)).current;
+    const headerHeight = 90; // Approx height of Chat Header
+    const diffClamp = Animated.diffClamp(scrollY, 0, headerHeight);
+    const translateY = diffClamp.interpolate({
+        inputRange: [0, headerHeight],
+        outputRange: [0, -headerHeight],
+    });
 
     useEffect(() => {
         if (!conversationId || typeof conversationId !== 'string') {
@@ -244,40 +254,55 @@ const ChatScreen = () => {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
+            {/* Collapsible Header */}
+            <Animated.View
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    elevation: 4,
+                    backgroundColor: colors.background,
+                    transform: [{ translateY }],
+                }}
+            >
+                <SafeAreaView edges={['top']}>
+                    <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                            <Ionicons name="arrow-back" size={24} color={colors.text} />
+                        </TouchableOpacity>
 
-                <View style={styles.headerCenter}>
-                    <View style={styles.headerAvatarContainer}>
-                        {otherUserPhoto && typeof otherUserPhoto === 'string' && otherUserPhoto.length > 0 ? (
-                            <Image
-                                source={{ uri: otherUserPhoto }}
-                                style={styles.headerAvatar}
-                            />
-                        ) : (
-                            <View style={[styles.headerAvatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
-                                <Text style={styles.headerAvatarText}>
-                                    {typeof otherUserName === 'string' ? otherUserName.charAt(0).toUpperCase() : 'U'}
+                        <View style={styles.headerCenter}>
+                            <View style={styles.headerAvatarContainer}>
+                                {otherUserPhoto && typeof otherUserPhoto === 'string' && otherUserPhoto.length > 0 ? (
+                                    <Image
+                                        source={{ uri: otherUserPhoto }}
+                                        style={styles.headerAvatar}
+                                    />
+                                ) : (
+                                    <View style={[styles.headerAvatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                                        <Text style={styles.headerAvatarText}>
+                                            {typeof otherUserName === 'string' ? otherUserName.charAt(0).toUpperCase() : 'U'}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                            <View style={styles.headerInfo}>
+                                <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
+                                    {otherUserName}
                                 </Text>
                             </View>
-                        )}
-                    </View>
-                    <View style={styles.headerInfo}>
-                        <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
-                            {otherUserName}
-                        </Text>
-                    </View>
-                </View>
+                        </View>
 
-                <View style={styles.headerRight}>
-                    <TouchableOpacity style={[styles.headerButton, { backgroundColor: isDark ? colors.background : '#EEF2FF' }]}>
-                        <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                </View>
-            </View>
+                        <View style={styles.headerRight}>
+                            <TouchableOpacity style={[styles.headerButton, { backgroundColor: isDark ? colors.background : '#EEF2FF' }]}>
+                                <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </SafeAreaView>
+            </Animated.View>
 
             {/* Messages */}
             <KeyboardAvoidingView
@@ -295,9 +320,13 @@ const ChatScreen = () => {
                         data={messages}
                         renderItem={renderMessage}
                         keyExtractor={(item) => item.id}
-                        contentContainerStyle={styles.messagesList}
+                        contentContainerStyle={[styles.messagesList, { paddingTop: 100 }]} // Add top padding
                         showsVerticalScrollIndicator={false}
                         onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+                        onScroll={Animated.event(
+                            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                            { useNativeDriver: false }
+                        )}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
                                 <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />

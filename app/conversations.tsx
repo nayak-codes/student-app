@@ -3,10 +3,10 @@ import { useRootNavigationState, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     FlatList,
     Image,
     RefreshControl,
-    SafeAreaView,
     StatusBar,
     StyleSheet,
     Text,
@@ -14,6 +14,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import {
@@ -29,6 +30,15 @@ const ConversationsScreen = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Collapsible Header Vars
+    const scrollY = React.useRef(new Animated.Value(0)).current;
+    const headerHeight = 180; // Adjusted for taller header
+    const diffClamp = Animated.diffClamp(scrollY, 0, headerHeight);
+    const translateY = diffClamp.interpolate({
+        inputRange: [0, headerHeight],
+        outputRange: [0, -headerHeight],
+    });
 
     const rootNavigationState = useRootNavigationState();
 
@@ -177,40 +187,56 @@ const ConversationsScreen = () => {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity
-                        onPress={() => router.back()}
-                        style={styles.backButton}
-                    >
-                        <Ionicons name="arrow-back" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: colors.text }]}>Messages</Text>
-                </View>
-            </View>
+            {/* Collapsible Header Container */}
+            <Animated.View
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    elevation: 4,
+                    backgroundColor: colors.background,
+                    transform: [{ translateY }],
+                }}
+            >
+                <SafeAreaView edges={['top']}>
+                    {/* Header */}
+                    <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                        <View style={styles.headerLeft}>
+                            <TouchableOpacity
+                                onPress={() => router.back()}
+                                style={styles.backButton}
+                            >
+                                <Ionicons name="arrow-back" size={24} color={colors.text} />
+                            </TouchableOpacity>
+                            <Text style={[styles.headerTitle, { color: colors.text }]}>Messages</Text>
+                        </View>
+                    </View>
 
-            {/* Search Bar */}
-            <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.background : '#F8FAFC', borderColor: colors.border }]}>
-                    <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
-                    <TextInput
-                        style={[styles.searchInput, { color: colors.text }]}
-                        placeholder="Search conversations..."
-                        placeholderTextColor={colors.textSecondary}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
+                    {/* Search Bar */}
+                    <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                        <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.background : '#F8FAFC', borderColor: colors.border }]}>
+                            <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.text }]}
+                                placeholder="Search conversations..."
+                                placeholderTextColor={colors.textSecondary}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                                    <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                </SafeAreaView>
+            </Animated.View>
 
             {/* Conversations List */}
             {loading ? (
@@ -222,14 +248,19 @@ const ConversationsScreen = () => {
                     data={filteredConversations}
                     renderItem={renderConversation}
                     keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContent}
+                    contentContainerStyle={[styles.listContent, { paddingTop: 180 }]}
                     showsVerticalScrollIndicator={false}
+                    onScroll={Animated.event(
+                        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                        { useNativeDriver: false }
+                    )}
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={handleRefresh}
                             colors={[colors.primary]}
                             tintColor={colors.primary}
+                            progressViewOffset={190}
                         />
                     }
                     ListEmptyComponent={
@@ -243,7 +274,7 @@ const ConversationsScreen = () => {
                     }
                 />
             )}
-        </SafeAreaView>
+        </View>
     );
 };
 

@@ -560,7 +560,13 @@ const EventsScreen = () => {
                     ListHeaderComponent={renderHeader}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={handleRefresh}
+                            colors={[colors.primary]}
+                            tintColor={colors.primary}
+                            progressViewOffset={120}
+                        />
                     }
                     ListEmptyComponent={
                         <View style={styles.emptyState}>

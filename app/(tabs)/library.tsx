@@ -361,7 +361,13 @@ const LibraryScreen = () => {
           </>
         }
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+            progressViewOffset={120}
+          />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>

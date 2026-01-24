@@ -99,6 +99,7 @@ const DownloadsScreen = () => {
                             onRefresh={onRefresh}
                             colors={[colors.primary]}
                             tintColor={colors.primary}
+                            progressViewOffset={120}
                         />
                     }
                     ListEmptyComponent={
