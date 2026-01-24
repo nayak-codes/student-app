@@ -273,7 +273,18 @@ const ChatScreen = () => {
                             <Ionicons name="arrow-back" size={24} color={colors.text} />
                         </TouchableOpacity>
 
-                        <View style={styles.headerCenter}>
+                        <TouchableOpacity
+                            style={styles.headerCenter}
+                            onPress={() => {
+                                if (otherUserId) {
+                                    router.push({
+                                        pathname: '/public-profile',
+                                        params: { userId: otherUserId }
+                                    });
+                                }
+                            }}
+                            activeOpacity={0.7}
+                        >
                             <View style={styles.headerAvatarContainer}>
                                 {otherUserPhoto && typeof otherUserPhoto === 'string' && otherUserPhoto.length > 0 ? (
                                     <Image
@@ -293,7 +304,7 @@ const ChatScreen = () => {
                                     {otherUserName}
                                 </Text>
                             </View>
-                        </View>
+                        </TouchableOpacity>
 
                         <View style={styles.headerRight}>
                             <TouchableOpacity style={[styles.headerButton, { backgroundColor: isDark ? colors.background : '#EEF2FF' }]}>

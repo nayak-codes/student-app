@@ -1,6 +1,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, Share, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
 import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -154,36 +154,8 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
             const post = posts.find(p => p.id === postId);
             if (!post) return;
 
-            Alert.alert(
-                'Share Post',
-                'Choose how you want to share this post',
-                [
-                    {
-                        text: 'Share to Friend',
-                        onPress: () => {
-                            setShareData(post);
-                            setShareModalVisible(true);
-                        },
-                    },
-                    {
-                        text: 'Share Externally',
-                        onPress: async () => {
-                            const result = await Share.share({
-                                message: `Check out this post by ${post.userName}!\n\n${post.content}`,
-                            });
-
-                            if (result.action === Share.sharedAction) {
-                                console.log('Post shared successfully');
-                            }
-                        },
-                    },
-                    {
-                        text: 'Cancel',
-                        style: 'cancel',
-                    },
-                ],
-                { cancelable: true }
-            );
+            setShareData(post);
+            setShareModalVisible(true);
         } catch (error) {
             console.error('Error sharing post:', error);
             Alert.alert('Error', 'Failed to share post');
