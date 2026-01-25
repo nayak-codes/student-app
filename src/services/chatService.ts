@@ -176,6 +176,24 @@ export const sendMessage = async (
                 unreadCount: updatedUnreadCount,
                 updatedAt: serverTimestamp(),
             });
+
+            // Send Push Notification
+            if (otherUserId) {
+                try {
+                    const { sendNotification } = require('./notificationService');
+                    await sendNotification(
+                        otherUserId,
+                        currentUser.uid,
+                        userData?.name || currentUser.displayName || 'User',
+                        userData?.photoURL || currentUser.photoURL,
+                        'message',
+                        `${userData?.name || currentUser.displayName || 'User'} sent you a message`,
+                        { conversationId }
+                    );
+                } catch (notifError) {
+                    console.error('Error sending message notification:', notifError);
+                }
+            }
         }
     } catch (error) {
         console.error('Error sending message:', error);

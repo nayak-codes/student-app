@@ -18,8 +18,8 @@ export function useConditionalVideoPlayer(
     // Only create player when both source and enabled are true
     const shouldCreate = enabled && !!source;
 
-    // Use empty string instead of null to avoid expo-video errors
-    const player = useVideoPlayer(shouldCreate ? source : '', (player) => {
+    // Use conditional logic to avoid creating player when valid source not present or disabled
+    const player = useVideoPlayer(shouldCreate ? source : null, (player) => {
         if (shouldCreate) {
             player.loop = true;
             playerRef.current = player;

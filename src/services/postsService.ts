@@ -561,6 +561,28 @@ export const addComment = async (
             comments: increment(1),
         });
 
+        // Send Push Notification
+        try {
+            const postSnap = await getDoc(postRef);
+            if (postSnap.exists()) {
+                const postData = postSnap.data();
+                if (postData.userId !== userId) {
+                    const { sendNotification } = require('./notificationService');
+                    await sendNotification(
+                        postData.userId,
+                        userId,
+                        userName,
+                        userPhoto,
+                        'comment',
+                        `commented on your post: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
+                        { postId, commentId: docRef.id }
+                    );
+                }
+            }
+        } catch (notifError) {
+            console.error('Error sending comment notification:', notifError);
+        }
+
         console.log('Comment added');
         return docRef.id;
     } catch (error) {

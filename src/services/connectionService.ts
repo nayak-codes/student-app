@@ -343,6 +343,26 @@ export const followUser = async (targetUserId: string): Promise<void> => {
         await updateFollowerCounts(currentUser.uid, targetUserId);
 
         console.log('User followed successfully');
+
+        // Send Notification
+        try {
+            // Fetch current user details properly
+            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+            const userData = userDoc.exists() ? userDoc.data() : {};
+
+            const { sendNotification } = require('./notificationService');
+            await sendNotification(
+                targetUserId,
+                currentUser.uid,
+                userData.displayName || currentUser.displayName || 'User',
+                userData.photoURL || currentUser.photoURL,
+                'follow_request',
+                'started following you',
+                { followerId: currentUser.uid }
+            );
+        } catch (notifError) {
+            console.error('Error sending follow notification:', notifError);
+        }
     } catch (error) {
         console.error('Error following user:', error);
         throw error;

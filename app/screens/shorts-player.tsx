@@ -186,6 +186,23 @@ interface ShortItemProps {
     onShare: (short: Post) => void;
 }
 
+function getTimeAgo(date: any) {
+    if (!date) return '';
+    try {
+        const now = new Date();
+        const past = new Date(date); // Handle timestamp or date string
+        const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+        if (diffInSeconds < 60) return 'just now';
+        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+        if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+        return `${Math.floor(diffInSeconds / 604800)}w ago`;
+    } catch (e) {
+        return '';
+    }
+}
+
 function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortItemProps) {
     const { colors } = useTheme();
     const router = useRouter();
@@ -294,6 +311,12 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
 
     return (
         <View style={styles.shortContainer}>
+            {/* Top Gradient for visibility */}
+            <LinearGradient
+                colors={['#000000', 'transparent']}
+                style={styles.topGradient}
+            />
+
             {/* Video */}
             <View style={styles.videoContainer}>
                 {player ? (
@@ -325,7 +348,8 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
 
             {/* Overlay Controls */}
             <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.8)']}
+                colors={['transparent', 'rgba(0,0,0,0.05)', 'rgba(0,0,0,0.6)']}
+                locations={[0, 0.6, 1]}
                 style={styles.overlay}
             >
                 <View style={styles.bottomSection}>
@@ -346,18 +370,20 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
                                 <TouchableOpacity
                                     style={[
                                         styles.followBtn,
-                                        isFollowing && { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#FFF' },
-                                        !isFollowing && { backgroundColor: colors.primary, borderWidth: 0 }
+                                        isFollowing && styles.followingBtn
                                     ]}
                                     onPress={handleFollow}
                                 >
-                                    <Text style={[styles.followText, { fontWeight: '600' }]}>
+                                    <Text style={styles.followText}>
                                         {isFollowing ? 'Following' : 'Follow'}
                                     </Text>
                                 </TouchableOpacity>
                             )}
                         </View>
-                        <Text style={styles.title} numberOfLines={2}>{short.content || 'Untitled'}</Text>
+                        <Text style={styles.title} numberOfLines={2}>
+                            {short.content || 'Untitled'}
+                            <Text style={styles.timeAgo}> • {getTimeAgo(short.createdAt)}</Text>
+                        </Text>
                     </View>
 
                     <View style={styles.rightActions}>
@@ -365,7 +391,7 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
                             <Ionicons
                                 name={isLiked ? "heart" : "heart-outline"}
                                 size={32}
-                                color={isLiked ? "#EF4444" : "#FFF"}
+                                color={isLiked ? "#FF3B30" : "#FFF"}
                             />
                             <Text style={styles.actionText}>{likesCount}</Text>
                         </TouchableOpacity>
@@ -376,7 +402,7 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.actionBtn} onPress={() => onShare(short)}>
-                            <Ionicons name="arrow-redo-outline" size={30} color="#FFF" />
+                            <Ionicons name="paper-plane-outline" size={30} color="#FFF" />
                             <Text style={styles.actionText}>Share</Text>
                         </TouchableOpacity>
 
@@ -406,7 +432,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 50,
         paddingBottom: 16,
-        zIndex: 10,
+        zIndex: 20, // Higher than top gradient
     },
     backButton: {
         padding: 4,
@@ -415,11 +441,22 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 18,
         fontWeight: '700',
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
     },
     shortContainer: {
         height: SCREEN_HEIGHT,
         width: SCREEN_WIDTH,
         backgroundColor: '#000',
+    },
+    topGradient: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 120,
+        zIndex: 10,
     },
     video: {
         flex: 1,
@@ -429,110 +466,112 @@ const styles = StyleSheet.create({
         height: '100%',
     },
     overlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'flex-end',
-        zIndex: 10,  // Higher to receive touches
-    },
-    rightActions: {
         position: 'absolute',
-        right: 12,
-        bottom: 100,
-        gap: 24,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 200,
+        justifyContent: 'flex-end',
+        paddingBottom: 24,
+        paddingHorizontal: 12,
+        zIndex: 10,
     },
-    actionBtn: {
-        alignItems: 'center',
-        gap: 4,
-    },
-    actionText: {
-        color: '#FFF',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    bottomInfo: {
-        padding: 16,
-        paddingBottom: 40,
-        gap: 12,
-    },
-    userInfo: {
+    bottomSection: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        marginBottom: 0,
     },
-    avatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
+    textContainer: {
+        flex: 1,
+        marginRight: 60,
+        justifyContent: 'flex-end',
+        paddingBottom: 8,
     },
-    avatarText: {
-        color: '#FFF',
-        fontWeight: '700',
-        fontSize: 14,
-    },
-    userName: {
+    title: {
         color: '#FFF',
         fontSize: 15,
+        fontWeight: '400',
+        lineHeight: 22,
+        marginBottom: 8,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+    },
+    authorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    avatarPlaceholder: {
+        width: 44, // Increased size
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#333',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+        borderWidth: 1.5,
+        borderColor: '#FFF',
+    },
+    avatarLetter: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#FFF',
+    },
+    authorName: {
+        color: '#FFF',
+        fontSize: 17, // Increased size
         fontWeight: '700',
-        flex: 1,
+        marginRight: 12,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
     },
     followBtn: {
+        borderWidth: 1.5,
+        borderColor: '#FFF',
+        borderRadius: 20, // Pill shape
         paddingHorizontal: 16,
         paddingVertical: 6,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: '#FFF',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        minWidth: 80,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    followingBtn: {
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        borderColor: 'transparent',
     },
     followText: {
         color: '#FFF',
         fontSize: 14,
         fontWeight: '700',
     },
-    caption: {
-        color: '#FFF',
-        fontSize: 14,
-        lineHeight: 20,
+    timeAgo: {
+        color: '#E2E8F0',
+        fontSize: 13,
+        fontWeight: '500',
+        opacity: 0.9,
     },
-    bottomSection: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-end',
-        paddingHorizontal: 12,
-        paddingBottom: 20,
-    },
-    textContainer: {
-        flex: 1,
-        marginRight: 12,
-    },
-    authorRow: {
-        flexDirection: 'row',
+    rightActions: {
+        position: 'absolute',
+        right: 0,
+        bottom: 12,
         alignItems: 'center',
-        marginBottom: 8,
-        gap: 8,
+        justifyContent: 'flex-end',
     },
-    avatarPlaceholder: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
+    actionBtn: {
         alignItems: 'center',
+        marginBottom: 20,
     },
-    avatarLetter: {
+    actionText: {
         color: '#FFF',
-        fontSize: 14,
-        fontWeight: '700',
-    },
-    authorName: {
-        color: '#FFF',
-        fontSize: 15,
-        fontWeight: '700',
-        flex: 1,
-    },
-    title: {
-        color: '#FFF',
-        fontSize: 14,
-        marginBottom: 4,
-        lineHeight: 18,
+        fontSize: 13,
+        fontWeight: '600',
+        marginTop: 4,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
 });

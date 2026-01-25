@@ -10,7 +10,6 @@ import {
   Image,
   ImageSourcePropType,
   Linking,
-  Modal,
   RefreshControl,
   Share,
   StatusBar,
@@ -366,77 +365,79 @@ const ExploreScreen: React.FC = () => {
     <View style={[styles.safeArea, { backgroundColor: colors.background }]} >
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1000,
-          elevation: 4,
-          backgroundColor: colors.background,
-          transform: [{ translateY }],
-        }}
-      >
-        <View
-          style={
-            [
-              styles.header,
-              {
-                backgroundColor: colors.background,
-                borderBottomColor: isDark ? '#333' : colors.border,
-                borderBottomWidth: 0, // Remove border from main header as it's now wrapped
-              }
-            ]}
+      {!showClipsFeed && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            elevation: 4,
+            backgroundColor: colors.background,
+            transform: [{ translateY }],
+          }}
         >
-          <SafeAreaView edges={['top']}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
-              <View style={styles.brandContainer}>
-                <Text style={styles.brandText}>Vidhyardi</Text>
-              </View>
-
-              <View style={styles.headerActions}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => router.push({ pathname: '/screens/universal-search', params: { category: 'posts' } })}
-                >
-                  <Ionicons name="search-outline" size={26} color={colors.text} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => router.push('/notifications')}
-                >
-                  <Ionicons name="notifications-outline" size={26} color={colors.text} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => router.push('/conversations')}
-                >
-                  <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </SafeAreaView>
-        </View >
-
-        {/* Tabs inside Animated Header */}
-        <View style={[styles.tabContainer, { backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: isDark ? '#333' : colors.border }]}>
-          <TouchableOpacity
-            style={[styles.segmentBtn, activeTab === 'video' && styles.segmentBtnActive, { backgroundColor: activeTab === 'video' ? colors.primary : colors.card }]}
-            onPress={() => setActiveTab('video')}
+          <View
+            style={
+              [
+                styles.header,
+                {
+                  backgroundColor: colors.background,
+                  borderBottomColor: isDark ? '#333' : colors.border,
+                  borderBottomWidth: 0, // Remove border from main header as it's now wrapped
+                }
+              ]}
           >
-            <Text style={[styles.segmentText, { color: activeTab === 'video' ? '#FFF' : colors.textSecondary }]}>Videos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segmentBtn, activeTab === 'clip' && styles.segmentBtnActive, { backgroundColor: activeTab === 'clip' ? colors.primary : colors.card }]}
-            onPress={() => setActiveTab('clip')}
-          >
-            <Text style={[styles.segmentText, { color: activeTab === 'clip' ? '#FFF' : colors.textSecondary }]}>Clips</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+            <SafeAreaView edges={['top']}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
+                <View style={styles.brandContainer}>
+                  <Text style={styles.brandText}>Vidhyardi</Text>
+                </View>
+
+                <View style={styles.headerActions}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => router.push({ pathname: '/screens/universal-search', params: { category: 'posts' } })}
+                  >
+                    <Ionicons name="search-outline" size={26} color={colors.text} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => router.push('/notifications')}
+                  >
+                    <Ionicons name="notifications-outline" size={26} color={colors.text} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => router.push('/conversations')}
+                  >
+                    <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </SafeAreaView>
+          </View >
+
+          {/* Tabs inside Animated Header */}
+          <View style={[styles.tabContainer, { backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: isDark ? '#333' : colors.border }]}>
+            <TouchableOpacity
+              style={[styles.segmentBtn, activeTab === 'video' && styles.segmentBtnActive, { backgroundColor: activeTab === 'video' ? colors.primary : colors.card }]}
+              onPress={() => setActiveTab('video')}
+            >
+              <Text style={[styles.segmentText, { color: activeTab === 'video' ? '#FFF' : colors.textSecondary }]}>Videos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.segmentBtn, activeTab === 'clip' && styles.segmentBtnActive, { backgroundColor: activeTab === 'clip' ? colors.primary : colors.card }]}
+              onPress={() => setActiveTab('clip')}
+            >
+              <Text style={[styles.segmentText, { color: activeTab === 'clip' ? '#FFF' : colors.textSecondary }]}>Clips</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
 
       <FlatList
         key={activeTab}
@@ -482,19 +483,16 @@ const ExploreScreen: React.FC = () => {
         onPostCreated={loadPosts}
       />
 
-      {/* Immersive Clips Feed Modal */}
-      <Modal
-        visible={showClipsFeed}
-        animationType="slide"
-        onRequestClose={() => setShowClipsFeed(false)}
-        transparent={false} // Full screen opaque
-      >
-        <ClipsFeed
-          data={feedData.filter(d => d.type === 'clip' || (d.videoLink && (d.videoLink.includes('/shorts/') || d.videoLink.includes('#shorts'))))}
-          initialIndex={initialClipIndex}
-          onClose={() => setShowClipsFeed(false)}
-        />
-      </Modal>
+      {/* Immersive Clips Feed Overlay (Inline for Tab Visibility) */}
+      {showClipsFeed && (
+        <View style={StyleSheet.absoluteFillObject}>
+          <ClipsFeed
+            data={feedData.filter(d => d.type === 'clip' || (d.videoLink && (d.videoLink.includes('/shorts/') || d.videoLink.includes('#shorts'))))}
+            initialIndex={initialClipIndex}
+            onClose={() => setShowClipsFeed(false)}
+          />
+        </View>
+      )}
     </View >
   );
 };

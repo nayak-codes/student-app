@@ -5,14 +5,23 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { AuthProvider } from '../src/contexts/AuthContext';
+import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider as AppThemeProvider, useTheme } from '../src/contexts/ThemeContext';
+import { registerForPushNotificationsAsync } from '../src/services/notificationService';
 
 // Prevent splash screen from auto-hiding before fonts are loaded
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   const { theme } = useTheme();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      registerForPushNotificationsAsync(user.uid);
+    }
+  }, [user]);
+
   return (
     <NavThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack
