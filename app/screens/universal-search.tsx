@@ -939,17 +939,17 @@ const SearchScreen = () => {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Expanded Search Bar Container with integrated Back button */}
-            <View style={[styles.topContainer, { backgroundColor: colors.card }]}>
+            <View style={[styles.topContainer, { backgroundColor: isDark ? '#0F0F0F' : '#000' }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    <Ionicons name="arrow-back" size={24} color="#FFF" />
                 </TouchableOpacity>
 
-                <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(51, 65, 85, 0.5)' : '#F1F5F9' }]}>
-                    <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
+                <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(51, 65, 85, 0.5)' : 'rgba(255, 255, 255, 0.15)' }]}>
+                    <Ionicons name="search-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
                     <TextInput
-                        style={[styles.searchInput, { color: colors.text }]}
+                        style={[styles.searchInput, { color: '#FFF' }]}
                         placeholder="Search students, colleges, posts..."
-                        placeholderTextColor={colors.textSecondary}
+                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
                         value={searchQuery}
                         onChangeText={handleTextChange}
                         onSubmitEditing={() => handleSearchSubmit(searchQuery)}
@@ -959,8 +959,8 @@ const SearchScreen = () => {
                         autoFocus={true}
                     />
                     {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={clearSearch}>
-                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                        <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+                            <Ionicons name="close-circle" size={24} color="rgba(255, 255, 255, 0.7)" />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -1192,13 +1192,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 8,
+        paddingTop: 24,
+        paddingBottom: 16,
         backgroundColor: '#FFF',
+        marginTop: 16,
     },
     backButton: {
         marginRight: 12,
         padding: 4,
+    },
+    clearButton: {
+        padding: 8,
+        marginLeft: 4,
     },
     searchContainer: {
         flex: 1,

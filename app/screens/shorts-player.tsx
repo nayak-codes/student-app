@@ -18,6 +18,7 @@ export default function ShortsPlayerScreen() {
     const { shortId, startIndex } = useLocalSearchParams();
     const router = useRouter();
     const { colors } = useTheme();
+    const { user } = useAuth();
     const [allShorts, setAllShorts] = useState<Post[]>([]);
     const [currentIndex, setCurrentIndex] = useState(parseInt(startIndex as string) || 0);
 
@@ -88,6 +89,45 @@ export default function ShortsPlayerScreen() {
         itemVisiblePercentThreshold: 50,
     }).current;
 
+    const handleLike = async (shortId: string) => {
+        if (!user) return;
+
+        const shortIndex = allShorts.findIndex(s => s.id === shortId);
+        if (shortIndex === -1) return;
+
+        const short = allShorts[shortIndex];
+        const isLiked = short.likedBy?.includes(user.uid);
+
+        // Optimistic Update
+        const updatedShorts = [...allShorts];
+        if (isLiked) {
+            updatedShorts[shortIndex] = {
+                ...short,
+                likes: (short.likes || 0) - 1,
+                likedBy: short.likedBy?.filter(id => id !== user.uid) || []
+            };
+        } else {
+            updatedShorts[shortIndex] = {
+                ...short,
+                likes: (short.likes || 0) + 1,
+                likedBy: [...(short.likedBy || []), user.uid]
+            };
+        }
+        setAllShorts(updatedShorts);
+
+        try {
+            if (isLiked) {
+                await unlikePost(shortId, user.uid);
+            } else {
+                await likePost(shortId, user.uid);
+            }
+        } catch (error) {
+            console.error('Like error:', error);
+            // Revert on error
+            setAllShorts(allShorts);
+        }
+    };
+
     const renderShort = ({ item, index }: { item: Post; index: number }) => {
         const isActive = index === currentIndex;
         const shouldLoad = Math.abs(index - currentIndex) <= 1;
@@ -96,6 +136,7 @@ export default function ShortsPlayerScreen() {
                 short={item}
                 isActive={isActive}
                 shouldLoad={shouldLoad}
+                onLike={() => handleLike(item.id)}
                 onComments={() => {
                     setSelectedShortId(item.id);
                     setSelectedShortCommentCount(item.comments || 0);
@@ -139,6 +180,7 @@ export default function ShortsPlayerScreen() {
                 ref={flatListRef}
                 data={allShorts}
                 renderItem={renderShort}
+                // ... props
                 keyExtractor={(item) => item.id}
                 pagingEnabled
                 showsVerticalScrollIndicator={false}
@@ -153,8 +195,10 @@ export default function ShortsPlayerScreen() {
                 windowSize={5}
                 removeClippedSubviews={true}
                 onScrollToIndexFailed={onScrollToIndexFailed}
+                // Force update on data change
+                extraData={allShorts}
             />
-            {/* Comments Sheet */}
+            {/* ... modals (Comments, Share) */}
             {selectedShortId && (
                 <CommentsSheet
                     visible={commentsVisible}
@@ -182,6 +226,7 @@ interface ShortItemProps {
     short: Post;
     isActive: boolean;
     shouldLoad: boolean;
+    onLike: () => void;
     onComments: () => void;
     onShare: (short: Post) => void;
 }
@@ -203,7 +248,7 @@ function getTimeAgo(date: any) {
     }
 }
 
-function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortItemProps) {
+function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare }: ShortItemProps) {
     const { colors } = useTheme();
     const router = useRouter();
     const player = useConditionalVideoPlayer(short.videoLink || null, shouldLoad);
@@ -211,18 +256,15 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
 
     // Auth
     const { user } = useAuth();
+    const isLiked = short.likedBy?.includes(user?.uid || '') || false;
+    const likesCount = short.likes || 0;
 
-    // Local State for interactions
-    const [isLiked, setIsLiked] = useState(false);
-    const [likesCount, setLikesCount] = useState(0);
+    // Local State for Follow ONLY
     const [isFollowing, setIsFollowing] = useState(false);
     const [isFollowLoading, setIsFollowLoading] = useState(false);
 
     useEffect(() => {
         if (short) {
-            setIsLiked(short.likedBy?.includes(user?.uid || '') || false);
-            setLikesCount(short.likes || 0);
-
             // Check follow status
             if (user && short.userId && user.uid !== short.userId) {
                 checkFollowStatus(user.uid, short.userId).then(status => {
@@ -230,7 +272,7 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
                 });
             }
         }
-    }, [short, user]);
+    }, [short.userId, user]); // Only re-check if user changes
 
     // Only play when active
     useEffect(() => {
@@ -245,35 +287,6 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
             setIsPlaying(false);
         }
     }, [isActive, player]);
-
-    const handleLike = async () => {
-        if (!user) return;
-
-        const previousLiked = isLiked;
-        const previousCount = likesCount;
-
-        // Optimistic
-        if (isLiked) {
-            setIsLiked(false);
-            setLikesCount(prev => Math.max(0, prev - 1));
-        } else {
-            setIsLiked(true);
-            setLikesCount(prev => prev + 1);
-        }
-
-        try {
-            if (previousLiked) {
-                await unlikePost(short.id, user.uid);
-            } else {
-                await likePost(short.id, user.uid);
-            }
-        } catch (error) {
-            // Revert
-            setIsLiked(previousLiked);
-            setLikesCount(previousCount);
-            console.error('Like error:', error);
-        }
-    };
 
     const handleFollow = async () => {
         if (!user || isFollowLoading) return;
@@ -387,7 +400,7 @@ function ShortItem({ short, isActive, shouldLoad, onComments, onShare }: ShortIt
                     </View>
 
                     <View style={styles.rightActions}>
-                        <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
+                        <TouchableOpacity style={styles.actionBtn} onPress={onLike}>
                             <Ionicons
                                 name={isLiked ? "heart" : "heart-outline"}
                                 size={32}

@@ -21,6 +21,7 @@ export interface EventItem {
     date: string;
     location: string;
     link?: string;
+    videoLink?: string;
     image?: string;
     createdAt?: Date;
     userId?: string;

@@ -535,7 +535,7 @@ const VideoPlayerScreen = () => {
                                 onPress={() => {
                                     // Push new video params onto stack (or replace)
                                     // Using push to allow back navigation
-                                    router.push({
+                                    router.replace({
                                         pathname: '/screens/video-player',
                                         params: {
                                             videoUri: item.videoLink,

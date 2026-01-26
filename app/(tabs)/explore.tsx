@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Animated,
+  BackHandler,
   Dimensions,
   FlatList,
   Image,
@@ -23,6 +24,7 @@ import ClipsFeed from '../../src/components/ClipsFeed';
 import CreatePostModal from '../../src/components/CreatePostModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { useVideoPlayerContext } from '../../src/contexts/VideoPlayerContext';
 import { addToHistory } from '../../src/services/historyService';
 import { getAllPosts, incrementViewCount, likePost, Post, unlikePost } from '../../src/services/postsService';
 
@@ -106,6 +108,8 @@ const ExploreScreen: React.FC = () => {
   const [showClipsFeed, setShowClipsFeed] = useState(false);
   const [initialClipIndex, setInitialClipIndex] = useState(0);
 
+  const { playVideo: playGlobalVideo } = useVideoPlayerContext();
+
   // Collapsible Header Logic
   const scrollY = React.useRef(new Animated.Value(0)).current;
   const headerHeight = 130; // approx height of header + tabs
@@ -147,6 +151,24 @@ const ExploreScreen: React.FC = () => {
   useEffect(() => {
     loadPosts();
   }, []);
+
+  // Handle hardware back button for Clips Feed
+  useEffect(() => {
+    const onBackPress = () => {
+      if (showClipsFeed) {
+        setShowClipsFeed(false);
+        return true; // Prevent default behavior (exit app/go back)
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress
+    );
+
+    return () => backHandler.remove();
+  }, [showClipsFeed]);
 
   const toggleSave = (id: string) => {
     setSavedItems(prev => {
@@ -238,7 +260,7 @@ const ExploreScreen: React.FC = () => {
             authorName: item.author,
             authorId: item.userId || '',
             likes: item.likes.toString(),
-            views: '0',
+            views: (item.viewCount || 0).toString(),
             date: item.timeAgo,
             authorImage: undefined
           }
@@ -252,21 +274,28 @@ const ExploreScreen: React.FC = () => {
     if (isYoutube) {
       Linking.openURL(item.videoLink);
     } else {
-      router.push({
-        pathname: '/screens/video-player',
-        params: {
-          videoUri: item.videoLink,
-          postId: item.id,
-          title: item.title,
-          description: '', // FeedItem often lacks full description
-          authorName: item.author,
-          authorId: item.userId || '',
-          likes: item.likes.toString(),
-          views: '0', // FeedItem lacks views
-          date: item.timeAgo,
-          authorImage: undefined
-        }
-      });
+      // Use Global Video Player Context
+      const postForPlayer: Post = {
+        id: item.id,
+        userId: item.userId || '',
+        userName: item.author,
+        userExam: '', // Fallback
+        userProfilePhoto: undefined, // Fallback need to fetch or ignore
+        content: item.title, // Title acts as content or description
+        type: 'video',
+        videoLink: item.videoLink,
+        thumbnailUrl: item.thumbnailUrl || item.imageUrl,
+        tags: item.tags || [],
+        likes: item.likes,
+        likedBy: item.likedBy || [],
+        comments: item.comments,
+        savedBy: [],
+        viewCount: item.viewCount || 0,
+        createdAt: new Date(), // Fallback
+        title: item.title // Ensure title is passed
+      };
+
+      playGlobalVideo(postForPlayer);
     }
   };
 
@@ -301,9 +330,15 @@ const ExploreScreen: React.FC = () => {
         </TouchableOpacity>
 
         <View style={styles.videoMetaContainer}>
-          <View style={styles.avatarPlaceholder}>
+          <TouchableOpacity
+            style={styles.avatarPlaceholder}
+            onPress={() => item.userId && router.push({
+              pathname: '/public-profile',
+              params: { userId: item.userId }
+            })}
+          >
             <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.videoTextContent}>
             <Text style={[styles.videoTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
             <Text style={styles.videoSubtitle}>{item.author} • {item.timeAgo} • {item.viewCount || 0} views</Text>
@@ -352,7 +387,7 @@ const ExploreScreen: React.FC = () => {
 
               <View style={styles.clipStats}>
                 <Ionicons name="play" size={10} color="#FFF" />
-                <Text style={styles.clipViewsText}>{item.likes > 1000 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}</Text>
+                <Text style={styles.clipViewsText}>{item.viewCount || 0}</Text>
               </View>
             </View>
           </View>

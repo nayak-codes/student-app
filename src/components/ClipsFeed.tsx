@@ -8,7 +8,6 @@ import {
     Dimensions,
     FlatList,
     Image,
-    Share,
     StatusBar,
     StyleSheet,
     Text,
@@ -22,7 +21,7 @@ import { checkFollowStatus, followUser, unfollowUser } from '../services/connect
 import { addToHistory } from '../services/historyService';
 import { likePost, unlikePost } from '../services/postsService';
 import CommentsSheet from './CommentsSheet';
-import ShareToFriendsModal from './ShareToFriendsModal';
+import ShareModal from './ShareModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -302,36 +301,23 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     };
 
     const handleShare = async (item: FeedItem) => {
-        Alert.alert(
-            "Share Clip",
-            "How would you like to share?",
-            [
-                {
-                    text: "Send to Friends",
-                    onPress: () => {
-                        setSelectedClipForShare(item);
-                        setIsShareModalVisible(true);
-                    }
-                },
-                {
-                    text: "Share via...",
-                    onPress: async () => {
-                        try {
-                            await Share.share({
-                                message: `Check out this clip on Chitki!\n\n${item.title}\n\nBy ${item.author}\n${item.videoLink}`,
-                                title: 'Share Clip',
-                            });
-                        } catch (error) {
-                            console.error('Error sharing:', error);
-                        }
-                    }
-                },
-                {
-                    text: "Cancel",
-                    style: "cancel"
-                }
-            ]
-        );
+        // Transform FeedItem to match ShareModal's expected format
+        const shareData = {
+            id: item.id,
+            content: item.title, // Map title to content
+            userId: item.userId,
+            userName: item.author,
+            videoLink: item.videoLink,
+            thumbnailUrl: item.thumbnailUrl,
+            imageUrl: item.imageUrl,
+            type: item.type,
+            likes: item.likes,
+            comments: item.comments,
+            likedBy: item.likedBy,
+        };
+
+        setSelectedClipForShare(shareData as any);
+        setIsShareModalVisible(true);
     };
 
     const handleFollow = async (userId?: string) => {
@@ -453,10 +439,11 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                 removeClippedSubviews={true}
             />
 
-            <ShareToFriendsModal
+            <ShareModal
                 visible={isShareModalVisible}
                 onClose={() => setIsShareModalVisible(false)}
-                postToShare={selectedClipForShare}
+                shareType="post"
+                shareData={selectedClipForShare}
             />
 
             {selectedClipId && (

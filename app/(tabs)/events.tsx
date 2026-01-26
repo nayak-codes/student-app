@@ -351,7 +351,14 @@ const EventsScreen = () => {
                 activeOpacity={0.7}
             >
                 {item.image && (
-                    <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
+                    <View>
+                        <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
+                        {item.videoLink && (
+                            <View style={styles.playIconOverlay}>
+                                <Ionicons name="play-circle" size={32} color="rgba(255,255,255,0.9)" />
+                            </View>
+                        )}
+                    </View>
                 )}
                 <View style={styles.cardContent}>
                     <View style={styles.badgeContainer}>
@@ -842,6 +849,16 @@ const styles = StyleSheet.create({
         width: '100%',
         aspectRatio: 16 / 9, // YouTube thumbnail style
         backgroundColor: '#E2E8F0',
+    },
+    playIconOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.2)',
     },
     cardContent: {
         padding: 18,

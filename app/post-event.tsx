@@ -72,6 +72,7 @@ export default function PostEventScreen() {
     const [description, setDescription] = useState('');
     const [location, setLocation] = useState('');
     const [link, setLink] = useState('');
+    const [videoLink, setVideoLink] = useState('');
     const [image, setImage] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<EventCategory | ''>('');
     const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -232,6 +233,7 @@ export default function PostEventScreen() {
                 location,
                 isOnline: location.toLowerCase().includes('online') || location.toLowerCase().includes('web'),
                 link,
+                videoLink,
                 userId: user.uid, // Add User ID
             };
 
@@ -364,6 +366,16 @@ export default function PostEventScreen() {
                             placeholderTextColor={colors.textSecondary}
                             value={link}
                             onChangeText={setLink}
+                            autoCapitalize="none"
+                        />
+
+                        <Text style={[styles.label, { color: colors.text }]}>Promo Video Link (YouTube/Vimeo)</Text>
+                        <TextInput
+                            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                            placeholder="https://youtube.com/..."
+                            placeholderTextColor={colors.textSecondary}
+                            value={videoLink}
+                            onChangeText={setVideoLink}
                             autoCapitalize="none"
                         />
 

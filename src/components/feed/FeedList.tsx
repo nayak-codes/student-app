@@ -105,22 +105,57 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
         if (postIndex === -1) return;
 
         const post = posts[postIndex];
-        const currentUserReaction = post.reactedBy?.[user.uid];
+        const previousReaction = post.reactedBy?.[user.uid];
+        const previousReactions = post.reactions || {
+            like: 0, celebrate: 0, support: 0, insightful: 0, love: 0, funny: 0, doubt: 0
+        };
+
+        let newReactions = { ...previousReactions };
+        let newReactedBy = { ...(post.reactedBy || {}) };
+
+        // Optimistic Update Logic
+        if (previousReaction === reactionType) {
+            // Remove reaction
+            newReactions[reactionType] = Math.max(0, (newReactions[reactionType] || 0) - 1);
+            delete newReactedBy[user.uid];
+        } else {
+            // Add or Change reaction
+            if (previousReaction) {
+                // Decrement old reaction
+                newReactions[previousReaction] = Math.max(0, (newReactions[previousReaction] || 0) - 1);
+            }
+            // Increment new reaction
+            newReactions[reactionType] = (newReactions[reactionType] || 0) + 1;
+            newReactedBy[user.uid] = reactionType;
+        }
+
+        const updatedPosts = [...posts];
+        updatedPosts[postIndex] = {
+            ...post,
+            reactions: newReactions,
+            reactedBy: newReactedBy,
+            // Sync legacy likes if reaction is 'like'
+            likes: reactionType === 'like' ? (
+                previousReaction === 'like' ? post.likes - 1 : (previousReaction ? post.likes : post.likes + 1)
+            ) : post.likes,
+            likedBy: reactionType === 'like' ? (
+                previousReaction === 'like' ? (post.likedBy || []).filter(id => id !== user.uid) : [...(post.likedBy || []), user.uid]
+            ) : (post.likedBy || [])
+        };
+        setPosts(updatedPosts);
 
         try {
-            if (currentUserReaction === reactionType) {
-                // Remove reaction if clicking same reaction
+            if (previousReaction === reactionType) {
                 await removeReaction(postId, user.uid);
             } else {
-                // Add or change reaction
                 await addReaction(postId, user.uid, reactionType);
             }
-
-            // Refresh this specific post's data
-            // In a real app, you'd update optimistically or fetch just this post
-            fetchPosts();
         } catch (error) {
             console.error('Error handling reaction:', error);
+            // Revert optimistic update on error
+            const revertedPosts = [...posts];
+            revertedPosts[postIndex] = post;
+            setPosts(revertedPosts);
         }
     };
 
