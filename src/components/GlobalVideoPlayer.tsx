@@ -24,7 +24,8 @@ import { addToHistory } from '../services/historyService';
 import { getAllPosts, incrementViewCount, likePost, Post, savePost, unlikePost, unsavePost } from '../services/postsService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MiniPlayerHeight = 60;
+const MiniPlayerWidth = SCREEN_WIDTH - 40; // Not used anymore but keeping for reference
+const MiniPlayerHeight = 160; // Square size - bigger for easier interaction
 const TabBarHeight = 60;
 
 const GlobalVideoPlayerContent = ({ currentVideo }: { currentVideo: any }) => {
@@ -47,6 +48,8 @@ const GlobalVideoPlayerContent = ({ currentVideo }: { currentVideo: any }) => {
     const [localLiked, setLocalLiked] = useState(false);
     const [localLikeCount, setLocalLikeCount] = useState(0);
     const [localSaved, setLocalSaved] = useState(false);
+    const [showMiniControls, setShowMiniControls] = useState(false);
+    const [lastTap, setLastTap] = useState(0);
 
     const player = useVideoPlayer(currentVideo.videoLink, (player) => {
         player.loop = false;
@@ -82,12 +85,12 @@ const GlobalVideoPlayerContent = ({ currentVideo }: { currentVideo: any }) => {
                 friction: 8,
             }),
             Animated.spring(videoWidth, {
-                toValue: toMini ? 90 : SCREEN_WIDTH,
+                toValue: toMini ? 160 : SCREEN_WIDTH, // Square 160x160
                 useNativeDriver: false,
                 friction: 8,
             }),
             Animated.spring(videoHeight, {
-                toValue: toMini ? MiniPlayerHeight : (SCREEN_WIDTH * 9 / 16),
+                toValue: toMini ? 160 : (SCREEN_WIDTH * 9 / 16), // Square 160x160
                 useNativeDriver: false,
                 friction: 8,
             }),
@@ -179,12 +182,36 @@ const GlobalVideoPlayerContent = ({ currentVideo }: { currentVideo: any }) => {
         <Animated.View style={[styles.mainContainer, {
             height: animatedHeight,
             top: animatedTop,
-            left: isMinimized ? 10 : 0,
+            left: isMinimized ? undefined : 0,
             right: isMinimized ? 10 : 0,
+            width: isMinimized ? 160 : SCREEN_WIDTH,
             borderRadius: isMinimized ? 12 : 0,
             backgroundColor: isMinimized ? (isDark ? '#1E293B' : '#F1F5F9') : colors.background,
         }]}>
-            <Pressable style={{ flex: 1 }} onPress={isMinimized ? expandVideo : undefined}>
+            <Pressable
+                style={{ flex: 1 }}
+                onPress={() => {
+                    if (!isMinimized) return;
+
+                    const now = Date.now();
+                    const timeSinceLastTap = now - lastTap;
+
+                    console.log('Tap detected, time since last:', timeSinceLastTap);
+
+                    if (timeSinceLastTap < 300) {
+                        // Double tap - expand video
+                        console.log('Double tap - expanding');
+                        expandVideo();
+                        setShowMiniControls(false);
+                    } else {
+                        // Single tap - toggle controls
+                        console.log('Single tap - toggling controls');
+                        setShowMiniControls(!showMiniControls);
+                    }
+
+                    setLastTap(now);
+                }}
+            >
 
                 {/* Video */}
                 <Animated.View style={[styles.videoWrapper, {
@@ -193,10 +220,33 @@ const GlobalVideoPlayerContent = ({ currentVideo }: { currentVideo: any }) => {
                     marginTop: isMinimized ? 0 : insets.top,
                 }]}>
                     <VideoView player={player} style={styles.videoView} contentFit={isMinimized ? "cover" : "contain"} nativeControls={!isMinimized} />
+
+                    {/* Expanded mode - minimize button */}
                     {!isMinimized && (
                         <TouchableOpacity style={styles.minimizeButton} onPress={minimizeVideo}>
                             <Ionicons name="chevron-down" size={32} color="#FFF" />
                         </TouchableOpacity>
+                    )}
+
+                    {/* Mini mode - overlay controls on video */}
+                    {isMinimized && showMiniControls && (
+                        <>
+                            {/* Close button - top right */}
+                            <TouchableOpacity
+                                style={styles.miniCloseButton}
+                                onPress={(e) => { e.stopPropagation(); closeVideo(); }}
+                            >
+                                <Ionicons name="close" size={20} color="#FFF" />
+                            </TouchableOpacity>
+
+                            {/* Play/Pause button - center */}
+                            <TouchableOpacity
+                                style={styles.miniPlayButton}
+                                onPress={(e) => { e.stopPropagation(); togglePlayPause(); }}
+                            >
+                                <Ionicons name={isPlaying ? "pause" : "play"} size={28} color="#FFF" />
+                            </TouchableOpacity>
+                        </>
                     )}
                 </Animated.View>
 
@@ -235,17 +285,7 @@ const GlobalVideoPlayerContent = ({ currentVideo }: { currentVideo: any }) => {
                     </ScrollView>
                 </Animated.View>
 
-                {/* Mini Controls */}
-                <Animated.View style={[styles.miniControlsContainer, { opacity: miniOpacity }]} pointerEvents={isMinimized ? 'auto' : 'none'}>
-                    <View style={styles.miniInfo}>
-                        <Text style={[styles.miniTitle, { color: colors.text }]} numberOfLines={1}>{currentVideo.title}</Text>
-                        <Text style={[styles.miniAuthor, { color: colors.textSecondary }]} numberOfLines={1}>{currentVideo.userName}</Text>
-                    </View>
-                    <View style={styles.miniButtons}>
-                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); togglePlayPause(); }} style={{ padding: 4 }}><Ionicons name={isPlaying ? "pause" : "play"} size={22} color={colors.text} /></TouchableOpacity>
-                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); closeVideo(); }} style={{ marginLeft: 12, padding: 4 }}><Ionicons name="close" size={22} color={colors.text} /></TouchableOpacity>
-                    </View>
-                </Animated.View>
+
             </Pressable>
         </Animated.View>
     );
@@ -284,32 +324,24 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.5)',
         borderRadius: 20,
     },
-    miniControlsContainer: {
+    miniCloseButton: {
         position: 'absolute',
-        left: 90,
-        right: 0,
-        top: 0,
-        bottom: 0,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingRight: 16,
+        top: 8,
+        right: 8,
+        padding: 6,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 16,
+        zIndex: 10,
     },
-    miniInfo: {
-        flex: 1,
-        justifyContent: 'center',
-        paddingHorizontal: 8,
-    },
-    miniTitle: {
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    miniAuthor: {
-        fontSize: 11,
-    },
-    miniButtons: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    miniPlayButton: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: [{ translateX: -20 }, { translateY: -20 }],
+        padding: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 20,
+        zIndex: 10,
     },
     infoSection: { padding: 16 },
     videoTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },

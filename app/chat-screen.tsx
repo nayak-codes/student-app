@@ -244,7 +244,7 @@ const ChatScreen = () => {
     const renderMessage = ({ item, index }: { item: Message; index: number }) => {
         const isOwnMessage = item.senderId === auth.currentUser?.uid;
         const messageDate = item.timestamp?.toDate ? item.timestamp.toDate() : new Date();
-        const prevMessage = messages[index + 1];
+        const prevMessage = messages[index - 1]; // Compare with chronologically newer message
         const prevMessageDate = prevMessage?.timestamp?.toDate ? prevMessage.timestamp.toDate() : null;
 
         const showDateHeader = !prevMessageDate || !isSameDay(messageDate, prevMessageDate);
@@ -266,7 +266,10 @@ const ChatScreen = () => {
                 ]}>
                     {/* Message Row Layout */}
                     {!isOwnMessage && (
-                        <View style={styles.avatarContainer}>
+                        <TouchableOpacity
+                            style={styles.avatarContainer}
+                            onPress={() => router.push({ pathname: '/public-profile', params: { userId: item.senderId } })}
+                        >
                             {item.senderPhoto ? (
                                 <Image source={{ uri: item.senderPhoto }} style={styles.avatar} />
                             ) : (
@@ -276,7 +279,7 @@ const ChatScreen = () => {
                                     </Text>
                                 </View>
                             )}
-                        </View>
+                        </TouchableOpacity>
                     )}
 
                     {isSharedContent ? (
@@ -440,7 +443,11 @@ const ChatScreen = () => {
                         <Ionicons name="arrow-back" size={24} color="#FFF" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.headerProfileContainer} activeOpacity={0.7}>
+                    <TouchableOpacity
+                        style={styles.headerProfileContainer}
+                        activeOpacity={0.7}
+                        onPress={() => router.push({ pathname: '/public-profile', params: { userId: otherUserId } })}
+                    >
                         {otherUserPhoto ? (
                             <Image source={{ uri: otherUserPhoto }} style={styles.headerAvatar} />
                         ) : (
