@@ -68,7 +68,7 @@ const VideoPlayerScreen = () => {
 
     // expo-video Player Setup
     const player = useVideoPlayer(videoUri, player => {
-        player.loop = false;
+        player.loop = true; // Auto-replay when video ends
     });
 
     // Lifecycle Management for Playback
@@ -91,6 +91,7 @@ const VideoPlayerScreen = () => {
     const [showDescription, setShowDescription] = useState(false);
     const [subscriberCount, setSubscriberCount] = useState(0);
     const [realCommentCount, setRealCommentCount] = useState(0);
+    const [showControls, setShowControls] = useState(true); // Show controls by default
 
     // Comments State
     const [commentsVisible, setCommentsVisible] = useState(false);
@@ -338,7 +339,10 @@ const VideoPlayerScreen = () => {
 
             {/* 1. Video Player Container - Sticky/Top */}
             <View style={styles.playerContainer}>
-                <View style={styles.videoWrapper}>
+                <Pressable
+                    style={styles.videoWrapper}
+                    onPress={() => setShowControls(!showControls)}
+                >
                     {videoUri && !errorMsg ? (
                         <>
                             <VideoView
@@ -366,7 +370,7 @@ const VideoPlayerScreen = () => {
                             )}
                         </View>
                     )}
-                </View>
+                </Pressable>
                 {/* Back Button Overlay */}
                 <TouchableOpacity
                     style={styles.backButton}
@@ -376,222 +380,224 @@ const VideoPlayerScreen = () => {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
+            {showControls && (
+                <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
 
-                {/* 2. Video Info Section */}
-                <View style={styles.infoSection}>
-                    <Text style={[styles.videoTitle, { color: colors.text }]} numberOfLines={showDescription ? undefined : 2}>
-                        {initialTitle || "Untitled Video"}
-                    </Text>
-
-                    <View style={styles.metaRow}>
-                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                            {formatViews(viewCount)} views • {date || 'Recently'}
+                    {/* 2. Video Info Section */}
+                    <View style={styles.infoSection}>
+                        <Text style={[styles.videoTitle, { color: colors.text }]} numberOfLines={showDescription ? undefined : 2}>
+                            {initialTitle || "Untitled Video"}
                         </Text>
-                        <TouchableOpacity onPress={() => setShowDescription(!showDescription)}>
-                            <Text style={[styles.moreText, { color: colors.textSecondary }]}>
-                                {showDescription ? '...less' : '...more'}
+
+                        <View style={styles.metaRow}>
+                            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                                {formatViews(viewCount)} views • {date || 'Recently'}
                             </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Collapsible Description */}
-                    {showDescription && (
-                        <View style={[styles.descriptionBox, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
-                            <Text style={[styles.descriptionText, { color: colors.text }]}>
-                                {initialDescription || "No description provided."}
-                            </Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* 3. Action Bar */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.actionBar}
-                >
-                    <TouchableOpacity
-                        style={[styles.actionPill, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
-                        onPress={() => setIsLiked(!isLiked)}
-                    >
-                        <Ionicons name={isLiked ? "heart" : "heart-outline"} size={20} color={isLiked ? "#EF4444" : colors.text} />
-                        <Text style={[styles.actionText, { color: colors.text }]}>
-                            {isLiked ? (likes + 1) : likes}
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.actionPill, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
-                        onPress={handleShare}
-                    >
-                        <Ionicons name="share-social-outline" size={20} color={colors.text} />
-                        <Text style={[styles.actionText, { color: colors.text }]}>Share</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.actionPill, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
-                        onPress={() => Alert.alert('Saved', 'Video saved to your playlist.')}
-                    >
-                        <Ionicons name="bookmark-outline" size={20} color={colors.text} />
-                        <Text style={[styles.actionText, { color: colors.text }]}>Save</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.actionPill, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
-                    >
-                        <Ionicons name="flag-outline" size={20} color={colors.text} />
-                        <Text style={[styles.actionText, { color: colors.text }]}>Report</Text>
-                    </TouchableOpacity>
-                </ScrollView>
-
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                {/* 4. Channel Info */}
-                <View style={styles.channelSection}>
-                    <View style={styles.channelRow}>
-                        <TouchableOpacity
-                            style={styles.channelInfo}
-                            onPress={() => {
-                                if (authorId) router.push({ pathname: '/public-profile', params: { userId: authorId } });
-                            }}
-                        >
-                            {authorImage ? (
-                                <Image source={{ uri: authorImage }} style={styles.avatar} />
-                            ) : (
-                                <View style={[styles.avatar, { backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' }]}>
-                                    <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{authorName?.[0] || 'U'}</Text>
-                                </View>
-                            )}
-                            <View style={{ marginLeft: 12, flex: 1 }}>
-                                <Text style={[styles.channelName, { color: colors.text }]} numberOfLines={1}>
-                                    {authorName || 'Unknown Creator'}
+                            <TouchableOpacity onPress={() => setShowDescription(!showDescription)}>
+                                <Text style={[styles.moreText, { color: colors.textSecondary }]}>
+                                    {showDescription ? '...less' : '...more'}
                                 </Text>
-                                <Text style={[styles.subscriberCount, { color: colors.textSecondary }]}>
-                                    {formatViews(subscriberCount)} subscribers
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Collapsible Description */}
+                        {showDescription && (
+                            <View style={[styles.descriptionBox, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+                                <Text style={[styles.descriptionText, { color: colors.text }]}>
+                                    {initialDescription || "No description provided."}
                                 </Text>
                             </View>
+                        )}
+                    </View>
+
+                    {/* 3. Action Bar */}
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.actionBar}
+                    >
+                        <TouchableOpacity
+                            style={[styles.actionPill, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
+                            onPress={() => setIsLiked(!isLiked)}
+                        >
+                            <Ionicons name={isLiked ? "heart" : "heart-outline"} size={20} color={isLiked ? "#EF4444" : colors.text} />
+                            <Text style={[styles.actionText, { color: colors.text }]}>
+                                {isLiked ? (likes + 1) : likes}
+                            </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.subscribeButton, { backgroundColor: isSubscribed ? (isDark ? '#334155' : '#E2E8F0') : colors.text }]}
-                            onPress={() => {
-                                const newState = !isSubscribed;
-                                setIsSubscribed(newState);
-                                if (newState) {
-                                    Alert.alert('Subscribed', `You have subscribed to ${authorName || 'this channel'}.`);
-                                }
-                            }}
+                            style={[styles.actionPill, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
+                            onPress={handleShare}
                         >
-                            <Text style={[styles.subscribeText, { color: isSubscribed ? colors.text : colors.background }]}>
-                                {isSubscribed ? 'Subscribed' : 'Subscribe'}
-                            </Text>
+                            <Ionicons name="share-social-outline" size={20} color={colors.text} />
+                            <Text style={[styles.actionText, { color: colors.text }]}>Share</Text>
                         </TouchableOpacity>
-                    </View>
-                </View>
 
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                        <TouchableOpacity
+                            style={[styles.actionPill, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
+                            onPress={() => Alert.alert('Saved', 'Video saved to your playlist.')}
+                        >
+                            <Ionicons name="bookmark-outline" size={20} color={colors.text} />
+                            <Text style={[styles.actionText, { color: colors.text }]}>Save</Text>
+                        </TouchableOpacity>
 
-                {/* 5. Comments Teaser */}
-                <TouchableOpacity
-                    style={[styles.commentsTeaser, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC' }]}
-                    onPress={() => setCommentsVisible(true)}
-                >
-                    <View style={styles.commentsHeader}>
-                        <Text style={[styles.commentsTitle, { color: colors.text }]}>Comments</Text>
-                        <Text style={[styles.commentsCount, { color: colors.textSecondary }]}>{realCommentCount}</Text>
-                    </View>
-                    <View style={styles.commentPreview}>
-                        {comments.length > 0 ? (
-                            <>
-                                {comments[0].userPhoto ? (
-                                    <Image source={{ uri: comments[0].userPhoto }} style={styles.miniAvatar} />
-                                ) : (
-                                    <View style={[styles.miniAvatar, { backgroundColor: '#64748B' }]} />
-                                )}
-                                <Text style={[styles.commentText, { color: colors.text }]} numberOfLines={1}>
-                                    {comments[0].text}
-                                </Text>
-                            </>
-                        ) : (
-                            <Text style={[styles.commentText, { color: colors.textSecondary, fontStyle: 'italic' }]}>
-                                Add a comment...
-                            </Text>
-                        )}
-                    </View>
-                </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.actionPill, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
+                        >
+                            <Ionicons name="flag-outline" size={20} color={colors.text} />
+                            <Text style={[styles.actionText, { color: colors.text }]}>Report</Text>
+                        </TouchableOpacity>
+                    </ScrollView>
 
-                {/* 6. Up Next / Related Videos */}
-                <View style={styles.relatedSection}>
-                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Up Next</Text>
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-                    {loadingRelated ? (
-                        <ActivityIndicator style={{ marginTop: 20 }} color={colors.primary} />
-                    ) : (
-                        relatedVideos.map((item) => (
-                            <Pressable
-                                key={item.id}
-                                style={styles.relatedItem}
+                    {/* 4. Channel Info */}
+                    <View style={styles.channelSection}>
+                        <View style={styles.channelRow}>
+                            <TouchableOpacity
+                                style={styles.channelInfo}
                                 onPress={() => {
-                                    // Push new video params onto stack (or replace)
-                                    // Using push to allow back navigation
-                                    router.replace({
-                                        pathname: '/screens/video-player',
-                                        params: {
-                                            videoUri: item.videoLink,
-                                            postId: item.id,
-                                            title: item.content, // Using content as title fallback
-                                            description: item.content,
-                                            authorName: item.userName,
-                                            authorImage: item.userProfilePhoto,
-                                            authorId: item.userId,
-                                            likes: item.likes,
-                                            views: item.viewCount || 0,
-                                            date: new Date(item.createdAt).toLocaleDateString(),
-                                            thumbnail: item.thumbnailUrl || item.imageUrl
-                                        }
-                                    });
+                                    if (authorId) router.push({ pathname: '/public-profile', params: { userId: authorId } });
                                 }}
                             >
-                                {/* Thumbnail */}
-                                <View style={styles.relatedThumbnailContainer}>
-                                    {(item.thumbnailUrl || item.imageUrl) ? (
-                                        <Image source={{ uri: item.thumbnailUrl || item.imageUrl }} style={styles.relatedThumbnail} resizeMode="cover" />
-                                    ) : (
-                                        <LinearGradient
-                                            colors={['#1F2937', '#000']}
-                                            style={styles.relatedThumbnail}
-                                        >
-                                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                                <Ionicons name="play-circle" size={32} color="#FFF" />
-                                            </View>
-                                        </LinearGradient>
-                                    )}
-                                    <View style={styles.durationBadge}>
-                                        <Text style={styles.durationText}>5:20</Text>
+                                {authorImage ? (
+                                    <Image source={{ uri: authorImage }} style={styles.avatar} />
+                                ) : (
+                                    <View style={[styles.avatar, { backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' }]}>
+                                        <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{authorName?.[0] || 'U'}</Text>
                                     </View>
-                                </View>
-
-                                {/* details */}
-                                <View style={styles.relatedDetails}>
-                                    <Text style={[styles.relatedTitle, { color: colors.text }]} numberOfLines={2}>
-                                        {item.content || 'Untitled Video'}
+                                )}
+                                <View style={{ marginLeft: 12, flex: 1 }}>
+                                    <Text style={[styles.channelName, { color: colors.text }]} numberOfLines={1}>
+                                        {authorName || 'Unknown Creator'}
                                     </Text>
-                                    <Text style={[styles.relatedMeta, { color: colors.textSecondary }]}>
-                                        {item.userName}
-                                    </Text>
-                                    <Text style={[styles.relatedMeta, { color: colors.textSecondary }]}>
-                                        {item.likes} likes • {item.viewCount || 0} views
+                                    <Text style={[styles.subscriberCount, { color: colors.textSecondary }]}>
+                                        {formatViews(subscriberCount)} subscribers
                                     </Text>
                                 </View>
-                            </Pressable>
-                        ))
-                    )}
-                </View>
+                            </TouchableOpacity>
 
-                {/* Bottom Spacing */}
-                <View style={{ height: 40 }} />
-            </ScrollView>
+                            <TouchableOpacity
+                                style={[styles.subscribeButton, { backgroundColor: isSubscribed ? (isDark ? '#334155' : '#E2E8F0') : colors.text }]}
+                                onPress={() => {
+                                    const newState = !isSubscribed;
+                                    setIsSubscribed(newState);
+                                    if (newState) {
+                                        Alert.alert('Subscribed', `You have subscribed to ${authorName || 'this channel'}.`);
+                                    }
+                                }}
+                            >
+                                <Text style={[styles.subscribeText, { color: isSubscribed ? colors.text : colors.background }]}>
+                                    {isSubscribed ? 'Subscribed' : 'Subscribe'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                    {/* 5. Comments Teaser */}
+                    <TouchableOpacity
+                        style={[styles.commentsTeaser, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC' }]}
+                        onPress={() => setCommentsVisible(true)}
+                    >
+                        <View style={styles.commentsHeader}>
+                            <Text style={[styles.commentsTitle, { color: colors.text }]}>Comments</Text>
+                            <Text style={[styles.commentsCount, { color: colors.textSecondary }]}>{realCommentCount}</Text>
+                        </View>
+                        <View style={styles.commentPreview}>
+                            {comments.length > 0 ? (
+                                <>
+                                    {comments[0].userPhoto ? (
+                                        <Image source={{ uri: comments[0].userPhoto }} style={styles.miniAvatar} />
+                                    ) : (
+                                        <View style={[styles.miniAvatar, { backgroundColor: '#64748B' }]} />
+                                    )}
+                                    <Text style={[styles.commentText, { color: colors.text }]} numberOfLines={1}>
+                                        {comments[0].text}
+                                    </Text>
+                                </>
+                            ) : (
+                                <Text style={[styles.commentText, { color: colors.textSecondary, fontStyle: 'italic' }]}>
+                                    Add a comment...
+                                </Text>
+                            )}
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* 6. Up Next / Related Videos */}
+                    <View style={styles.relatedSection}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Up Next</Text>
+
+                        {loadingRelated ? (
+                            <ActivityIndicator style={{ marginTop: 20 }} color={colors.primary} />
+                        ) : (
+                            relatedVideos.map((item) => (
+                                <Pressable
+                                    key={item.id}
+                                    style={styles.relatedItem}
+                                    onPress={() => {
+                                        // Push new video params onto stack (or replace)
+                                        // Using push to allow back navigation
+                                        router.replace({
+                                            pathname: '/screens/video-player',
+                                            params: {
+                                                videoUri: item.videoLink,
+                                                postId: item.id,
+                                                title: item.content, // Using content as title fallback
+                                                description: item.content,
+                                                authorName: item.userName,
+                                                authorImage: item.userProfilePhoto,
+                                                authorId: item.userId,
+                                                likes: item.likes,
+                                                views: item.viewCount || 0,
+                                                date: new Date(item.createdAt).toLocaleDateString(),
+                                                thumbnail: item.thumbnailUrl || item.imageUrl
+                                            }
+                                        });
+                                    }}
+                                >
+                                    {/* Thumbnail */}
+                                    <View style={styles.relatedThumbnailContainer}>
+                                        {(item.thumbnailUrl || item.imageUrl) ? (
+                                            <Image source={{ uri: item.thumbnailUrl || item.imageUrl }} style={styles.relatedThumbnail} resizeMode="cover" />
+                                        ) : (
+                                            <LinearGradient
+                                                colors={['#1F2937', '#000']}
+                                                style={styles.relatedThumbnail}
+                                            >
+                                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Ionicons name="play-circle" size={32} color="#FFF" />
+                                                </View>
+                                            </LinearGradient>
+                                        )}
+                                        <View style={styles.durationBadge}>
+                                            <Text style={styles.durationText}>5:20</Text>
+                                        </View>
+                                    </View>
+
+                                    {/* details */}
+                                    <View style={styles.relatedDetails}>
+                                        <Text style={[styles.relatedTitle, { color: colors.text }]} numberOfLines={2}>
+                                            {item.content || 'Untitled Video'}
+                                        </Text>
+                                        <Text style={[styles.relatedMeta, { color: colors.textSecondary }]}>
+                                            {item.userName}
+                                        </Text>
+                                        <Text style={[styles.relatedMeta, { color: colors.textSecondary }]}>
+                                            {item.likes} likes • {item.viewCount || 0} views
+                                        </Text>
+                                    </View>
+                                </Pressable>
+                            ))
+                        )}
+                    </View>
+
+                    {/* Bottom Spacing */}
+                    <View style={{ height: 40 }} />
+                </ScrollView>
+            )}
 
             {/* REPLACE MODAL WITH ABSOLUTE VIEW */}
             {commentsVisible && (

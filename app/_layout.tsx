@@ -55,6 +55,15 @@ function RootLayoutNav() {
           <Stack.Screen name="playlists/liked" options={{ headerShown: false }} />
           <Stack.Screen name="playlists/saved" options={{ headerShown: false }} />
           <Stack.Screen name="playlists/watch-later" options={{ headerShown: false }} />
+
+          {/* Messaging, Groups & Pages */}
+          <Stack.Screen name="create-group" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="create-page" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="browse-pages" options={{ headerShown: false }} />
+          <Stack.Screen name="group-chat" options={{ headerShown: false }} />
+          <Stack.Screen name="group-info" options={{ headerShown: false }} />
+          <Stack.Screen name="page-chat" options={{ headerShown: false }} />
+          <Stack.Screen name="select-members" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
         <GlobalVideoPlayer />
       </>

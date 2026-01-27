@@ -34,6 +34,7 @@ export interface Message {
 
 export interface Conversation {
     id: string;
+    type?: 'chat' | 'group' | 'page'; // Conversation type
     participants: string[];
     participantDetails: {
         [userId: string]: {
@@ -42,6 +43,23 @@ export interface Conversation {
             email: string;
         };
     };
+
+    // Group-specific fields
+    groupName?: string;
+    groupDescription?: string;
+    groupIcon?: string;
+    admins?: string[]; // Array of admin user IDs
+    createdBy?: string; // Group creator user ID
+    importantMembers?: string[]; // Array of important member user IDs (for quick filter)
+
+    // Page-specific fields
+    pageName?: string;
+    pageDescription?: string;
+    pageIcon?: string;
+    pageOwner?: string; // Creator/owner ID
+    subscribers?: string[]; // Array of subscriber IDs
+    isVerified?: boolean;
+
     lastMessage?: {
         text: string;
         senderId: string;
@@ -365,5 +383,571 @@ export const getTotalUnreadCount = async (userId: string): Promise<number> => {
     } catch (error) {
         console.error('Error getting total unread count:', error);
         return 0;
+    }
+};
+
+// ==================== GROUP FUNCTIONS ====================
+
+/**
+ * Create a new group conversation
+ */
+export const createGroup = async (
+    groupName: string,
+    groupDescription: string,
+    participantIds: string[], // Array of user IDs to add to the group
+    groupIcon?: string
+): Promise<string> => {
+    try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error('User not authenticated');
+
+        // Get current user details
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const currentUserData = userDoc.data();
+
+        // Ensure creator is in participants
+        const allParticipants = Array.from(new Set([currentUser.uid, ...participantIds]));
+
+        // Fetch all participant details
+        const participantDetails: { [userId: string]: { name: string; photoURL?: string; email: string } } = {};
+
+        for (const userId of allParticipants) {
+            const userDocRef = await getDoc(doc(db, 'users', userId));
+            const userData = userDocRef.data();
+            participantDetails[userId] = {
+                name: userData?.name || 'User',
+                photoURL: userData?.photoURL || '',
+                email: userData?.email || '',
+            };
+        }
+
+        // Initialize unread count for all participants
+        const unreadCount: { [userId: string]: number } = {};
+        allParticipants.forEach(id => {
+            unreadCount[id] = 0;
+        });
+
+        // Create group conversation
+        const newGroup = {
+            type: 'group',
+            participants: allParticipants,
+            participantDetails,
+            groupName,
+            groupDescription,
+            groupIcon: groupIcon || '',
+            admins: [currentUser.uid], // Creator is the first admin
+            unreadCount,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        const conversationsRef = collection(db, 'conversations');
+        const docRef = await addDoc(conversationsRef, newGroup);
+
+        // Send notification to all participants (except creator)
+        participantIds.forEach(async (userId) => {
+            if (userId !== currentUser.uid) {
+                try {
+                    const { sendNotification } = require('./notificationService');
+                    await sendNotification(
+                        userId,
+                        currentUser.uid,
+                        currentUserData?.name || 'Someone',
+                        currentUserData?.photoURL || '',
+                        'group_invite',
+                        `${currentUserData?.name || 'Someone'} added you to "${groupName}"`,
+                        { conversationId: docRef.id, groupName }
+                    );
+                } catch (notifError) {
+                    console.error('Error sending group invite notification:', notifError);
+                }
+            }
+        });
+
+        return docRef.id;
+    } catch (error) {
+        console.error('Error creating group:', error);
+        throw error;
+    }
+};
+
+/**
+ * Add a member to a group
+ */
+export const addGroupMember = async (
+    groupId: string,
+    userIdToAdd: string,
+    addedByUserId: string
+): Promise<void> => {
+    try {
+        const groupRef = doc(db, 'conversations', groupId);
+        const groupDoc = await getDoc(groupRef);
+        const groupData = groupDoc.data();
+
+        if (!groupData || groupData.type !== 'group') {
+            throw new Error('Group not found');
+        }
+
+        // Check if the user adding is an admin
+        if (!groupData.admins?.includes(addedByUserId)) {
+            throw new Error('Only admins can add members');
+        }
+
+        // Check if user is already in the group
+        if (groupData.participants.includes(userIdToAdd)) {
+            throw new Error('User is already in the group');
+        }
+
+        // Get user details
+        const userDoc = await getDoc(doc(db, 'users', userIdToAdd));
+        const userData = userDoc.data();
+
+        // Update group
+        const updatedParticipants = [...groupData.participants, userIdToAdd];
+        const updatedParticipantDetails = {
+            ...groupData.participantDetails,
+            [userIdToAdd]: {
+                name: userData?.name || 'User',
+                photoURL: userData?.photoURL || '',
+                email: userData?.email || '',
+            },
+        };
+        const updatedUnreadCount = {
+            ...groupData.unreadCount,
+            [userIdToAdd]: 0,
+        };
+
+        await updateDoc(groupRef, {
+            participants: updatedParticipants,
+            participantDetails: updatedParticipantDetails,
+            unreadCount: updatedUnreadCount,
+            updatedAt: serverTimestamp(),
+        });
+
+        // Send notification
+        try {
+            const { sendNotification } = require('./notificationService');
+            const adderDoc = await getDoc(doc(db, 'users', addedByUserId));
+            const adderData = adderDoc.data();
+
+            await sendNotification(
+                userIdToAdd,
+                addedByUserId,
+                adderData?.name || 'Someone',
+                adderData?.photoURL || '',
+                'group_invite',
+                `${adderData?.name || 'Someone'} added you to "${groupData.groupName}"`,
+                { conversationId: groupId, groupName: groupData.groupName }
+            );
+        } catch (notifError) {
+            console.error('Error sending notification:', notifError);
+        }
+    } catch (error) {
+        console.error('Error adding group member:', error);
+        throw error;
+    }
+};
+
+/**
+ * Remove a member from a group
+ */
+export const removeGroupMember = async (
+    groupId: string,
+    userIdToRemove: string,
+    removedByUserId: string
+): Promise<void> => {
+    try {
+        const groupRef = doc(db, 'conversations', groupId);
+        const groupDoc = await getDoc(groupRef);
+        const groupData = groupDoc.data();
+
+        if (!groupData || groupData.type !== 'group') {
+            throw new Error('Group not found');
+        }
+
+        // Check if the user removing is an admin
+        if (!groupData.admins?.includes(removedByUserId)) {
+            throw new Error('Only admins can remove members');
+        }
+
+        // Can't remove yourself
+        if (userIdToRemove === removedByUserId) {
+            throw new Error('Use leave group instead');
+        }
+
+        // Update group
+        const updatedParticipants = groupData.participants.filter((id: string) => id !== userIdToRemove);
+        const updatedParticipantDetails = { ...groupData.participantDetails };
+        delete updatedParticipantDetails[userIdToRemove];
+
+        const updatedUnreadCount = { ...groupData.unreadCount };
+        delete updatedUnreadCount[userIdToRemove];
+
+        // Remove from admins if they were an admin
+        const updatedAdmins = groupData.admins?.filter((id: string) => id !== userIdToRemove) || [];
+
+        await updateDoc(groupRef, {
+            participants: updatedParticipants,
+            participantDetails: updatedParticipantDetails,
+            unreadCount: updatedUnreadCount,
+            admins: updatedAdmins,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error removing group member:', error);
+        throw error;
+    }
+};
+
+/**
+ * Update group settings (name, description, icon)
+ */
+export const updateGroupSettings = async (
+    groupId: string,
+    userId: string,
+    settings: {
+        groupName?: string;
+        groupDescription?: string;
+        groupIcon?: string;
+    }
+): Promise<void> => {
+    try {
+        const groupRef = doc(db, 'conversations', groupId);
+        const groupDoc = await getDoc(groupRef);
+        const groupData = groupDoc.data();
+
+        if (!groupData || groupData.type !== 'group') {
+            throw new Error('Group not found');
+        }
+
+        // Check if user is an admin
+        if (!groupData.admins?.includes(userId)) {
+            throw new Error('Only admins can update group settings');
+        }
+
+        const updateData: any = {
+            updatedAt: serverTimestamp(),
+        };
+
+        if (settings.groupName) updateData.groupName = settings.groupName;
+        if (settings.groupDescription !== undefined) updateData.groupDescription = settings.groupDescription;
+        if (settings.groupIcon !== undefined) updateData.groupIcon = settings.groupIcon;
+
+        await updateDoc(groupRef, updateData);
+    } catch (error) {
+        console.error('Error updating group settings:', error);
+        throw error;
+    }
+};
+
+/**
+ * Make a user an admin of the group
+ */
+export const makeGroupAdmin = async (
+    groupId: string,
+    userIdToPromote: string,
+    promotedByUserId: string
+): Promise<void> => {
+    try {
+        const groupRef = doc(db, 'conversations', groupId);
+        const groupDoc = await getDoc(groupRef);
+        const groupData = groupDoc.data();
+
+        if (!groupData || groupData.type !== 'group') {
+            throw new Error('Group not found');
+        }
+
+        // Check if the user promoting is an admin
+        if (!groupData.admins?.includes(promotedByUserId)) {
+            throw new Error('Only admins can promote members');
+        }
+
+        // Check if user is already an admin
+        if (groupData.admins?.includes(userIdToPromote)) {
+            throw new Error('User is already an admin');
+        }
+
+        // Check if user is in the group
+        if (!groupData.participants.includes(userIdToPromote)) {
+            throw new Error('User is not in the group');
+        }
+
+        const updatedAdmins = [...(groupData.admins || []), userIdToPromote];
+
+        await updateDoc(groupRef, {
+            admins: updatedAdmins,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error making user admin:', error);
+        throw error;
+    }
+};
+
+// ==================== PAGE FUNCTIONS ====================
+
+/**
+ * Create a new page/channel
+ */
+export const createPage = async (
+    pageName: string,
+    pageDescription: string,
+    pageIcon?: string,
+    isVerified: boolean = false
+): Promise<string> => {
+    try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error('User not authenticated');
+
+        // Get current user details
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const currentUserData = userDoc.data();
+
+        // Create page conversation
+        const newPage = {
+            type: 'page',
+            participants: [currentUser.uid], // Only owner is in participants initially
+            participantDetails: {
+                [currentUser.uid]: {
+                    name: currentUserData?.name || 'User',
+                    photoURL: currentUserData?.photoURL || '',
+                    email: currentUserData?.email || '',
+                },
+            },
+            pageName,
+            pageDescription,
+            pageIcon: pageIcon || '',
+            pageOwner: currentUser.uid,
+            admins: [currentUser.uid], // Owner is the first admin
+            subscribers: [], // Empty initially
+            isVerified,
+            unreadCount: {
+                [currentUser.uid]: 0,
+            },
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        const conversationsRef = collection(db, 'conversations');
+        const docRef = await addDoc(conversationsRef, newPage);
+
+        return docRef.id;
+    } catch (error) {
+        console.error('Error creating page:', error);
+        throw error;
+    }
+};
+
+/**
+ * Subscribe to a page
+ */
+export const subscribeToPage = async (
+    pageId: string,
+    userId: string
+): Promise<void> => {
+    try {
+        const pageRef = doc(db, 'conversations', pageId);
+        const pageDoc = await getDoc(pageRef);
+        const pageData = pageDoc.data();
+
+        if (!pageData || pageData.type !== 'page') {
+            throw new Error('Page not found');
+        }
+
+        // Check if already subscribed
+        if (pageData.subscribers?.includes(userId)) {
+            throw new Error('Already subscribed to this page');
+        }
+
+        // Get user details
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        const userData = userDoc.data();
+
+        const updatedSubscribers = [...(pageData.subscribers || []), userId];
+        const updatedParticipantDetails = {
+            ...pageData.participantDetails,
+            [userId]: {
+                name: userData?.name || 'User',
+                photoURL: userData?.photoURL || '',
+                email: userData?.email || '',
+            },
+        };
+        const updatedUnreadCount = {
+            ...pageData.unreadCount,
+            [userId]: 0,
+        };
+
+        await updateDoc(pageRef, {
+            subscribers: updatedSubscribers,
+            participantDetails: updatedParticipantDetails,
+            unreadCount: updatedUnreadCount,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error subscribing to page:', error);
+        throw error;
+    }
+};
+
+/**
+ * Unsubscribe from a page
+ */
+export const unsubscribeFromPage = async (
+    pageId: string,
+    userId: string
+): Promise<void> => {
+    try {
+        const pageRef = doc(db, 'conversations', pageId);
+        const pageDoc = await getDoc(pageRef);
+        const pageData = pageDoc.data();
+
+        if (!pageData || pageData.type !== 'page') {
+            throw new Error('Page not found');
+        }
+
+        // Check if subscribed
+        if (!pageData.subscribers?.includes(userId)) {
+            throw new Error('Not subscribed to this page');
+        }
+
+        const updatedSubscribers = pageData.subscribers.filter((id: string) => id !== userId);
+        const updatedParticipantDetails = { ...pageData.participantDetails };
+        delete updatedParticipantDetails[userId];
+
+        const updatedUnreadCount = { ...pageData.unreadCount };
+        delete updatedUnreadCount[userId];
+
+        await updateDoc(pageRef, {
+            subscribers: updatedSubscribers,
+            participantDetails: updatedParticipantDetails,
+            unreadCount: updatedUnreadCount,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error unsubscribing from page:', error);
+        throw error;
+    }
+};
+
+/**
+ * Update page settings (name, description, icon)
+ */
+export const updatePageSettings = async (
+    pageId: string,
+    userId: string,
+    settings: {
+        pageName?: string;
+        pageDescription?: string;
+        pageIcon?: string;
+    }
+): Promise<void> => {
+    try {
+        const pageRef = doc(db, 'conversations', pageId);
+        const pageDoc = await getDoc(pageRef);
+        const pageData = pageDoc.data();
+
+        if (!pageData || pageData.type !== 'page') {
+            throw new Error('Page not found');
+        }
+
+        // Check if user is an admin
+        if (!pageData.admins?.includes(userId)) {
+            throw new Error('Only admins can update page settings');
+        }
+
+        const updateData: any = {
+            updatedAt: serverTimestamp(),
+        };
+
+        if (settings.pageName) updateData.pageName = settings.pageName;
+        if (settings.pageDescription !== undefined) updateData.pageDescription = settings.pageDescription;
+        if (settings.pageIcon !== undefined) updateData.pageIcon = settings.pageIcon;
+
+        await updateDoc(pageRef, updateData);
+    } catch (error) {
+        console.error('Error updating page settings:', error);
+        throw error;
+    }
+};
+
+/**
+ * Send a broadcast message to a page (admin only)
+ */
+export const sendPageBroadcast = async (
+    pageId: string,
+    text: string
+): Promise<void> => {
+    try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error('User not authenticated');
+
+        // Get page details
+        const pageRef = doc(db, 'conversations', pageId);
+        const pageDoc = await getDoc(pageRef);
+        const pageData = pageDoc.data();
+
+        if (!pageData || pageData.type !== 'page') {
+            throw new Error('Page not found');
+        }
+
+        // Check if user is an admin
+        if (!pageData.admins?.includes(currentUser.uid)) {
+            throw new Error('Only admins can send broadcasts');
+        }
+
+        // Send the broadcast message
+        await sendMessage(pageId, text);
+
+        // Notify all subscribers
+        const subscribers = pageData.subscribers || [];
+        subscribers.forEach(async (subscriberId: string) => {
+            if (subscriberId !== currentUser.uid) {
+                try {
+                    const { sendNotification } = require('./notificationService');
+                    await sendNotification(
+                        subscriberId,
+                        currentUser.uid,
+                        pageData.pageName || 'A Page',
+                        pageData.pageIcon || '',
+                        'page_broadcast',
+                        `New broadcast from ${pageData.pageName}`,
+                        { conversationId: pageId, pageName: pageData.pageName }
+                    );
+                } catch (notifError) {
+                    console.error('Error sending broadcast notification:', notifError);
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error sending page broadcast:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get all public pages (for browsing)
+ */
+export const getPublicPages = async (): Promise<Conversation[]> => {
+    try {
+        const conversationsRef = collection(db, 'conversations');
+        const q = query(conversationsRef, where('type', '==', 'page'));
+        const snapshot = await getDocs(q);
+
+        const pages: Conversation[] = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        })) as Conversation[];
+
+        // Sort by subscriber count (descending)
+        pages.sort((a, b) => {
+            const aCount = a.subscribers?.length || 0;
+            const bCount = b.subscribers?.length || 0;
+            return bCount - aCount;
+        });
+
+        return pages;
+    } catch (error) {
+        console.error('Error getting public pages:', error);
+        return [];
     }
 };

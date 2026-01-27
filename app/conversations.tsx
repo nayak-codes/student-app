@@ -30,10 +30,11 @@ const ConversationsScreen = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [activeTab, setActiveTab] = useState<'chats' | 'groups' | 'pages'>('chats');
 
     // Collapsible Header Vars
     const scrollY = React.useRef(new Animated.Value(0)).current;
-    const headerHeight = 180; // Adjusted for taller header
+    const headerHeight = 240; // Increased for tab bar
     const diffClamp = Animated.diffClamp(scrollY, 0, headerHeight);
     const translateY = diffClamp.interpolate({
         inputRange: [0, headerHeight],
@@ -64,22 +65,37 @@ const ConversationsScreen = () => {
     }, [rootNavigationState?.key]);
 
     useEffect(() => {
+        // Filter by active tab first
+        let tabFiltered = conversations.filter((convo) => {
+            const type = convo.type || 'chat'; // Default to 'chat' for backward compatibility
+            return type === activeTab.slice(0, -1); // 'chats' -> 'chat', 'groups' -> 'group', 'pages' -> 'page'
+        });
+
+        // Then filter by search query if present
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
-            const filtered = conversations.filter((convo) => {
+            const filtered = tabFiltered.filter((convo) => {
                 const currentUser = auth.currentUser;
                 if (!currentUser) return false;
 
+                // For groups and pages, search by name
+                if (convo.type === 'group' && convo.groupName) {
+                    return convo.groupName.toLowerCase().includes(query);
+                }
+                if (convo.type === 'page' && convo.pageName) {
+                    return convo.pageName.toLowerCase().includes(query);
+                }
+
+                // For chats, search by participant name
                 const otherUserId = convo.participants.find((id) => id !== currentUser.uid);
                 const otherUser = otherUserId ? convo.participantDetails[otherUserId] : null;
-
                 return otherUser?.name.toLowerCase().includes(query);
             });
             setFilteredConversations(filtered);
         } else {
-            setFilteredConversations(conversations);
+            setFilteredConversations(tabFiltered);
         }
-    }, [searchQuery, conversations]);
+    }, [searchQuery, conversations, activeTab]);
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -108,82 +124,220 @@ const ConversationsScreen = () => {
         const currentUser = auth.currentUser;
         if (!currentUser) return null;
 
-        const otherUserId = item.participants.find((id) => id !== currentUser.uid);
-        const otherUser = otherUserId ? item.participantDetails[otherUserId] : null;
+        const type = item.type || 'chat';
         const unreadCount = item.unreadCount?.[currentUser.uid] || 0;
 
-        if (!otherUser) return null;
+        // For regular chats
+        if (type === 'chat') {
+            const otherUserId = item.participants.find((id) => id !== currentUser.uid);
+            const otherUser = otherUserId ? item.participantDetails[otherUserId] : null;
 
-        return (
-            <TouchableOpacity
-                style={[styles.conversationItem, { backgroundColor: colors.card, borderBottomColor: isDark ? '#333' : '#F1F5F9' }]}
-                onPress={() => {
-                    router.push({
-                        pathname: '/chat-screen',
-                        params: {
-                            conversationId: item.id,
-                            otherUserId: otherUserId,
-                            otherUserName: otherUser.name,
-                            otherUserPhoto: otherUser.photoURL || '',
-                        },
-                    });
-                }}
-                activeOpacity={0.7}
-            >
-                <View style={styles.avatarContainer}>
-                    {otherUser.photoURL ? (
-                        <Image
-                            source={{ uri: otherUser.photoURL }}
-                            style={styles.avatar}
-                        />
-                    ) : (
-                        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
-                            <Text style={styles.avatarText}>
-                                {otherUser.name.charAt(0).toUpperCase()}
-                            </Text>
-                        </View>
-                    )}
-                    {unreadCount > 0 && (
-                        <View style={[styles.onlineBadge, { borderColor: colors.card }]} />
-                    )}
-                </View>
+            if (!otherUser) return null;
 
-                {/* Right Content */}
-                <View style={styles.conversationContent}>
-                    {/* Top Row: Name and Time Separated */}
-                    <View style={styles.topRow}>
-                        <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
-                            {otherUser.name}
-                        </Text>
-                        {item.lastMessage && (
-                            <Text style={[styles.timestamp, { color: unreadCount > 0 ? colors.primary : colors.textSecondary }]}>
-                                {formatTimestamp(item.lastMessage.timestamp)}
-                            </Text>
-                        )}
-                    </View>
-
-                    {/* Bottom Row: Message and Badge */}
-                    <View style={styles.bottomRow}>
-                        <Text
-                            style={[
-                                styles.lastMessage,
-                                { color: unreadCount > 0 ? colors.text : colors.textSecondary, fontWeight: unreadCount > 0 ? '600' : '400' },
-                            ]}
-                            numberOfLines={1}
-                        >
-                            {item.lastMessage?.text || 'Start a conversation'}
-                        </Text>
-                        {unreadCount > 0 && (
-                            <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
-                                <Text style={styles.unreadBadgeText}>
-                                    {unreadCount > 9 ? '9+' : unreadCount}
+            return (
+                <TouchableOpacity
+                    style={[styles.conversationItem, { backgroundColor: colors.card, borderBottomColor: isDark ? '#333' : '#F1F5F9' }]}
+                    onPress={() => {
+                        router.push({
+                            pathname: '/chat-screen',
+                            params: {
+                                conversationId: item.id,
+                                otherUserId: otherUserId,
+                                otherUserName: otherUser.name,
+                                otherUserPhoto: otherUser.photoURL || '',
+                            },
+                        });
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.avatarContainer}>
+                        {otherUser.photoURL ? (
+                            <Image
+                                source={{ uri: otherUser.photoURL }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                                <Text style={styles.avatarText}>
+                                    {otherUser.name.charAt(0).toUpperCase()}
                                 </Text>
                             </View>
                         )}
+                        {unreadCount > 0 && (
+                            <View style={[styles.onlineBadge, { borderColor: colors.card }]} />
+                        )}
                     </View>
-                </View>
-            </TouchableOpacity>
-        );
+
+                    {/* Right Content */}
+                    <View style={styles.conversationContent}>
+                        {/* Top Row: Name and Time Separated */}
+                        <View style={styles.topRow}>
+                            <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
+                                {otherUser.name}
+                            </Text>
+                            {item.lastMessage && (
+                                <Text style={[styles.timestamp, { color: unreadCount > 0 ? colors.primary : colors.textSecondary }]}>
+                                    {formatTimestamp(item.lastMessage.timestamp)}
+                                </Text>
+                            )}
+                        </View>
+
+                        {/* Bottom Row: Message and Badge */}
+                        <View style={styles.bottomRow}>
+                            <Text
+                                style={[
+                                    styles.lastMessage,
+                                    { color: unreadCount > 0 ? colors.text : colors.textSecondary, fontWeight: unreadCount > 0 ? '600' : '400' },
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {item.lastMessage?.text || 'Start a conversation'}
+                            </Text>
+                            {unreadCount > 0 && (
+                                <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+                                    <Text style={styles.unreadBadgeText}>
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            );
+        }
+
+        // For groups
+        if (type === 'group') {
+            return (
+                <TouchableOpacity
+                    style={[styles.conversationItem, { backgroundColor: colors.card, borderBottomColor: isDark ? '#333' : '#F1F5F9' }]}
+                    onPress={() => {
+                        router.push({
+                            pathname: '/group-chat',
+                            params: {
+                                conversationId: item.id,
+                                groupName: item.groupName || 'Group',
+                                groupIcon: item.groupIcon || '',
+                            },
+                        });
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.avatarContainer}>
+                        {item.groupIcon ? (
+                            <Image
+                                source={{ uri: item.groupIcon }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: '#10B981' }]}>
+                                <Ionicons name="people" size={24} color="#FFF" />
+                            </View>
+                        )}
+                        {unreadCount > 0 && (
+                            <View style={[styles.onlineBadge, { borderColor: colors.card }]} />
+                        )}
+                    </View>
+
+                    <View style={styles.conversationContent}>
+                        <View style={styles.topRow}>
+                            <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
+                                {item.groupName || 'Unnamed Group'}
+                            </Text>
+                            {item.lastMessage && (
+                                <Text style={[styles.timestamp, { color: unreadCount > 0 ? colors.primary : colors.textSecondary }]}>
+                                    {formatTimestamp(item.lastMessage.timestamp)}
+                                </Text>
+                            )}
+                        </View>
+
+                        <View style={styles.bottomRow}>
+                            <Text
+                                style={[
+                                    styles.lastMessage,
+                                    { color: unreadCount > 0 ? colors.text : colors.textSecondary, fontWeight: unreadCount > 0 ? '600' : '400' },
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {item.participants.length} members • {item.lastMessage?.text || 'No messages yet'}
+                            </Text>
+                            {unreadCount > 0 && (
+                                <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+                                    <Text style={styles.unreadBadgeText}>
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            );
+        }
+
+        // For pages
+        if (type === 'page') {
+            const subscriberCount = item.subscribers?.length || 0;
+            return (
+                <TouchableOpacity
+                    style={[styles.conversationItem, { backgroundColor: colors.card, borderBottomColor: isDark ? '#333' : '#F1F5F9' }]}
+                    onPress={() => {
+                        router.push({
+                            pathname: '/page-chat',
+                            params: {
+                                conversationId: item.id,
+                                pageName: item.pageName || 'Page',
+                                pageIcon: item.pageIcon || '',
+                            },
+                        });
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.avatarContainer}>
+                        {item.pageIcon ? (
+                            <Image
+                                source={{ uri: item.pageIcon }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: '#8B5CF6' }]}>
+                                <Ionicons name="megaphone" size={24} color="#FFF" />
+                            </View>
+                        )}
+                        {item.isVerified && (
+                            <View style={[styles.verifiedBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
+                                <Ionicons name="checkmark" size={10} color="#FFF" />
+                            </View>
+                        )}
+                    </View>
+
+                    <View style={styles.conversationContent}>
+                        <View style={styles.topRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
+                                    {item.pageName || 'Unnamed Page'}
+                                </Text>
+                            </View>
+                            {item.lastMessage && (
+                                <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+                                    {formatTimestamp(item.lastMessage.timestamp)}
+                                </Text>
+                            )}
+                        </View>
+
+                        <View style={styles.bottomRow}>
+                            <Text
+                                style={[styles.lastMessage, { color: colors.textSecondary }]}
+                                numberOfLines={1}
+                            >
+                                {subscriberCount} {subscriberCount === 1 ? 'subscriber' : 'subscribers'} • {item.lastMessage?.text || 'No broadcasts yet'}
+                            </Text>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            );
+        }
+
+        return null;
     };
 
     return (
@@ -235,6 +389,102 @@ const ConversationsScreen = () => {
                             )}
                         </View>
                     </View>
+
+                    {/* Tab Navigation */}
+                    <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                        <TouchableOpacity
+                            style={[
+                                styles.tab,
+                                activeTab === 'chats' && styles.activeTab,
+                                activeTab === 'chats' && { borderBottomColor: colors.primary },
+                            ]}
+                            onPress={() => setActiveTab('chats')}
+                        >
+                            <Ionicons
+                                name={activeTab === 'chats' ? 'chatbubble' : 'chatbubble-outline'}
+                                size={18}
+                                color={activeTab === 'chats' ? colors.primary : colors.textSecondary}
+                            />
+                            <Text
+                                style={[
+                                    styles.tabText,
+                                    { color: activeTab === 'chats' ? colors.primary : colors.textSecondary },
+                                    activeTab === 'chats' && styles.activeTabText,
+                                ]}
+                            >
+                                Chats
+                            </Text>
+                            {filteredConversations.filter(c => (c.type || 'chat') === 'chat').length > 0 && (
+                                <View style={[styles.tabBadge, { backgroundColor: activeTab === 'chats' ? colors.primary : colors.textSecondary }]}>
+                                    <Text style={styles.tabBadgeText}>
+                                        {filteredConversations.filter(c => (c.type || 'chat') === 'chat').length}
+                                    </Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.tab,
+                                activeTab === 'groups' && styles.activeTab,
+                                activeTab === 'groups' && { borderBottomColor: colors.primary },
+                            ]}
+                            onPress={() => setActiveTab('groups')}
+                        >
+                            <Ionicons
+                                name={activeTab === 'groups' ? 'people' : 'people-outline'}
+                                size={18}
+                                color={activeTab === 'groups' ? colors.primary : colors.textSecondary}
+                            />
+                            <Text
+                                style={[
+                                    styles.tabText,
+                                    { color: activeTab === 'groups' ? colors.primary : colors.textSecondary },
+                                    activeTab === 'groups' && styles.activeTabText,
+                                ]}
+                            >
+                                Groups
+                            </Text>
+                            {filteredConversations.filter(c => c.type === 'group').length > 0 && (
+                                <View style={[styles.tabBadge, { backgroundColor: activeTab === 'groups' ? colors.primary : colors.textSecondary }]}>
+                                    <Text style={styles.tabBadgeText}>
+                                        {filteredConversations.filter(c => c.type === 'group').length}
+                                    </Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.tab,
+                                activeTab === 'pages' && styles.activeTab,
+                                activeTab === 'pages' && { borderBottomColor: colors.primary },
+                            ]}
+                            onPress={() => setActiveTab('pages')}
+                        >
+                            <Ionicons
+                                name={activeTab === 'pages' ? 'megaphone' : 'megaphone-outline'}
+                                size={18}
+                                color={activeTab === 'pages' ? colors.primary : colors.textSecondary}
+                            />
+                            <Text
+                                style={[
+                                    styles.tabText,
+                                    { color: activeTab === 'pages' ? colors.primary : colors.textSecondary },
+                                    activeTab === 'pages' && styles.activeTabText,
+                                ]}
+                            >
+                                Pages
+                            </Text>
+                            {filteredConversations.filter(c => c.type === 'page').length > 0 && (
+                                <View style={[styles.tabBadge, { backgroundColor: activeTab === 'pages' ? colors.primary : colors.textSecondary }]}>
+                                    <Text style={styles.tabBadgeText}>
+                                        {filteredConversations.filter(c => c.type === 'page').length}
+                                    </Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </SafeAreaView>
             </Animated.View>
 
@@ -248,7 +498,7 @@ const ConversationsScreen = () => {
                     data={filteredConversations}
                     renderItem={renderConversation}
                     keyExtractor={(item) => item.id}
-                    contentContainerStyle={[styles.listContent, { paddingTop: 180 }]}
+                    contentContainerStyle={[styles.listContent, { paddingTop: 240 }]}
                     showsVerticalScrollIndicator={false}
                     onScroll={Animated.event(
                         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -273,6 +523,39 @@ const ConversationsScreen = () => {
                         </View>
                     }
                 />
+            )}
+
+            {/* Floating Action Buttons - Show based on active tab */}
+            {activeTab === 'groups' && (
+                <TouchableOpacity
+                    style={[styles.fab, { backgroundColor: '#10B981' }]}
+                    onPress={() => router.push('/create-group')}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="people" size={24} color="#FFF" />
+                    <Text style={styles.fabText}>Create Group</Text>
+                </TouchableOpacity>
+            )}
+
+            {activeTab === 'pages' && (
+                <View style={styles.fabContainer}>
+                    <TouchableOpacity
+                        style={[styles.fabSecondary, { backgroundColor: colors.card, borderColor: '#8B5CF6' }]}
+                        onPress={() => router.push('/browse-pages')}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="search" size={20} color="#8B5CF6" />
+                        <Text style={[styles.fabSecondaryText, { color: '#8B5CF6' }]}>Browse Pages</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.fab, { backgroundColor: '#8B5CF6' }]}
+                        onPress={() => router.push('/create-page')}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="add" size={24} color="#FFF" />
+                        <Text style={styles.fabText}>Create Page</Text>
+                    </TouchableOpacity>
+                </View>
             )}
         </View>
     );
@@ -333,6 +616,47 @@ const styles = StyleSheet.create({
     clearButton: {
         padding: 4,
     },
+    tabContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#FFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        paddingHorizontal: 8,
+    },
+    tab: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+        gap: 6,
+    },
+    activeTab: {
+        borderBottomWidth: 2,
+    },
+    tabText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    activeTabText: {
+        fontWeight: '700',
+    },
+    tabBadge: {
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 5,
+    },
+    tabBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FFF',
+    },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -379,6 +703,17 @@ const styles = StyleSheet.create({
         backgroundColor: '#10B981',
         borderWidth: 2,
         borderColor: '#FFF',
+    },
+    verifiedBadge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
     },
     conversationContent: {
         flex: 1,
@@ -443,6 +778,51 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#64748B',
         textAlign: 'center',
+    },
+    fab: {
+        position: 'absolute',
+        bottom: 24,
+        right: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 30,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+        gap: 8,
+    },
+    fabText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    fabContainer: {
+        position: 'absolute',
+        bottom: 24,
+        right: 20,
+        gap: 12,
+    },
+    fabSecondary: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 18,
+        borderRadius: 30,
+        borderWidth: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
+        gap: 8,
+    },
+    fabSecondaryText: {
+        fontSize: 15,
+        fontWeight: '600',
     },
 });
 

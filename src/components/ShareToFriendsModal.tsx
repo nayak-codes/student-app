@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -11,9 +12,10 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { getOrCreateConversation, sendSharedPost } from '../services/chatService';
+import { getOrCreateConversation, sendMessage, sendSharedPost } from '../services/chatService';
 import { getFriends } from '../services/connectionService';
 
 interface ShareToFriendsModalProps {
@@ -26,6 +28,7 @@ const ShareToFriendsModal: React.FC<ShareToFriendsModalProps> = ({ visible, onCl
     const { user } = useAuth();
     const { colors, isDark } = useTheme();
     const [friends, setFriends] = useState<any[]>([]);
+    const [groups, setGroups] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [sendingMap, setSendingMap] = useState<{ [key: string]: boolean }>({}); // Track sending state per user
     const [sentMap, setSentMap] = useState<{ [key: string]: boolean }>({}); // Track sent state per user
@@ -33,18 +36,33 @@ const ShareToFriendsModal: React.FC<ShareToFriendsModalProps> = ({ visible, onCl
 
     useEffect(() => {
         if (visible && user) {
-            loadFriends();
+            loadFriendsAndGroups();
         }
     }, [visible, user]);
 
-    const loadFriends = async () => {
+    const loadFriendsAndGroups = async () => {
         if (!user) return;
         setLoading(true);
         try {
+            // Load friends
             const friendsList = await getFriends(user.uid);
             setFriends(friendsList);
+
+            // Load groups where user is a participant
+            const groupsQuery = query(
+                collection(db, 'conversations'),
+                where('type', '==', 'group'),
+                where('participants', 'array-contains', user.uid)
+            );
+            const groupsSnapshot = await getDocs(groupsQuery);
+            const groupsList = groupsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                isGroup: true
+            }));
+            setGroups(groupsList);
         } catch (error) {
-            console.error("Error loading friends:", error);
+            console.error("Error loading friends and groups:", error);
         } finally {
             setLoading(false);
         }
@@ -68,13 +86,9 @@ const ShareToFriendsModal: React.FC<ShareToFriendsModalProps> = ({ visible, onCl
             );
 
             // 2. Send the shared post
-            // Convert FeedItem to a format suitable for chat message if needed
-            // For now passing postToShare directly as it mimics the structure expected by sendSharedPost (needs content, etc.)
-            // We might need to ensure postToShare has 'content' field if it's from FeedItem which has 'title'
             const postData = {
                 ...postToShare,
                 content: postToShare.title || postToShare.content || 'Video Clip',
-                // Add any other necessary fields
             };
 
             await sendSharedPost(conversationId, postData);
@@ -82,31 +96,67 @@ const ShareToFriendsModal: React.FC<ShareToFriendsModalProps> = ({ visible, onCl
             setSentMap(prev => ({ ...prev, [friend.userId]: true }));
         } catch (error) {
             console.error("Error sharing to friend:", error);
-            // Optionally show error toast
         } finally {
             setSendingMap(prev => ({ ...prev, [friend.userId]: false }));
         }
     };
 
-    const filteredFriends = friends.filter(friend =>
-        friend.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    const handleSendToGroup = async (group: any) => {
+        if (!user || !postToShare) return;
+
+        setSendingMap(prev => ({ ...prev, [group.id]: true }));
+
+        try {
+            // Send message to group
+            await sendMessage(group.id, `Shared: ${postToShare.title || postToShare.content || 'a post'}`);
+
+            setSentMap(prev => ({ ...prev, [group.id]: true }));
+        } catch (error) {
+            console.error("Error sharing to group:", error);
+        } finally {
+            setSendingMap(prev => ({ ...prev, [group.id]: false }));
+        }
+    };
+
+    // Combine friends and groups into one list
+    const combinedList = [
+        ...friends.map(f => ({ ...f, type: 'friend', displayName: f.name, key: f.userId })),
+        ...groups.map(g => ({ ...g, type: 'group', displayName: g.groupName, key: g.id }))
+    ];
+
+    const filteredList = combinedList.filter(item =>
+        item.displayName?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const renderFriendItem = ({ item }: { item: any }) => {
-        const isSending = sendingMap[item.userId];
-        const isSent = sentMap[item.userId];
+        const itemKey = item.type === 'group' ? item.id : item.userId;
+        const isSending = sendingMap[itemKey];
+        const isSent = sentMap[itemKey];
+        const isGroup = item.type === 'group';
 
         return (
             <View style={[styles.friendItem, { borderBottomColor: colors.border }]}>
                 <View style={styles.friendInfo}>
-                    {item.photoURL ? (
+                    {isGroup ? (
+                        // Group icon
+                        <View style={[styles.avatar, { backgroundColor: '#10B981' }]}>
+                            <Ionicons name="people" size={20} color="#FFF" />
+                        </View>
+                    ) : item.photoURL ? (
                         <Image source={{ uri: item.photoURL }} style={styles.avatar} />
                     ) : (
                         <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
-                            <Text style={styles.avatarLetter}>{item.name?.charAt(0) || '?'}</Text>
+                            <Text style={styles.avatarLetter}>{item.displayName?.charAt(0) || '?'}</Text>
                         </View>
                     )}
-                    <Text style={[styles.friendName, { color: colors.text }]}>{item.name}</Text>
+                    <View>
+                        <Text style={[styles.friendName, { color: colors.text }]}>{item.displayName}</Text>
+                        {isGroup && (
+                            <Text style={[styles.groupSubtext, { color: colors.textSecondary }]}>
+                                {item.participants?.length || 0} members
+                            </Text>
+                        )}
+                    </View>
                 </View>
 
                 <TouchableOpacity
@@ -114,7 +164,7 @@ const ShareToFriendsModal: React.FC<ShareToFriendsModalProps> = ({ visible, onCl
                         styles.sendBtn,
                         isSent ? styles.sentBtn : { backgroundColor: colors.primary }
                     ]}
-                    onPress={() => !isSent && !isSending && handleSend(item)}
+                    onPress={() => !isSent && !isSending && (isGroup ? handleSendToGroup(item) : handleSend(item))}
                     disabled={isSent || isSending}
                 >
                     {isSending ? (
@@ -160,12 +210,12 @@ const ShareToFriendsModal: React.FC<ShareToFriendsModalProps> = ({ visible, onCl
                         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
                     ) : (
                         <FlatList
-                            data={filteredFriends}
+                            data={filteredList}
                             renderItem={renderFriendItem}
-                            keyExtractor={(item) => item.userId}
+                            keyExtractor={(item) => item.key}
                             ListEmptyComponent={
                                 <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                                    No friends found. Use the Search tab to find people!
+                                    No friends or groups found!
                                 </Text>
                             }
                         />
@@ -244,6 +294,10 @@ const styles = StyleSheet.create({
     friendName: {
         fontSize: 16,
         fontWeight: '600',
+    },
+    groupSubtext: {
+        fontSize: 12,
+        marginTop: 2,
     },
     sendBtn: {
         paddingHorizontal: 16,

@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../src/contexts/AuthContext';
 import { uploadResource } from '../../src/services/libraryService';
 import { uploadToCloudinary } from '../../src/utils/cloudinaryUpload';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface UploadModalProps {
     visible: boolean;
@@ -25,6 +26,7 @@ interface UploadModalProps {
 
 const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onUploadComplete }) => {
     const { user, userProfile } = useAuth();
+    const { colors, isDark } = useTheme();
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [topic, setTopic] = useState('');
@@ -181,13 +183,13 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
             onRequestClose={onClose}
         >
             <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
+                <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
                     {/* Header */}
                     <View style={styles.header}>
                         <TouchableOpacity onPress={onClose} disabled={isUploading}>
-                            <Ionicons name="close" size={24} color="#64748B" />
+                            <Ionicons name="close" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Upload Resource</Text>
+                        <Text style={[styles.headerTitle, { color: colors.text }]}>Upload Resource</Text>
                         <TouchableOpacity
                             onPress={handleUpload}
                             disabled={isUploading || !title.trim() || !selectedFile}
@@ -214,12 +216,12 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                             onPress={pickDocument}
                             disabled={isUploading}
                         >
-                            <Ionicons name="document-attach-outline" size={32} color="#4F46E5" />
-                            <Text style={styles.filePickerText}>
+                            <Ionicons name="document-attach-outline" size={32} color={colors.primary} />
+                            <Text style={[styles.filePickerText, { color: colors.text }]}>
                                 {selectedFile ? selectedFile.name : 'Tap to select PDF file'}
                             </Text>
                             {selectedFile && (
-                                <Text style={styles.fileSize}>
+                                <Text style={[styles.fileSize, { color: colors.textSecondary }]}>
                                     {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                                 </Text>
                             )}
@@ -236,7 +238,7 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         )}
 
                         {/* Cover Photo Selection */}
-                        <Text style={styles.label}>Cover Photo</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Cover Photo</Text>
                         <View style={styles.coverOptions}>
                             <TouchableOpacity
                                 style={[styles.coverOption, coverType === 'pdf' && styles.coverOptionActive]}
@@ -276,11 +278,11 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         )}
 
                         {/* Title */}
-                        <Text style={styles.label}>Title *</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Title *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { color: colors.text, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
                             placeholder="e.g., Physics Formula Sheet for JEE"
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={colors.textSecondary}
                             value={title}
                             onChangeText={setTitle}
                             maxLength={100}
@@ -288,11 +290,11 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         />
 
                         {/* Description */}
-                        <Text style={styles.label}>Description</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Description</Text>
                         <TextInput
-                            style={[styles.input, styles.textArea]}
+                            style={[styles.input, styles.textArea, { color: colors.text, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
                             placeholder="Brief description of the resource..."
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={colors.textSecondary}
                             value={description}
                             onChangeText={setDescription}
                             multiline
@@ -302,11 +304,11 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         />
 
                         {/* Topic */}
-                        <Text style={styles.label}>Topic</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Topic</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { color: colors.text, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
                             placeholder="e.g., Mechanics, Organic Chemistry"
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor={colors.textSecondary}
                             value={topic}
                             onChangeText={setTopic}
                             maxLength={50}
@@ -314,7 +316,7 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         />
 
                         {/* Resource Type */}
-                        <Text style={styles.label}>Type</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Type</Text>
                         <View style={styles.typeButtons}>
                             <TouchableOpacity
                                 style={[styles.typeButton, resourceType === 'pdf' && styles.typeButtonActive]}
@@ -363,7 +365,7 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         </View>
 
                         {/* Exam */}
-                        <Text style={styles.label}>Exam</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Exam</Text>
                         <View style={styles.examButtons}>
                             {['ALL', 'JEE', 'NEET', 'EAPCET'].map((ex) => (
                                 <TouchableOpacity
@@ -380,7 +382,7 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         </View>
 
                         {/* Subject */}
-                        <Text style={styles.label}>Subject</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Subject</Text>
                         <View style={styles.subjectButtons}>
                             {['Physics', 'Chemistry', 'Maths', 'Biology', 'General'].map((sub) => (
                                 <TouchableOpacity
@@ -397,7 +399,7 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         </View>
 
                         {/* Tags */}
-                        <Text style={styles.label}>Tags (Select up to 5)</Text>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Tags (Select up to 5)</Text>
                         <View style={styles.tagsContainer}>
                             {availableTags.map((tag) => (
                                 <TouchableOpacity
@@ -471,7 +473,7 @@ const styles = StyleSheet.create({
         padding: 32,
         alignItems: 'center',
         marginBottom: 20,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: 'transparent',
     },
     filePickerText: {
         fontSize: 14,

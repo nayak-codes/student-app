@@ -41,6 +41,14 @@ export default function CreateHubScreen() {
             route: '/publish/clip'
         },
         {
+            title: 'Share PDFs',
+            subtitle: 'Upload study materials, notes, or documents',
+            icon: 'document-text-outline',
+            color: '#8B5CF6',
+            items: ['Notes', 'Study', 'Resources'],
+            route: '/publish/pdf'
+        },
+        {
             title: 'Host Event',
             subtitle: 'Schedule a webinar or study session',
             icon: 'calendar-outline',

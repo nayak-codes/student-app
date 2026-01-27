@@ -1,12 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, useRouter } from 'expo-router';
-import React from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../src/contexts/AuthContext';
 
 export default function WelcomeScreen() {
     const router = useRouter();
     const { user, loading } = useAuth();
+
+    // If user is already logged in, redirect to tabs
+    useEffect(() => {
+        if (!loading && user) {
+            router.replace('/(tabs)');
+        }
+    }, [user, loading]);
 
     // If still loading auth state, show spinner
     if (loading) {
@@ -17,9 +24,13 @@ export default function WelcomeScreen() {
         );
     }
 
-    // If user is already logged in, redirect to tabs
+    // If user is logged in, show spinner while redirecting
     if (user) {
-        return <Redirect href="/(tabs)" />;
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#6C63FF" />
+            </View>
+        );
     }
 
     return (
