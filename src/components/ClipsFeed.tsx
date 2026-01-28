@@ -61,11 +61,14 @@ interface ClipsFeedItemProps {
     onClose: () => void;
     shouldLoad: boolean;
     containerHeight: number;
+    isRightHanded: boolean;
+    onToggleHand: () => void;
 }
 
 const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
     item, isActive, hasLiked, isFollowing, showFollow,
-    onLike, onShare, onFollow, onProfile, onComments, onClose, shouldLoad, containerHeight
+    onLike, onShare, onFollow, onProfile, onComments, onClose, shouldLoad, containerHeight,
+    isRightHanded, onToggleHand
 }) => {
     // Use conditional player that only loads when within buffer window
     const player = useConditionalVideoPlayer(item.videoLink || null, shouldLoad);
@@ -101,12 +104,6 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
 
     return (
         <View style={[styles.container, { height: containerHeight }]}>
-            {/* Top Gradient for Status Bar Visibility */}
-            <LinearGradient
-                colors={['#000000', 'transparent']}
-                style={styles.topGradient}
-            />
-
             <View style={styles.videoContainer}>
                 {player ? (
                     <VideoView
@@ -135,9 +132,9 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
                 locations={[0, 0.6, 1]}
                 style={styles.overlay}
             >
-                <View style={styles.bottomSection}>
-                    <View style={styles.textContainer}>
-                        <View style={styles.authorRow}>
+                <View style={[styles.bottomSection, !isRightHanded && styles.bottomSectionReversed]}>
+                    <View style={[styles.textContainer, isRightHanded ? styles.textContainerRight : styles.textContainerLeft]}>
+                        <View style={[styles.authorRow, !isRightHanded && styles.authorRowReversed]}>
                             <TouchableOpacity
                                 style={styles.avatarPlaceholder}
                                 onPress={onProfile}
@@ -165,7 +162,7 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
                         </Text>
                     </View>
 
-                    <View style={styles.rightActions}>
+                    <View style={[styles.rightActions, !isRightHanded && styles.leftActions]}>
                         <TouchableOpacity style={styles.actionBtn} onPress={onLike}>
                             <Ionicons name={hasLiked ? "heart" : "heart-outline"} size={32} color={hasLiked ? "#FF3B30" : "#FFF"} />
                             <Text style={styles.actionText}>{item.likes}</Text>
@@ -187,6 +184,18 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
                     </View>
                 </View>
             </LinearGradient>
+
+            {/* Hand Toggle Button - appears on opposite side */}
+            <TouchableOpacity
+                style={[styles.handToggleBtn, isRightHanded ? styles.handToggleBtnLeft : styles.handToggleBtnRight]}
+                onPress={onToggleHand}
+            >
+                <Ionicons
+                    name={isRightHanded ? "hand-left-outline" : "hand-right-outline"}
+                    size={24}
+                    color="#FFF"
+                />
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
                 <Ionicons name="arrow-back" size={28} color="#FFF" />
@@ -218,6 +227,14 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     const [commentsVisible, setCommentsVisible] = useState(false);
     const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
     const [selectedClipCommentCount, setSelectedClipCommentCount] = useState(0);
+
+    // One-handed mode state - default to right-handed
+    const [isRightHanded, setIsRightHanded] = useState(true);
+
+    // Toggle hand mode
+    const toggleHandMode = () => {
+        setIsRightHanded(prev => !prev);
+    };
 
     // Optimized follow status check: Only check active item and neighbors
     useEffect(() => {
@@ -430,6 +447,8 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                             onClose={onClose}
                             shouldLoad={shouldLoad}
                             containerHeight={containerHeight}
+                            isRightHanded={isRightHanded}
+                            onToggleHand={toggleHandMode}
                         />
                     );
                 }}
@@ -454,6 +473,9 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                     commentCount={selectedClipCommentCount}
                 />
             )}
+
+            {/* Static Top Black Card - Instagram Style (outside FlatList) */}
+            <View style={styles.topBlackCard} />
         </View>
     );
 };
@@ -468,12 +490,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#000',
     },
-    topGradient: {
+    topBlackCard: {
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
-        height: 100,
+        height: 40,
+        backgroundColor: '#000',
         zIndex: 10,
     },
     videoContainer: {
@@ -507,9 +530,16 @@ const styles = StyleSheet.create({
     },
     textContainer: {
         flex: 1,
-        marginRight: 60,
         justifyContent: 'flex-end',
         paddingBottom: 4,
+    },
+    textContainerRight: {
+        marginRight: 60,
+        marginLeft: 12,
+    },
+    textContainerLeft: {
+        marginLeft: 60,
+        marginRight: 12,
     },
     title: {
         color: '#FFF',
@@ -604,6 +634,45 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 3,
         elevation: 5,
+    },
+    // One-handed mode styles
+    bottomSectionReversed: {
+        flexDirection: 'row-reverse',
+    },
+    authorRowReversed: {
+        flexDirection: 'row-reverse',
+    },
+    leftActions: {
+        position: 'absolute',
+        left: 0,
+        right: 'auto',
+        bottom: 12,
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    handToggleBtn: {
+        position: 'absolute',
+        bottom: 90,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 24,
+        width: 48,
+        height: 48,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 15,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.4)',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 6,
+    },
+    handToggleBtnLeft: {
+        left: 20,
+    },
+    handToggleBtnRight: {
+        right: 20,
     },
 });
 

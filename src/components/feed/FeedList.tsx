@@ -24,7 +24,7 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
     const [shareData, setShareData] = useState<any>(null);
     const [commentsModalVisible, setCommentsModalVisible] = useState(false);
     const [selectedPostId, setSelectedPostId] = useState<string>('');
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
 
     // Track which posts are currently visible in viewport
     const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
@@ -51,8 +51,12 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
 
             setClips(shuffle(clipPosts));
             setPosts(shuffle(regularPosts));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching posts:', error);
+            if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+                console.warn('Feed permission error. Logging out.');
+                await logout();
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);

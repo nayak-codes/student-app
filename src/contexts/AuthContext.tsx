@@ -48,9 +48,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const profile = await getUserProfile(authUser.uid);
                     setUserProfile(profile);
-                } catch (error) {
+                } catch (error: any) {
                     console.error('Error fetching user profile:', error);
                     setUserProfile(null);
+
+                    // If permission denied, likely stale auth or banned - logout to reset
+                    if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+                        console.warn('Permission error detected. Logging out to refresh session.');
+                        await logoutUser();
+                        setUser(null);
+                    }
                 }
             } else {
                 setUserProfile(null);

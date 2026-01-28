@@ -760,6 +760,9 @@ const EventsScreen = () => {
             >
                 <Ionicons name="add" size={32} color="#FFF" />
             </TouchableOpacity>
+
+            {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
+            <View style={styles.topBlackCard} />
         </View>
     );
 };
@@ -793,7 +796,8 @@ const styles = StyleSheet.create({
     },
     // Sub Filters
     subFilterContainer: {
-        paddingVertical: 12,
+        paddingTop: 48, // Extra padding for black card
+        paddingBottom: 12,
         backgroundColor: '#FFF',
         marginBottom: 8
     },
@@ -1383,6 +1387,15 @@ const styles = StyleSheet.create({
     },
     disabledButtonText: {
         opacity: 0.4,
+    },
+    topBlackCard: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 40,
+        backgroundColor: '#000',
+        zIndex: 1001,
     },
 });
 

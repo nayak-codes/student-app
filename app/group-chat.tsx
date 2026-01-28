@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -30,6 +31,9 @@ import {
     subscribeToMessages
 } from '../src/services/chatService';
 
+// Session persistence for filter visibility
+const filterCheckState = new Map<string, boolean>();
+
 export default function GroupChatScreen() {
     const router = useRouter();
     const { colors, isDark } = useTheme();
@@ -48,7 +52,25 @@ export default function GroupChatScreen() {
     const [groupData, setGroupData] = useState<Conversation | null>(null);
     const [showOptionsSheet, setShowOptionsSheet] = useState(false);
     const [filteredUserId, setFilteredUserId] = useState<string | null>(null);
+    const [filteredMediaType, setFilteredMediaType] = useState<'all' | 'image' | 'pdf' | 'other'>('all');
     const [importantMembers, setImportantMembers] = useState<UserProfile[]>([]);
+
+    // Initialize with persisted state
+    const [showImportantMembersCard, setShowImportantMembersCard] = useState(() => {
+        if (typeof params.conversationId === 'string') {
+            return filterCheckState.has(params.conversationId) ? filterCheckState.get(params.conversationId)! : true;
+        }
+        return true;
+    });
+
+    // Update persistence when state changes
+    useEffect(() => {
+        const id = getString(params.conversationId);
+        if (id) {
+            filterCheckState.set(id, showImportantMembersCard);
+        }
+    }, [showImportantMembersCard, params.conversationId]);
+
     const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
@@ -194,27 +216,26 @@ export default function GroupChatScreen() {
                         )}
 
                         {/* Message Bubble */}
-                        <View
-                            style={[
-                                styles.messageBubble,
-                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
-                            ]}
-                        >
-                            <Text
-                                style={[
-                                    styles.messageText,
-                                    isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
-                                ]}
+                        {isOwnMessage ? (
+                            <LinearGradient
+                                colors={['#026b61ff', '#026b61ff']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={[styles.messageBubble, styles.ownMessageBubble]}
                             >
-                                {item.text}
-                            </Text>
-                            <Text style={[
-                                styles.messageTimeInline,
-                                isOwnMessage ? styles.ownMessageTimeInline : [styles.otherMessageTimeInline, { color: colors.textSecondary }]
-                            ]}>
-                                {formatMessageTime(item.timestamp)}
-                            </Text>
-                        </View>
+                                <Text style={[styles.messageText, styles.ownMessageText]}>{item.text}</Text>
+                                <Text style={[styles.messageTimeInline, styles.ownMessageTimeInline]}>
+                                    {formatMessageTime(item.timestamp)}
+                                </Text>
+                            </LinearGradient>
+                        ) : (
+                            <View style={[styles.messageBubble, styles.otherMessageBubble]}>
+                                <Text style={[styles.messageText, { color: '#F8FAFC' }]}>{item.text}</Text>
+                                <Text style={[styles.messageTimeInline, styles.otherMessageTimeInline, { color: '#CBD5E1' }]}>
+                                    {formatMessageTime(item.timestamp)}
+                                </Text>
+                            </View>
+                        )}
                     </View>
                 </View>
             </View>
@@ -224,16 +245,35 @@ export default function GroupChatScreen() {
     const memberCount = groupData?.participants?.length || 0;
 
     // Filter messages if a user is selected
-    const displayedMessages = filteredUserId
+    const userMessages = filteredUserId
         ? messages.filter(msg => msg.senderId === filteredUserId)
         : messages;
 
+    const displayedMessages = userMessages.filter(msg => {
+        if (filteredMediaType === 'all') return true;
+        if (filteredMediaType === 'pdf') return msg.messageType === 'sharedPDF';
+        // Assuming sharedPost contains images/media. 'other' captures text.
+        if (filteredMediaType === 'image') return msg.messageType === 'sharedPost';
+        if (filteredMediaType === 'other') return msg.messageType === 'text';
+        return true;
+    });
+
+    // Calculate counts for the selected user
+    const counts = {
+        all: userMessages.length,
+        pdf: userMessages.filter(m => m.messageType === 'sharedPDF').length,
+        image: userMessages.filter(m => m.messageType === 'sharedPost').length,
+        other: userMessages.filter(m => m.messageType === 'text').length
+    };
+
     const handleSelectMember = (userId: string) => {
         setFilteredUserId(userId);
+        setFilteredMediaType('all'); // Reset media type when changing user
     };
 
     const handleClearFilter = () => {
         setFilteredUserId(null);
+        setFilteredMediaType('all');
     };
 
     return (
@@ -289,101 +329,209 @@ export default function GroupChatScreen() {
                 </View>
             </View>
 
-            {/* Important Members Filter Card */}
-            {importantMembers.length > 0 && (
-                <ImportantMembersCard
-                    importantMembers={importantMembers}
-                    onSelectMember={handleSelectMember}
-                    onClearFilter={handleClearFilter}
-                    activeMemberId={filteredUserId}
-                />
-            )}
-
-            {/* Filter Indicator */}
-            {filteredUserId && (
-                <View style={[styles.filterIndicator, { backgroundColor: isDark ? '#1F2937' : '#F3F4F6' }]}>
-                    <Ionicons name="filter" size={16} color="#10B981" />
-                    <Text style={[styles.filterText, { color: colors.text }]}>
-                        Filtering: {importantMembers.find(m => m.id === filteredUserId)?.name}
-                    </Text>
-                    <Text style={[styles.filterCount, { color: colors.textSecondary }]}>
-                        ({displayedMessages.length} messages)
-                    </Text>
-                </View>
-            )}
-
-            {/* Messages */}
-            <KeyboardAvoidingView
-                style={styles.chatContainer}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            {/* Premium Body Gradient */}
+            <LinearGradient
+                colors={['#0F172A', '#020617']} // Midnight Blue to Deep Black
+                style={{ flex: 1 }}
             >
-                {loading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={colors.primary} />
-                    </View>
-                ) : (
-                    <FlatList
-                        ref={flatListRef}
-                        data={displayedMessages}
-                        renderItem={renderMessage}
-                        keyExtractor={(item) => item.id}
-                        contentContainerStyle={styles.messagesList}
-                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-                        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+
+                {/* Important Members Filter Card */}
+                {importantMembers.length > 0 && (showImportantMembersCard ? (
+                    <ImportantMembersCard
+                        importantMembers={importantMembers}
+                        onSelectMember={handleSelectMember}
+                        onClearFilter={handleClearFilter}
+                        activeMemberId={filteredUserId}
+                        onHide={() => {
+                            setShowImportantMembersCard(false);
+                            setFilteredUserId(null); // Clear filter
+                            setFilteredMediaType('all');
+                        }}
+                        onAddMember={
+                            groupData?.admins?.includes(auth.currentUser?.uid || '')
+                                ? () => router.push({ pathname: '/group-info', params: { conversationId } })
+                                : undefined
+                        }
                     />
-                )}
-                {messages.length === 0 && !loading && (
-                    <View style={styles.emptyState}>
-                        <View style={[styles.emptyIconContainer, { backgroundColor: colors.card }]}>
-                            <Ionicons name="people-outline" size={48} color={colors.primary} />
-                        </View>
-                        <Text style={[styles.emptyTitle, { color: colors.text }]}>Welcome to {groupName}!</Text>
-                        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                            Start the conversation with your group members
-                        </Text>
-                    </View>
-                )}
-
-                {/* Input Area */}
-                <View style={[styles.inputContainer, {
-                    backgroundColor: isDark ? '#1F2C34' : '#FFF',
-                    borderTopColor: isDark ? '#374151' : '#F1F5F9'
-                }]}>
-                    <TouchableOpacity style={styles.attachButton}>
-                        <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
-                    </TouchableOpacity>
-
-                    <View style={[styles.inputWrapper, {
-                        backgroundColor: isDark ? '#2D3748' : '#F0F2F5'
-                    }]}>
-                        <TextInput
-                            style={[styles.input, { color: isDark ? '#F8FAFC' : '#1E293B' }]}
-                            placeholder="Message"
-                            placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
-                            value={inputText}
-                            onChangeText={setInputText}
-                            multiline
-                        />
-                    </View>
-
+                ) : (
                     <TouchableOpacity
-                        style={[
-                            styles.sendButton,
-                            { backgroundColor: inputText.trim() ? colors.primary : '#374151' },
-                            !inputText.trim() && styles.sendButtonDisabled
-                        ]}
-                        onPress={handleSend}
-                        disabled={!inputText.trim() || sending}
+                        style={[styles.showFiltersButton, { backgroundColor: isDark ? '#0a0d12ff' : '#FFFFFF', borderBottomColor: colors.border }]}
+                        onPress={() => setShowImportantMembersCard(true)}
                     >
-                        {sending ? (
-                            <ActivityIndicator size="small" color="#FFF" />
-                        ) : (
-                            <Ionicons name="send" size={20} color="#FFF" />
-                        )}
+                        <Text style={[styles.showFiltersText, { color: colors.primary }]}>Show Filters</Text>
+                        <Ionicons name="chevron-down" size={16} color={colors.primary} />
                     </TouchableOpacity>
-                </View>
-            </KeyboardAvoidingView>
+                ))}
+
+                {/* Filter Indicator & Sub-filters */}
+                {filteredUserId && (
+                    <View style={[styles.filterIndicator, { backgroundColor: isDark ? '#2e3d52ff' : '#F3F4F6' }]}>
+                        <View style={styles.filterRow}>
+                            <Ionicons name="filter" size={16} color="#10B981" />
+                            <Text style={[styles.filterText, { color: colors.text }]}>
+                                Filtering: {importantMembers.find(m => m.id === filteredUserId)?.name}
+                            </Text>
+                        </View>
+
+                        {/* Media Type Buttons */}
+                        <View style={styles.mediaFiltersRow}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.mediaFilterChip,
+                                    filteredMediaType === 'all' && styles.mediaFilterChipActive
+                                ]}
+                                onPress={() => setFilteredMediaType('all')}
+                            >
+                                <Text style={[
+                                    styles.mediaFilterText,
+                                    filteredMediaType === 'all' && styles.mediaFilterTextActive,
+                                    { color: filteredMediaType === 'all' ? '#FFF' : colors.text }
+                                ]}>
+                                    All ({counts.all})
+                                </Text>
+                            </TouchableOpacity>
+
+                            {counts.image > 0 && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.mediaFilterChip,
+                                        filteredMediaType === 'image' && styles.mediaFilterChipActive
+                                    ]}
+                                    onPress={() => setFilteredMediaType('image')}
+                                >
+                                    <Text style={[
+                                        styles.mediaFilterText,
+                                        filteredMediaType === 'image' && styles.mediaFilterTextActive,
+                                        { color: filteredMediaType === 'image' ? '#FFF' : colors.text }
+                                    ]}>
+                                        Images ({counts.image})
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+
+                            {counts.pdf > 0 && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.mediaFilterChip,
+                                        filteredMediaType === 'pdf' && styles.mediaFilterChipActive
+                                    ]}
+                                    onPress={() => setFilteredMediaType('pdf')}
+                                >
+                                    <Text style={[
+                                        styles.mediaFilterText,
+                                        filteredMediaType === 'pdf' && styles.mediaFilterTextActive,
+                                        { color: filteredMediaType === 'pdf' ? '#FFF' : colors.text }
+                                    ]}>
+                                        PDFs ({counts.pdf})
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+
+                            {counts.other > 0 && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.mediaFilterChip,
+                                        filteredMediaType === 'other' && styles.mediaFilterChipActive
+                                    ]}
+                                    onPress={() => setFilteredMediaType('other')}
+                                >
+                                    <Text style={[
+                                        styles.mediaFilterText,
+                                        filteredMediaType === 'other' && styles.mediaFilterTextActive,
+                                        { color: filteredMediaType === 'other' ? '#FFF' : colors.text }
+                                    ]}>
+                                        Others ({counts.other})
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                )}
+
+                {/* Messages */}
+                <KeyboardAvoidingView
+                    style={styles.chatContainer}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                >
+                    {loading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                        </View>
+                    ) : (
+                        <FlatList
+                            ref={flatListRef}
+                            data={displayedMessages}
+                            renderItem={renderMessage}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={styles.messagesList}
+                            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                        />
+                    )}
+                    {messages.length === 0 && !loading && (
+                        <View style={styles.emptyState}>
+                            <View style={[styles.emptyIconContainer, { backgroundColor: colors.card }]}>
+                                <Ionicons name="people-outline" size={48} color={colors.primary} />
+                            </View>
+                            <Text style={[styles.emptyTitle, { color: colors.text }]}>Welcome to {groupName}!</Text>
+                            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                                Start the conversation with your group members
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Input Area */}
+                    <View style={[styles.inputContainer, {
+                        backgroundColor: 'transparent',
+                    }]}>
+                        <View style={[styles.inputWrapper, {
+                            backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                        }]}>
+                            <TouchableOpacity style={styles.attachButton}>
+                                <Ionicons name="happy-outline" size={24} color={colors.textSecondary} />
+                            </TouchableOpacity>
+
+                            <TextInput
+                                style={[styles.input, { color: isDark ? '#F8FAFC' : '#1E293B' }]}
+                                placeholder="Message"
+                                placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
+                                value={inputText}
+                                onChangeText={setInputText}
+                                multiline
+                            />
+
+                            <View style={styles.inputRightIcons}>
+                                <TouchableOpacity style={styles.attachButton}>
+                                    <Ionicons name="attach" size={24} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                                {!inputText.trim() && (
+                                    <TouchableOpacity style={styles.attachButton}>
+                                        <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.sendButton,
+                                { backgroundColor: '#10B981' }
+                            ]}
+                            onPress={handleSend}
+                            disabled={!inputText.trim() || sending}
+                        >
+                            {sending ? (
+                                <ActivityIndicator size="small" color="#FFF" />
+                            ) : (
+                                <Ionicons name={inputText.trim() ? "send" : "mic"} size={22} color="#FFF" />
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
+            </LinearGradient>
 
             {/* Group Options Bottom Sheet */}
             <GroupOptionsSheet
@@ -429,7 +577,7 @@ export default function GroupChatScreen() {
                     }
                 ]}
             />
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -511,7 +659,7 @@ const styles = StyleSheet.create({
     messagesList: {
         paddingHorizontal: 16,
         paddingTop: 16,
-        paddingBottom: 16,
+        paddingBottom: 16, // Reduced since input is relative now
     },
     dateHeader: {
         alignItems: 'center',
@@ -528,8 +676,8 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     messageContainer: {
-        marginBottom: 12,
-        maxWidth: '80%',
+        marginBottom: 4,
+        maxWidth: '75%',
     },
     ownMessageContainer: {
         alignSelf: 'flex-end',
@@ -573,27 +721,37 @@ const styles = StyleSheet.create({
         marginLeft: 12,
     },
     messageBubble: {
-        borderRadius: 18,
-        padding: 12,
-        maxWidth: '100%',
-        elevation: 2,
+        borderRadius: 16,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
     },
     ownMessageBubble: {
-        backgroundColor: '#25D366',
         borderBottomRightRadius: 4,
-        borderTopRightRadius: 18,
-        borderBottomLeftRadius: 18,
-        borderTopLeftRadius: 18,
+        borderTopRightRadius: 20,
+        borderBottomLeftRadius: 20,
+        borderTopLeftRadius: 20,
+        overflow: 'hidden',
     },
     otherMessageBubble: {
-        backgroundColor: '#334155',
+        backgroundColor: '#1E293B', // Slate 800
         borderBottomLeftRadius: 4,
-        borderTopLeftRadius: 18,
-        borderBottomRightRadius: 18,
-        borderTopRightRadius: 18,
+        borderTopLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        borderTopRightRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)', // Glass border
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
     },
     messageText: {
-        fontSize: 15,
+        fontSize: 14,
         lineHeight: 20,
         marginBottom: 2,
     },
@@ -601,18 +759,19 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
     otherMessageText: {
-        color: '#FFFFFF',
+        color: '#F8FAFC',
     },
     messageTimeInline: {
-        fontSize: 10,
+        fontSize: 9,
         alignSelf: 'flex-end',
-        opacity: 0.8,
+        opacity: 0.75,
+        marginTop: 2,
     },
     ownMessageTimeInline: {
         color: 'rgba(255, 255, 255, 0.9)',
     },
     otherMessageTimeInline: {
-        color: 'rgba(255, 255, 255, 0.7)',
+        color: 'rgba(255, 255, 255, 0.6)',
     },
     emptyState: {
         flex: 1,
@@ -640,26 +799,34 @@ const styles = StyleSheet.create({
     },
     inputContainer: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
+        alignItems: 'flex-end',
+        paddingHorizontal: 8,
         paddingVertical: 8,
-        borderTopWidth: 1,
-    },
-    attachButton: {
-        padding: 4,
-        marginRight: 8,
     },
     inputWrapper: {
         flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
         borderRadius: 24,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        marginRight: 8,
-        maxHeight: 100,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        marginRight: 6,
+        minHeight: 48,
+        maxHeight: 120,
     },
     input: {
-        fontSize: 15,
-        maxHeight: 80,
+        flex: 1,
+        fontSize: 16,
+        maxHeight: 100,
+        paddingHorizontal: 8,
+        paddingVertical: 8,
+    },
+    inputRightIcons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    attachButton: {
+        padding: 8,
     },
     sendButton: {
         width: 40,
@@ -671,19 +838,65 @@ const styles = StyleSheet.create({
     sendButtonDisabled: {
         opacity: 0.5,
     },
-    filterIndicator: {
+    showFiltersButton: {
+        alignSelf: 'flex-end',
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        justifyContent: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        marginRight: 16,
+        marginTop: 8,
         gap: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+        elevation: 1,
+    },
+    showFiltersText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    filterIndicator: {
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        gap: 10,
+    },
+    filterRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     filterText: {
         fontSize: 13,
         fontWeight: '600',
     },
-    filterCount: {
-        fontSize: 12,
+    mediaFiltersRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+    },
+    mediaFilterChip: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 14,
+        backgroundColor: '#E5E7EB',
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    mediaFilterChipActive: {
+        backgroundColor: '#000000ff',
+    },
+    mediaFilterText: {
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    mediaFilterTextActive: {
+        fontWeight: '600',
+        color: '#FFF',
     },
 });
 

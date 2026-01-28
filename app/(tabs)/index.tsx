@@ -137,6 +137,8 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingTop: 110 }}
       />
 
+      {/* Static Top Black Card - Instagram Style (outside FeedList) */}
+      <View style={styles.topBlackCard} />
 
     </View>
   );
@@ -205,5 +207,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#FFF',
+  },
+  topBlackCard: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    backgroundColor: '#000',
+    zIndex: 1001,
   },
 });

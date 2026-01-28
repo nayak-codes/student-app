@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { arrayRemove, arrayUnion, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -9,11 +11,12 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth, db } from '../src/config/firebase';
+import { auth, db, storage } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { UserProfile } from '../src/services/authService';
 import { Conversation } from '../src/services/chatService';
@@ -30,6 +33,14 @@ export default function GroupInfoScreen() {
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
     const [isCreator, setIsCreator] = useState(false);
+    const [showAllMembers, setShowAllMembers] = useState(false);
+
+    // Edit Mode State
+    const [isEditing, setIsEditing] = useState(false);
+    const [editName, setEditName] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [editImage, setEditImage] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         fetchGroupInfo();
@@ -196,8 +207,8 @@ export default function GroupInfoScreen() {
             }
 
             // Check max limit
-            if (currentImportant.length >= 5) {
-                Alert.alert('Limit Reached', 'You can only have up to 5 important members');
+            if (currentImportant.length >= 15) {
+                Alert.alert('Limit Reached', 'You can only have up to 15 important members');
                 return;
             }
 
@@ -317,6 +328,55 @@ export default function GroupInfoScreen() {
         );
     };
 
+    const startEditing = () => {
+        setEditName(groupData?.groupName || '');
+        setEditDescription(groupData?.groupDescription || '');
+        setEditImage(groupData?.groupIcon || null);
+        setIsEditing(true);
+    };
+
+    const pickImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+        });
+
+        if (!result.canceled) {
+            setEditImage(result.assets[0].uri);
+        }
+    };
+
+    const handleSaveChanges = async () => {
+        setSaving(true);
+        try {
+            let imageUrl = editImage;
+            if (editImage && editImage !== groupData?.groupIcon && !editImage.startsWith('http')) {
+                const response = await fetch(editImage);
+                const blob = await response.blob();
+                const storageRef = ref(storage, `groups/${conversationId}/icon_${Date.now()}`);
+                await uploadBytes(storageRef, blob);
+                imageUrl = await getDownloadURL(storageRef);
+            }
+
+            await updateDoc(doc(db, 'conversations', conversationId), {
+                groupName: editName,
+                groupDescription: editDescription,
+                groupIcon: imageUrl
+            });
+
+            setGroupData(prev => prev ? ({ ...prev, groupName: editName, groupDescription: editDescription, groupIcon: imageUrl || undefined }) : null);
+            setIsEditing(false);
+            Alert.alert('Success', 'Group updated');
+        } catch (error) {
+            console.error('Error updating:', error);
+            Alert.alert('Error', 'Failed to update');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     if (loading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -339,67 +399,149 @@ export default function GroupInfoScreen() {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Group Header */}
-                <View style={[styles.groupHeader, { backgroundColor: colors.card }]}>
-                    {groupData?.groupIcon ? (
-                        <Image source={{ uri: groupData.groupIcon }} style={styles.groupIcon} />
-                    ) : (
-                        <View style={[styles.groupIcon, styles.groupIconPlaceholder, { backgroundColor: '#10B981' }]}>
-                            <Ionicons name="people" size={48} color="#FFF" />
-                        </View>
-                    )}
-                    <Text style={[styles.groupName, { color: colors.text }]}>
-                        {groupData?.groupName}
-                    </Text>
-                    <Text style={[styles.groupDescription, { color: colors.textSecondary }]}>
-                        {groupData?.groupDescription || 'No description'}
-                    </Text>
-                    <Text style={[styles.groupStats, { color: colors.textSecondary }]}>
-                        Created {groupData?.createdAt ? new Date(groupData.createdAt.toMillis()).toLocaleDateString() : 'recently'}
-                    </Text>
-
-                    {/* Action Buttons - WhatsApp Style */}
-                    <View style={styles.actionButtons}>
-                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: isDark ? '#1F2937' : '#F3F4F6' }]}>
-                            <Ionicons name="search-outline" size={24} color="#10B981" />
-                            <Text style={[styles.actionButtonText, { color: colors.text }]}>Search</Text>
+                {/* Professional Group Header */}
+                <View style={[styles.groupHeader, { backgroundColor: colors.card, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }]}>
+                    {/* Edit Button for Admin */}
+                    {isAdmin && !isEditing && (
+                        <TouchableOpacity style={styles.editButton} onPress={startEditing}>
+                            <Ionicons name="create-outline" size={20} color={colors.text} />
                         </TouchableOpacity>
-                        {isAdmin && (
-                            <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: isDark ? '#1F2937' : '#F3F4F6' }]}
-                                onPress={handleAddMembers}
-                            >
-                                <Ionicons name="person-add-outline" size={24} color="#10B981" />
-                                <Text style={[styles.actionButtonText, { color: colors.text }]}>Add</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
+                    )}
 
-                {/* Group Description Section */}
-                {groupData?.groupDescription && groupData.groupDescription !== 'No description' && (
-                    <View style={[styles.section, { backgroundColor: colors.card }]}>
-                        <View style={styles.descriptionSection}>
-                            <Text style={[styles.descriptionText, { color: colors.text }]}>
-                                {groupData.groupDescription}
+                    {isEditing ? (
+                        <View style={{ width: '100%', alignItems: 'center' }}>
+                            <TouchableOpacity onPress={pickImage} style={styles.editImageOverlay}>
+                                {editImage ? (
+                                    <Image source={{ uri: editImage }} style={styles.groupIcon} />
+                                ) : (
+                                    <View style={[styles.groupIcon, styles.groupIconPlaceholder, { backgroundColor: '#10B981' }]}>
+                                        <Ionicons name="camera" size={32} color="#FFF" />
+                                    </View>
+                                )}
+                                <View style={styles.cameraBadge}>
+                                    <Ionicons name="camera" size={14} color="#FFF" />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        groupData?.groupIcon ? (
+                            <Image source={{ uri: groupData.groupIcon }} style={styles.groupIcon} />
+                        ) : (
+                            <View style={[styles.groupIcon, styles.groupIconPlaceholder, { backgroundColor: '#10B981', shadowColor: '#10B981', shadowOpacity: 0.3, shadowRadius: 10 }]}>
+                                <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#FFF' }}>
+                                    {groupData?.groupName?.charAt(0)?.toUpperCase()}
+                                </Text>
+                            </View>
+                        )
+                    )}
+
+                    {isEditing ? (
+                        <View style={{ width: '100%', alignItems: 'center' }}>
+                            <TextInput
+                                style={[styles.editInput, { color: colors.text, borderBottomColor: colors.primary, fontSize: 24, fontWeight: 'bold', textAlign: 'center' }]}
+                                value={editName}
+                                onChangeText={setEditName}
+                                placeholder="Group Name"
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
+                                    onPress={() => setIsEditing(false)}
+                                >
+                                    <Text style={{ color: colors.text }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                                    onPress={handleSaveChanges}
+                                    disabled={saving}
+                                >
+                                    {saving ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: '#FFF' }}>Save</Text>}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ) : (
+                        <Text style={[styles.groupName, { color: colors.text }]}>
+                            {groupData?.groupName}
+                        </Text>
+                    )}
+
+
+
+                    <View style={styles.statsRow}>
+                        <View style={styles.statBadge}>
+                            <Ionicons name="people" size={12} color={colors.textSecondary} />
+                            <Text style={[styles.statText, { color: colors.textSecondary }]}>
+                                {members.length} Members
+                            </Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statBadge}>
+                            <Ionicons name="calendar" size={12} color={colors.textSecondary} />
+                            <Text style={[styles.statText, { color: colors.textSecondary }]}>
+                                {groupData?.createdAt ? new Date(groupData.createdAt.toMillis()).toLocaleDateString() : 'Active'}
                             </Text>
                         </View>
                     </View>
-                )}
 
-                {/* Mute Notifications */}
-                <View style={[styles.section, { backgroundColor: colors.card }]}>
-                    <TouchableOpacity
-                        style={[styles.actionItem, { borderBottomWidth: 0 }]}
-                        onPress={handleMuteNotifications}
-                    >
-                        <View style={[styles.actionIconContainer, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}>
-                            <Ionicons name="notifications-off-outline" size={24} color={colors.text} />
-                        </View>
-                        <Text style={[styles.actionText, { color: colors.text }]}>Mute Notifications</Text>
-                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
+                    {/* Professional Action Bar */}
+                    <View style={styles.actionBar}>
+                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}>
+                            <Ionicons name="search" size={20} color={colors.primary} />
+                            <Text style={[styles.actionLabel, { color: colors.text }]}>Search</Text>
+                        </TouchableOpacity>
+
+                        {isAdmin && (
+                            <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}
+                                onPress={handleAddMembers}
+                            >
+                                <Ionicons name="person-add" size={20} color={colors.primary} />
+                                <Text style={[styles.actionLabel, { color: colors.text }]}>Add</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                            style={[styles.actionButton, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}
+                            onPress={handleMuteNotifications}
+                        >
+                            <Ionicons name="notifications-off" size={20} color={colors.textSecondary} />
+                            <Text style={[styles.actionLabel, { color: colors.text }]}>Mute</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.actionButton, { backgroundColor: '#FEE2E2' }]}
+                            onPress={handleExitGroup}
+                        >
+                            <Ionicons name="log-out" size={20} color="#DC2626" />
+                            <Text style={[styles.actionLabel, { color: '#DC2626' }]}>Exit</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
+
+                {/* Description Card (New Separate Box) */}
+                {(groupData?.groupDescription || isEditing) && (
+                    <View style={[styles.section, { backgroundColor: colors.card, padding: 16, marginTop: 16 }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>
+                        </View>
+
+                        {isEditing ? (
+                            <TextInput
+                                style={[styles.descriptionInput, { color: colors.text, borderColor: colors.border }]}
+                                value={editDescription}
+                                onChangeText={setEditDescription}
+                                multiline
+                                placeholder="Enter description..."
+                                placeholderTextColor={colors.textSecondary}
+                            />
+                        ) : (
+                            <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
+                                {groupData?.groupDescription || 'No description'}
+                            </Text>
+                        )}
+                    </View>
+                )}
 
                 {/* Important Members Section */}
                 {groupData?.importantMembers && groupData.importantMembers.length > 0 && (
@@ -417,15 +559,41 @@ export default function GroupInfoScreen() {
                     </>
                 )}
 
-                {/* Members Section */}
+                {/* Members Section (Redesigned) */}
                 <View style={styles.sectionHeader}>
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                        {members.length} {members.length === 1 ? 'Member' : 'Members'}
+                        Community ({members.length})
                     </Text>
+                    {!showAllMembers && members.length > 5 && (
+                        <Text style={{ color: colors.primary, fontSize: 12 }}>Showing top 5</Text>
+                    )}
                 </View>
 
-                <View style={[styles.membersContainer, { backgroundColor: colors.card }]}>
-                    {members.map(renderMember)}
+                <View style={[styles.membersContainer, { backgroundColor: colors.card, paddingVertical: 8 }]}>
+                    {(showAllMembers ? members : members.slice(0, 5)).map((item, index) => (
+                        <View key={item.id}>
+                            {renderMember(item)}
+                            {index < (showAllMembers ? members.length : 5) - 1 && (
+                                <View style={{ height: 1, backgroundColor: colors.border, marginLeft: 76, opacity: 0.5 }} />
+                            )}
+                        </View>
+                    ))}
+
+                    {members.length > 5 && (
+                        <TouchableOpacity
+                            style={styles.viewAllButton}
+                            onPress={() => setShowAllMembers(!showAllMembers)}
+                        >
+                            <Text style={[styles.viewAllText, { color: colors.primary }]}>
+                                {showAllMembers ? 'Show Less' : `View All ${members.length} Members`}
+                            </Text>
+                            <Ionicons
+                                name={showAllMembers ? "chevron-up" : "chevron-down"}
+                                size={16}
+                                color={colors.primary}
+                            />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Exit Group */}
@@ -591,8 +759,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 12,
-        borderBottomWidth: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
     },
     memberLeft: {
         flexDirection: 'row',
@@ -647,5 +815,98 @@ const styles = StyleSheet.create({
     },
     memberStatus: {
         fontSize: 13,
+        marginTop: 2,
+    },
+    viewAllButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.05)',
+        marginTop: 4,
+        gap: 6,
+    },
+    viewAllText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    statsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 16,
+        marginBottom: 24,
+        gap: 12,
+    },
+    statBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0,0,0,0.03)',
+    },
+    editButton: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        zIndex: 10,
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0,0,0,0.05)',
+    },
+    editInput: {
+        borderBottomWidth: 1,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        marginBottom: 16,
+        width: '80%',
+    },
+    descriptionInput: {
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+        height: 100,
+        textAlignVertical: 'top',
+    },
+    editImageOverlay: {
+        position: 'relative',
+        marginBottom: 16,
+    },
+    cameraBadge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#10B981',
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#FFF',
+    },
+    statText: {
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    statDivider: {
+        width: 1,
+        height: 16,
+        backgroundColor: 'rgba(0,0,0,0.1)',
+    },
+    actionBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-evenly',
+        width: '100%',
+        paddingHorizontal: 16,
+        marginBottom: 8,
+    },
+    actionLabel: {
+        marginTop: 4,
+        fontSize: 12,
+        fontWeight: '500',
     },
 });

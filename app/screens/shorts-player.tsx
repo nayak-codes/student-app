@@ -33,6 +33,9 @@ export default function ShortsPlayerScreen() {
     const [shareModalVisible, setShareModalVisible] = useState(false);
     const [shareData, setShareData] = useState<any>(null);
 
+    // One-handed mode state - default to right-handed
+    const [isRightHanded, setIsRightHanded] = useState(true);
+
     const flatListRef = React.useRef<FlatList>(null);
 
     useEffect(() => {
@@ -128,6 +131,11 @@ export default function ShortsPlayerScreen() {
         }
     };
 
+    // Toggle hand mode
+    const toggleHandMode = () => {
+        setIsRightHanded(prev => !prev);
+    };
+
     const renderShort = ({ item, index }: { item: Post; index: number }) => {
         const isActive = index === currentIndex;
         const shouldLoad = Math.abs(index - currentIndex) <= 1;
@@ -146,6 +154,8 @@ export default function ShortsPlayerScreen() {
                     setShareData(short);
                     setShareModalVisible(true);
                 }}
+                isRightHanded={isRightHanded}
+                onToggleHand={toggleHandMode}
             />
         );
     };
@@ -218,6 +228,9 @@ export default function ShortsPlayerScreen() {
                 shareType="post"
                 shareData={shareData}
             />
+
+            {/* Static Top Black Card - Instagram Style (outside FlatList) */}
+            <View style={styles.topBlackCard} />
         </View>
     );
 }
@@ -229,6 +242,8 @@ interface ShortItemProps {
     onLike: () => void;
     onComments: () => void;
     onShare: (short: Post) => void;
+    isRightHanded: boolean;
+    onToggleHand: () => void;
 }
 
 function getTimeAgo(date: any) {
@@ -248,7 +263,7 @@ function getTimeAgo(date: any) {
     }
 }
 
-function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare }: ShortItemProps) {
+function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare, isRightHanded, onToggleHand }: ShortItemProps) {
     const { colors } = useTheme();
     const router = useRouter();
     const player = useConditionalVideoPlayer(short.videoLink || null, shouldLoad);
@@ -324,12 +339,6 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare }:
 
     return (
         <View style={styles.shortContainer}>
-            {/* Top Gradient for visibility */}
-            <LinearGradient
-                colors={['#000000', 'transparent']}
-                style={styles.topGradient}
-            />
-
             {/* Video */}
             <View style={styles.videoContainer}>
                 {player ? (
@@ -365,9 +374,9 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare }:
                 locations={[0, 0.6, 1]}
                 style={styles.overlay}
             >
-                <View style={styles.bottomSection}>
-                    <View style={styles.textContainer}>
-                        <View style={styles.authorRow}>
+                <View style={[styles.bottomSection, !isRightHanded && styles.bottomSectionReversed]}>
+                    <View style={[styles.textContainer, isRightHanded ? styles.textContainerRight : styles.textContainerLeft]}>
+                        <View style={[styles.authorRow, !isRightHanded && styles.authorRowReversed]}>
                             <TouchableOpacity
                                 style={styles.avatarPlaceholder}
                                 onPress={() => router.push(`/full-profile?userId=${short.userId}`)}
@@ -399,7 +408,7 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare }:
                         </Text>
                     </View>
 
-                    <View style={styles.rightActions}>
+                    <View style={[styles.rightActions, !isRightHanded && styles.leftActions]}>
                         <TouchableOpacity style={styles.actionBtn} onPress={onLike}>
                             <Ionicons
                                 name={isLiked ? "heart" : "heart-outline"}
@@ -425,6 +434,19 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare }:
                     </View>
                 </View>
             </LinearGradient>
+
+            {/* Hand Toggle Button - appears on opposite side */}
+            <TouchableOpacity
+                style={[styles.handToggleBtn, isRightHanded ? styles.handToggleBtnLeft : styles.handToggleBtnRight]}
+                onPress={onToggleHand}
+                activeOpacity={0.7}
+            >
+                <Ionicons
+                    name={isRightHanded ? "hand-left-outline" : "hand-right-outline"}
+                    size={24}
+                    color="#FFF"
+                />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -497,9 +519,16 @@ const styles = StyleSheet.create({
     },
     textContainer: {
         flex: 1,
-        marginRight: 60,
         justifyContent: 'flex-end',
         paddingBottom: 8,
+    },
+    textContainerRight: {
+        marginRight: 60,
+        marginLeft: 12,
+    },
+    textContainerLeft: {
+        marginLeft: 60,
+        marginRight: 12,
     },
     title: {
         color: '#FFF',
@@ -586,5 +615,53 @@ const styles = StyleSheet.create({
         textShadowColor: 'rgba(0,0,0,0.5)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 2,
+    },
+    // One-handed mode styles
+    bottomSectionReversed: {
+        flexDirection: 'row-reverse',
+    },
+    authorRowReversed: {
+        flexDirection: 'row-reverse',
+    },
+    leftActions: {
+        position: 'absolute',
+        left: 0,
+        right: 'auto',
+        bottom: 12,
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    handToggleBtn: {
+        position: 'absolute',
+        bottom: 90,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 24,
+        width: 48,
+        height: 48,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 15,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.4)',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 6,
+    },
+    handToggleBtnLeft: {
+        left: 20,
+    },
+    handToggleBtnRight: {
+        right: 20,
+    },
+    topBlackCard: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 40,
+        backgroundColor: '#000',
+        zIndex: 10,
     },
 });

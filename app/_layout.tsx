@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -16,7 +16,23 @@ SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   const { theme } = useTheme();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const segments = useSegments() as string[];
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+
+    const inPublicGroup =
+      segments.includes('login') ||
+      segments.includes('signup') ||
+      segments.length === 0 ||
+      (segments.length === 1 && segments[0] === 'index');
+
+    if (!user && !inPublicGroup) {
+      router.replace('/login');
+    }
+  }, [user, loading, segments]);
 
   useEffect(() => {
     if (user) {

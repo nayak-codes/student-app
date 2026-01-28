@@ -528,6 +528,9 @@ const ExploreScreen: React.FC = () => {
           />
         </View>
       )}
+
+      {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
+      <View style={styles.topBlackCard} />
     </View >
   );
 };
@@ -791,6 +794,15 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 25,
+  },
+  topBlackCard: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    backgroundColor: '#000',
+    zIndex: 1001,
   },
 });
 
