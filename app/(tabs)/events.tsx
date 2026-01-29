@@ -796,13 +796,14 @@ const styles = StyleSheet.create({
     },
     // Sub Filters
     subFilterContainer: {
-        paddingTop: 48, // Extra padding for black card
+        paddingTop: 25, // Reduced padding for black card
         paddingBottom: 12,
         backgroundColor: '#FFF',
         marginBottom: 8
     },
     subFilterList: {
-        paddingHorizontal: 20,
+        paddingLeft: 16, // Aligned more to the left
+        paddingRight: 80, // Extra padding so last chip can scroll to the edge
         gap: 8,
     },
     subFilterChip: {

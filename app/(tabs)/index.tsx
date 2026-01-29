@@ -16,6 +16,7 @@ import { useCallback } from 'react';
 import { useFriendRequests } from '../../src/hooks/useFriendRequests';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SwipeNavigator from '../../src/components/SwipeNavigator';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -68,79 +69,81 @@ export default function HomeScreen() {
   });
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+    <SwipeNavigator swipeLeftRoute="/conversations">
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Collapsible Header */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            backgroundColor: colors.background,
-            borderBottomColor: isDark ? '#333' : colors.border,
-            transform: [{ translateY }],
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            elevation: 4,
-          }
-        ]}
-      >
-        <SafeAreaView edges={['top']}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
-            <View style={styles.brandContainer}>
-              <Text style={styles.brandText}>Vidhyardi</Text>
+        {/* Collapsible Header */}
+        <Animated.View
+          style={[
+            styles.header,
+            {
+              backgroundColor: colors.background,
+              borderBottomColor: isDark ? '#333' : colors.border,
+              transform: [{ translateY }],
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 1000,
+              elevation: 4,
+            }
+          ]}
+        >
+          <SafeAreaView edges={['top']}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
+              <View style={styles.brandContainer}>
+                <Text style={styles.brandText}>Vidhyardi</Text>
+              </View>
+
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push('/screens/universal-search')}
+                >
+                  <Ionicons name="search-outline" size={26} color={colors.text} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push('/notifications')}
+                >
+                  <Ionicons name="notifications-outline" size={26} color={colors.text} />
+                  {requestCount > 0 && <View style={styles.notificationDot} />}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push('/conversations')}
+                >
+                  <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
+                  {unreadCount > 0 && (
+                    <View style={[styles.chatBadge, { borderColor: isDark ? colors.background : '#FFF' }]}>
+                      <Text style={styles.chatBadgeText}>
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
+          </SafeAreaView>
+        </Animated.View>
 
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => router.push('/screens/universal-search')}
-              >
-                <Ionicons name="search-outline" size={26} color={colors.text} />
-              </TouchableOpacity>
+        {/* Main Feed Content */}
+        <FeedList
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
+          contentContainerStyle={{ paddingTop: 110 }}
+        />
 
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => router.push('/notifications')}
-              >
-                <Ionicons name="notifications-outline" size={26} color={colors.text} />
-                {requestCount > 0 && <View style={styles.notificationDot} />}
-              </TouchableOpacity>
+        {/* Static Top Black Card - Instagram Style (outside FeedList) */}
+        <View style={styles.topBlackCard} />
 
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => router.push('/conversations')}
-              >
-                <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
-                {unreadCount > 0 && (
-                  <View style={[styles.chatBadge, { borderColor: isDark ? colors.background : '#FFF' }]}>
-                    <Text style={styles.chatBadgeText}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </SafeAreaView>
-      </Animated.View>
-
-      {/* Main Feed Content */}
-      <FeedList
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        contentContainerStyle={{ paddingTop: 110 }}
-      />
-
-      {/* Static Top Black Card - Instagram Style (outside FeedList) */}
-      <View style={styles.topBlackCard} />
-
-    </View>
+      </View>
+    </SwipeNavigator>
   );
 }
 
