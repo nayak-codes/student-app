@@ -10,7 +10,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useConditionalVideoPlayer } from '../../src/hooks/useConditionalVideoPlayer';
 import { checkFollowStatus, followUser, unfollowUser } from '../../src/services/connectionService';
-import { Post, getAllPosts, incrementViewCount, likePost, unlikePost } from '../../src/services/postsService';
+import { Post, addReaction, getAllPosts, incrementViewCount, likePost, removeReaction, unlikePost } from '../../src/services/postsService';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -131,6 +131,55 @@ export default function ShortsPlayerScreen() {
         }
     };
 
+    const handleHype = async (shortId: string) => {
+        if (!user) return;
+
+        const shortIndex = allShorts.findIndex(s => s.id === shortId);
+        if (shortIndex === -1) return;
+
+        const short = allShorts[shortIndex];
+        const reactedBy = short.reactedBy || {};
+        const isHyped = reactedBy[user.uid] === 'hype';
+
+        // Optimistic Update
+        const updatedShorts = [...allShorts];
+        const newReactions = { ...(short.reactions || { like: 0, celebrate: 0, support: 0, insightful: 0, love: 0, funny: 0, hype: 0 }) };
+        const newReactedBy = { ...reactedBy };
+
+        if (isHyped) {
+            // Remove hype
+            newReactions.hype = Math.max(0, (newReactions.hype || 0) - 1);
+            delete newReactedBy[user.uid];
+        } else {
+            // Add hype (remove other reaction if exists? For now, simplified to just add/toggle hype)
+            // If they had another reaction, we should technically remove it first, but let's just set hype
+            const prevReaction = newReactedBy[user.uid];
+            if (prevReaction && newReactions[prevReaction]) {
+                newReactions[prevReaction]--;
+            }
+            newReactions.hype = (newReactions.hype || 0) + 1;
+            newReactedBy[user.uid] = 'hype';
+        }
+
+        updatedShorts[shortIndex] = {
+            ...short,
+            reactions: newReactions,
+            reactedBy: newReactedBy
+        };
+        setAllShorts(updatedShorts);
+
+        try {
+            if (isHyped) {
+                await removeReaction(shortId, user.uid);
+            } else {
+                await addReaction(shortId, user.uid, 'hype');
+            }
+        } catch (error) {
+            console.error('Hype error:', error);
+            setAllShorts(allShorts); // Revert
+        }
+    };
+
     // Toggle hand mode
     const toggleHandMode = () => {
         setIsRightHanded(prev => !prev);
@@ -145,6 +194,7 @@ export default function ShortsPlayerScreen() {
                 isActive={isActive}
                 shouldLoad={shouldLoad}
                 onLike={() => handleLike(item.id)}
+                onHype={() => handleHype(item.id)}
                 onComments={() => {
                     setSelectedShortId(item.id);
                     setSelectedShortCommentCount(item.comments || 0);
@@ -240,6 +290,7 @@ interface ShortItemProps {
     isActive: boolean;
     shouldLoad: boolean;
     onLike: () => void;
+    onHype: () => void;
     onComments: () => void;
     onShare: (short: Post) => void;
     isRightHanded: boolean;
@@ -263,7 +314,7 @@ function getTimeAgo(date: any) {
     }
 }
 
-function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare, isRightHanded, onToggleHand }: ShortItemProps) {
+function ShortItem({ short, isActive, shouldLoad, onLike, onHype, onComments, onShare, isRightHanded, onToggleHand }: ShortItemProps) {
     const { colors } = useTheme();
     const router = useRouter();
     const player = useConditionalVideoPlayer(short.videoLink || null, shouldLoad);
@@ -273,6 +324,8 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare, i
     const { user } = useAuth();
     const isLiked = short.likedBy?.includes(user?.uid || '') || false;
     const likesCount = short.likes || 0;
+    const isHyped = short.reactedBy?.[user?.uid || ''] === 'hype';
+    const hypeCount = short.reactions?.hype || 0;
 
     // Local State for Follow ONLY
     const [isFollowing, setIsFollowing] = useState(false);
@@ -416,6 +469,15 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onComments, onShare, i
                                 color={isLiked ? "#FF3B30" : "#FFF"}
                             />
                             <Text style={styles.actionText}>{likesCount}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionBtn} onPress={onHype}>
+                            <Ionicons
+                                name={isHyped ? "flame" : "flame-outline"}
+                                size={32}
+                                color={isHyped ? "#FF4500" : "#FFF"}
+                            />
+                            <Text style={styles.actionText}>{hypeCount}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.actionBtn} onPress={onComments}>

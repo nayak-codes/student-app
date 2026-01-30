@@ -93,7 +93,7 @@ const PostDetailModal: React.FC<PostDetailModalProps> = ({ visible, onClose, pos
 
         // Initialize objects if missing
         if (!updatedPost.reactions) updatedPost.reactions = {
-            like: 0, celebrate: 0, support: 0, love: 0, insightful: 0, funny: 0, doubt: 0
+            like: 0, celebrate: 0, support: 0, love: 0, insightful: 0, funny: 0, hype: 0
         };
         if (!updatedPost.reactedBy) updatedPost.reactedBy = {};
 

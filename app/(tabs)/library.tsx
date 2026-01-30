@@ -15,10 +15,11 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DocumentViewer from '../../src/components/DocumentViewer';
 import UploadResourceModal from '../../src/components/UploadResourceModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
-import { getAllResources, LibraryResource } from '../../src/services/libraryService';
+import { getAllResources, incrementViews, LibraryResource } from '../../src/services/libraryService';
 
 type FilterType = 'all' | 'pdf' | 'notes' | 'formula';
 type ExamFilter = 'ALL' | 'JEE' | 'NEET' | 'EAPCET';
@@ -142,6 +143,20 @@ const LibraryScreen = () => {
     setFilteredResources(filtered);
   };
 
+  const handleQuickView = async (item: LibraryResource) => {
+    if (item.type === 'pdf') {
+      setSelectedResource(item);
+      setViewerVisible(true);
+      try {
+        await incrementViews(item.id);
+      } catch (e) {
+        console.error("View count error", e);
+      }
+    } else {
+      router.push({ pathname: '/document-detail', params: { id: item.id } });
+    }
+  };
+
   useEffect(() => {
     loadResources();
   }, []);
@@ -182,13 +197,13 @@ const LibraryScreen = () => {
     const thumbnailUrl = getThumbnailUrl(item);
 
     return (
-      <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.card }]}
-        onPress={() => router.push({ pathname: '/document-detail', params: { id: item.id } })}
-        activeOpacity={0.7}
-      >
-        {/* Cover Image Area */}
-        <View style={[styles.cardCover, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+      <View style={[styles.card, { backgroundColor: colors.card }]}>
+        {/* Cover Image Area - Quick View */}
+        <TouchableOpacity
+          style={[styles.cardCover, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
+          onPress={() => handleQuickView(item)}
+          activeOpacity={0.8}
+        >
           {thumbnailUrl ? (
             <Image
               source={{ uri: thumbnailUrl }}
@@ -216,10 +231,14 @@ const LibraryScreen = () => {
               </View>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* Content */}
-        <View style={styles.cardContent}>
+        {/* Content - Details */}
+        <TouchableOpacity
+          style={styles.cardContent}
+          onPress={() => router.push({ pathname: '/document-detail', params: { id: item.id } })}
+          activeOpacity={0.5}
+        >
           <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
 
           {/* Description */}
@@ -253,8 +272,8 @@ const LibraryScreen = () => {
               </View>
             </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -291,11 +310,10 @@ const LibraryScreen = () => {
               <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Study Resources</Text>
             </View>
             <TouchableOpacity
-              style={[styles.uploadButton, { backgroundColor: colors.primary }]}
+              style={[styles.uploadButtonIcon, { backgroundColor: colors.primary }]}
               onPress={() => setShowUploadModal(true)}
             >
-              <Ionicons name="add" size={20} color="#FFF" />
-              <Text style={styles.uploadButtonText}>Upload</Text>
+              <Ionicons name="add" size={24} color="#FFF" />
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -459,6 +477,17 @@ const LibraryScreen = () => {
         onUploadComplete={loadResources}
       />
 
+      {/* Document Viewer */}
+      {selectedResource && (
+        <DocumentViewer
+          visible={viewerVisible}
+          onClose={() => setViewerVisible(false)}
+          documentUrl={selectedResource.fileUrl}
+          documentName={selectedResource.title}
+          documentType={selectedResource.type}
+        />
+      )}
+
       {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
       <View style={styles.topBlackCard} />
     </View >
@@ -491,19 +520,18 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: '500',
   },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#4F46E5',
+  uploadButtonIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    gap: 4,
-  },
-  uploadButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#4F46E5',
+    elevation: 2,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   searchContainer: {
     flexDirection: 'row',

@@ -40,7 +40,7 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
             // Filter out 'clip' AND 'video' from main feed (LinkedIn style text/image focus)
             const regularPosts = fetchedPosts.filter(p => p.type !== 'clip' && p.type !== 'video');
 
-            // Shuffle both lists for random feed on refresh
+            // Shuffle helper
             const shuffle = (array: any[]) => {
                 for (let i = array.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -49,8 +49,35 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
                 return array;
             };
 
-            setClips(shuffle(clipPosts));
-            setPosts(shuffle(regularPosts));
+            // NEW VIRAL LOGIC: Sort by Hype count
+            // Posts with hype > 0 or high reactions come first
+            const viralSort = (postsToSort: Post[]) => {
+                return postsToSort.sort((a, b) => {
+                    const hypeA = a.reactions?.hype || 0;
+                    const hypeB = b.reactions?.hype || 0;
+
+                    // Specific Viral Override: If hype > 2, it's very important
+                    if (hypeA > 2 && hypeB <= 2) return -1;
+                    if (hypeB > 2 && hypeA <= 2) return 1;
+
+                    // Secondary Sort: Total Reaction Count
+                    const reactionsA = Object.values(a.reactions || {}).reduce((sum, v) => sum + v, 0) + a.likes;
+                    const reactionsB = Object.values(b.reactions || {}).reduce((sum, v) => sum + v, 0) + b.likes;
+
+                    if (hypeA !== hypeB) {
+                        return hypeB - hypeA; // Descending Hype
+                    }
+                    if (reactionsA !== reactionsB) {
+                        return reactionsB - reactionsA; // Descending Interactions
+                    }
+
+                    // Fallback to Date (Newest First)
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                });
+            };
+
+            setClips(shuffle(clipPosts)); // Keep clips shuffled for variety
+            setPosts(viralSort(regularPosts)); // Viral sort for main feed
         } catch (error: any) {
             console.error('Error fetching posts:', error);
             if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
@@ -111,7 +138,7 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
         const post = posts[postIndex];
         const previousReaction = post.reactedBy?.[user.uid];
         const previousReactions = post.reactions || {
-            like: 0, celebrate: 0, support: 0, insightful: 0, love: 0, funny: 0, doubt: 0
+            like: 0, celebrate: 0, support: 0, insightful: 0, love: 0, funny: 0, hype: 0
         };
 
         let newReactions = { ...previousReactions };

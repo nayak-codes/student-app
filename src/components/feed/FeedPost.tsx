@@ -31,7 +31,7 @@ const REACTIONS: Record<ReactionType, { icon: keyof typeof Ionicons.glyphMap; co
     love: { icon: 'heart', color: '#EF4444', label: 'Love' },
     insightful: { icon: 'bulb', color: '#F59E0B', label: 'Insight' },
     funny: { icon: 'happy', color: '#06B6D4', label: 'Funny' },
-    doubt: { icon: 'hand-left', color: '#F59E0B', label: 'Doubt' },
+    hype: { icon: 'flame', color: '#FF4500', label: 'Hype' },
 };
 
 const FeedPost: React.FC<FeedPostProps> = ({
@@ -56,7 +56,7 @@ const FeedPost: React.FC<FeedPostProps> = ({
     // State
     const [saved, setSaved] = useState(currentUserSaved);
     const [userReaction, setUserReaction] = useState<ReactionType | null>(
-        currentUserReaction || (currentUserLiked ? 'like' : null)
+        ((currentUserReaction as any) === 'doubt' ? 'hype' : currentUserReaction) || (currentUserLiked ? 'like' : null)
     );
     const [showReactions, setShowReactions] = useState(false);
     const [showOptionsModal, setShowOptionsModal] = useState(false);
@@ -92,6 +92,12 @@ const FeedPost: React.FC<FeedPostProps> = ({
             });
         }
     }, [post.imageUrl]);
+
+    useEffect(() => {
+        setUserReaction(
+            ((currentUserReaction as any) === 'doubt' ? 'hype' : currentUserReaction) || (currentUserLiked ? 'like' : null)
+        );
+    }, [currentUserReaction, currentUserLiked]);
 
     useEffect(() => {
         if (showReactions) {
@@ -404,15 +410,15 @@ const FeedPost: React.FC<FeedPostProps> = ({
                             activeOpacity={0.7}
                         >
                             <Ionicons
-                                name={userReaction ? REACTIONS[userReaction].icon : "thumbs-up-outline"}
+                                name={(userReaction && REACTIONS[userReaction]) ? REACTIONS[userReaction].icon : "thumbs-up-outline"}
                                 size={22}
-                                color={userReaction ? REACTIONS[userReaction].color : colors.textSecondary}
+                                color={(userReaction && REACTIONS[userReaction]) ? REACTIONS[userReaction].color : colors.textSecondary}
                             />
                             <Text style={[
                                 styles.newActionText,
-                                { color: userReaction ? REACTIONS[userReaction].color : colors.textSecondary }
+                                { color: (userReaction && REACTIONS[userReaction]) ? REACTIONS[userReaction].color : colors.textSecondary }
                             ]}>
-                                {userReaction ? REACTIONS[userReaction].label : "Like"}
+                                {(userReaction && REACTIONS[userReaction]) ? REACTIONS[userReaction].label : "Like"}
                             </Text>
                         </TouchableOpacity>
 
@@ -439,22 +445,26 @@ const FeedPost: React.FC<FeedPostProps> = ({
                         </Text>
                     </TouchableOpacity>
 
-                    {/* Doubt (Raise Hand) Button - NEW FEATURE */}
+                    {/* Hype (Flame) Button - NEW FEATURE */}
                     <TouchableOpacity
-                        onPress={() => onReact(post.id, 'doubt')}
+                        onPress={() => {
+                            const newReaction = userReaction === 'hype' ? null : 'hype';
+                            setUserReaction(newReaction);
+                            onReact(post.id, 'hype');
+                        }}
                         style={styles.newActionButton}
                         activeOpacity={0.7}
                     >
                         <Ionicons
-                            name={userReaction === 'doubt' ? "hand-left" : "hand-left-outline"}
+                            name={userReaction === 'hype' ? "flame" : "flame-outline"}
                             size={22}
-                            color={userReaction === 'doubt' ? "#F59E0B" : colors.textSecondary}
+                            color={userReaction === 'hype' ? "#FF4500" : colors.textSecondary}
                         />
                         <Text style={[
                             styles.newActionText,
-                            { color: userReaction === 'doubt' ? "#F59E0B" : colors.textSecondary }
+                            { color: userReaction === 'hype' ? "#FF4500" : colors.textSecondary }
                         ]}>
-                            Doubt
+                            Hype
                         </Text>
                     </TouchableOpacity>
 

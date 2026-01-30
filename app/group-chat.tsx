@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -8,7 +7,9 @@ import {
     Alert,
     FlatList,
     Image,
+    ImageBackground,
     KeyboardAvoidingView,
+    Linking,
     Platform,
     StatusBar,
     StyleSheet,
@@ -18,8 +19,12 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ChatAttachmentMenu, { AttachmentType } from '../src/components/ChatAttachmentMenu';
 import GroupOptionsSheet from '../src/components/GroupOptionsSheet';
 import ImportantMembersCard from '../src/components/ImportantMembersCard';
+import MediaPreviewModal, { AttachmentPreview } from '../src/components/MediaPreviewModal';
+import PollCreator from '../src/components/PollCreator';
+import PollMessage from '../src/components/PollMessage';
 import { auth, db } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { UserProfile } from '../src/services/authService';
@@ -28,8 +33,12 @@ import {
     markMessagesAsRead,
     Message,
     sendMessage,
-    subscribeToMessages
+    subscribeToMessages,
+    voteOnPoll
 } from '../src/services/chatService';
+import { pickDocument, pickImage, takePhoto, uploadMedia } from '../src/services/mediaService';
+
+
 
 // Session persistence for filter visibility
 const filterCheckState = new Map<string, boolean>();
@@ -51,16 +60,20 @@ export default function GroupChatScreen() {
     const [sending, setSending] = useState(false);
     const [groupData, setGroupData] = useState<Conversation | null>(null);
     const [showOptionsSheet, setShowOptionsSheet] = useState(false);
+    const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+    const [showPollCreator, setShowPollCreator] = useState(false);
     const [filteredUserId, setFilteredUserId] = useState<string | null>(null);
+    const [previewAttachment, setPreviewAttachment] = useState<AttachmentPreview | null>(null);
+    const [showPreview, setShowPreview] = useState(false);
     const [filteredMediaType, setFilteredMediaType] = useState<'all' | 'image' | 'pdf' | 'other'>('all');
     const [importantMembers, setImportantMembers] = useState<UserProfile[]>([]);
 
     // Initialize with persisted state
     const [showImportantMembersCard, setShowImportantMembersCard] = useState(() => {
         if (typeof params.conversationId === 'string') {
-            return filterCheckState.has(params.conversationId) ? filterCheckState.get(params.conversationId)! : true;
+            return filterCheckState.has(params.conversationId) ? filterCheckState.get(params.conversationId)! : false;
         }
-        return true;
+        return false;
     });
 
     // Update persistence when state changes
@@ -122,16 +135,121 @@ export default function GroupChatScreen() {
         };
     }, [conversationId]);
 
-    const handleSend = async () => {
-        if (!inputText.trim() || !conversationId || typeof conversationId !== 'string') return;
+    const handleAttachmentSelect = async (type: AttachmentType) => {
+        setShowAttachmentMenu(false);
+        try {
+            if (type === 'gallery') {
+                const uri = await pickImage();
+                if (uri) {
+                    setPreviewAttachment({ uri, type: 'image' });
+                    setShowPreview(true);
+                }
+            } else if (type === 'camera') {
+                const photoUri = await takePhoto();
+                if (photoUri) {
+                    setPreviewAttachment({ uri: photoUri, type: 'image' });
+                    setShowPreview(true);
+                }
+            } else if (type === 'document') {
+                const docUri = await pickDocument();
+                if (docUri) {
+                    const name = docUri.split('/').pop() || 'Document';
+                    setPreviewAttachment({ uri: docUri, type: 'file', name });
+                    setShowPreview(true);
+                }
+            } else if (type === 'poll') {
+                setShowPollCreator(true);
+            } else {
+                Alert.alert('Feature Coming Soon', `The ${type} feature is under development.`);
+            }
+        } catch (error) {
+            console.error('Error handling attachment:', error);
+            Alert.alert('Error', 'Failed to select attachment');
+        }
+    };
+
+    const handleSendAttachment = async (caption: string) => {
+        if (!previewAttachment || !conversationId) return;
 
         setSending(true);
         try {
-            await sendMessage(conversationId, inputText.trim());
-            setInputText('');
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+            let mediaUrl: string | null = null;
+            let path = '';
+
+            if (previewAttachment.type === 'image') {
+                path = `chat-images/${conversationId}`;
+            } else {
+                path = `chat-files/${conversationId}`;
+            }
+
+            mediaUrl = await uploadMedia(previewAttachment.uri, path);
+
+            if (mediaUrl) {
+                await sendMessage(
+                    conversationId,
+                    caption, // Send caption as text
+                    auth.currentUser?.uid || '',
+                    auth.currentUser?.displayName || 'User',
+                    previewAttachment.type === 'image' ? 'image' : 'file',
+                    mediaUrl
+                );
+                setShowPreview(false);
+                setPreviewAttachment(null);
+            } else {
+                Alert.alert('Error', 'Failed to upload attachment');
+            }
         } catch (error) {
-            console.error('Error sending message:', error);
+            console.error('Error sending attachment:', error);
+            Alert.alert('Error', 'Failed to send attachment');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean) => {
+        if (!conversationId) return;
+        setSending(true);
+        try {
+            await sendMessage(
+                conversationId,
+                'Poll: ' + question,
+                auth.currentUser?.uid || '',
+                auth.currentUser?.displayName || 'User',
+                'poll',
+                undefined,
+                undefined,
+                { question, options, allowMultiple }
+            );
+        } catch (error) {
+            console.error("Error creating poll:", error);
+            Alert.alert('Error', 'Failed to create poll');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleVote = async (messageId: string, optionId: string) => {
+        if (!conversationId || !auth.currentUser) return;
+        try {
+            await voteOnPoll(conversationId, messageId, optionId, auth.currentUser.uid);
+        } catch (error) {
+            console.log("Vote error", error);
+        }
+    };
+
+    const handleSend = async () => {
+        if (!inputText.trim() || !conversationId) return;
+
+        const textToSend = inputText.trim();
+        setInputText(''); // Clear input immediately
+        setSending(true);
+
+        try {
+            await sendMessage(conversationId, textToSend, auth.currentUser?.uid || '', auth.currentUser?.displayName || 'User');
+        } catch (error) {
+            console.error("Error sending message:", error);
+            Alert.alert('Error', 'Failed to send message');
+            setInputText(textToSend); // Restore text on error
         } finally {
             setSending(false);
         }
@@ -179,7 +297,7 @@ export default function GroupChatScreen() {
         const showDateHeader = !prevMessageDate || !isSameDay(messageDate, prevMessageDate);
 
         // Show sender name for group messages (for others' messages)
-        const showSenderName = !isOwnMessage;
+        const showSenderName = !isOwnMessage && (item.messageType !== 'text' || item.text.length > 0);
         const senderName = item.senderName || 'Unknown';
 
         return (
@@ -207,7 +325,7 @@ export default function GroupChatScreen() {
                         </TouchableOpacity>
                     )}
 
-                    <View style={{ flex: 1 }}>
+                    <View>
                         {/* Sender Name (for group chats) */}
                         {showSenderName && (
                             <Text style={[styles.senderName, { color: colors.textSecondary }]}>
@@ -215,27 +333,72 @@ export default function GroupChatScreen() {
                             </Text>
                         )}
 
-                        {/* Message Bubble */}
-                        {isOwnMessage ? (
-                            <LinearGradient
-                                colors={['#026b61ff', '#026b61ff']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={[styles.messageBubble, styles.ownMessageBubble]}
-                            >
-                                <Text style={[styles.messageText, styles.ownMessageText]}>{item.text}</Text>
-                                <Text style={[styles.messageTimeInline, styles.ownMessageTimeInline]}>
-                                    {formatMessageTime(item.timestamp)}
-                                </Text>
-                            </LinearGradient>
+                        {/* POLL MESSAGE */}
+                        {item.messageType === 'poll' && item.poll ? (
+                            <PollMessage
+                                message={item}
+                                currentUserId={auth.currentUser?.uid || ''}
+                                onVote={(optionId) => handleVote(item.id, optionId)}
+                            />
                         ) : (
-                            <View style={[styles.messageBubble, styles.otherMessageBubble]}>
-                                <Text style={[styles.messageText, { color: '#F8FAFC' }]}>{item.text}</Text>
-                                <Text style={[styles.messageTimeInline, styles.otherMessageTimeInline, { color: '#CBD5E1' }]}>
+                            /* STANDARD MESSAGE BUBBLE */
+                            <View style={[
+                                styles.messageBubble,
+                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble
+                            ]}>
+                                {/* Image Attachment */}
+                                {item.messageType === 'image' && item.mediaUrl && (
+                                    <TouchableOpacity onPress={() => router.push({
+                                        pathname: '/image-viewer',
+                                        params: { images: item.mediaUrl }
+                                    })}>
+                                        <Image
+                                            source={{ uri: item.mediaUrl }}
+                                            style={styles.mediaImage}
+                                            resizeMode="cover"
+                                        />
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* File Attachment */}
+                                {item.messageType === 'file' && item.mediaUrl && (
+                                    <TouchableOpacity
+                                        style={styles.fileContainer}
+                                        onPress={() => Linking.openURL(item.mediaUrl!)}
+                                    >
+                                        <Ionicons name="document-text" size={32} color="#FFF" />
+                                        <View style={styles.fileInfo}>
+                                            <Text style={styles.fileName} numberOfLines={1}>{item.text || 'Document'}</Text>
+                                            <Text style={styles.fileType}>Tap to view</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Text Content (if any, or if strictly text message) */}
+                                {(item.text && item.messageType !== 'file') ? (
+                                    <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : { color: '#F8FAFC' }]}>
+                                        {item.text}
+                                    </Text>
+                                ) : null}
+
+                                <Text style={[styles.messageTimeInline, isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline]}>
                                     {formatMessageTime(item.timestamp)}
                                 </Text>
+
+                                {/* Shared Content Placeholders (Legacy) */}
+                                {item.messageType === 'sharedPost' && <Text style={{ color: '#FFF', fontStyle: 'italic' }}>[Shared Post]</Text>}
+                                {item.messageType === 'sharedPDF' && <Text style={{ color: '#FFF', fontStyle: 'italic' }}>[Shared PDF]</Text>}
                             </View>
                         )}
+
+                        {/* Interactive Message Gradient for Own Text Messages Only currently overridden to plain view above for simplicity in mixed types. 
+                           If we want gradient specifically for text-only own messages, we can conditionally wrap. 
+                           For now, the style ownMessageBubble has background color or we can re-add LinearGradient if desired.
+                           To keep it simple and consistent with attachments, I used View. 
+                           If you want Gradient back for text, we can check. 
+                           Let's re-add Gradient for own text messages specifically if requested, but View is safer for mixed content.
+                           The original code had LinearGradient. Let's try to preserve it for text-only own messages.
+                        */}
                     </View>
                 </View>
             </View>
@@ -277,7 +440,7 @@ export default function GroupChatScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'bottom']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: '#000000' }]} edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
             {/* Header */}
@@ -329,209 +492,214 @@ export default function GroupChatScreen() {
                 </View>
             </View>
 
-            {/* Premium Body Gradient */}
-            <LinearGradient
-                colors={['#0F172A', '#020617']} // Midnight Blue to Deep Black
-                style={{ flex: 1 }}
-            >
-
-                {/* Important Members Filter Card */}
-                {importantMembers.length > 0 && (showImportantMembersCard ? (
-                    <ImportantMembersCard
-                        importantMembers={importantMembers}
-                        onSelectMember={handleSelectMember}
-                        onClearFilter={handleClearFilter}
-                        activeMemberId={filteredUserId}
-                        onHide={() => {
-                            setShowImportantMembersCard(false);
-                            setFilteredUserId(null); // Clear filter
-                            setFilteredMediaType('all');
-                        }}
-                        onAddMember={
-                            groupData?.admins?.includes(auth.currentUser?.uid || '')
-                                ? () => router.push({ pathname: '/group-info', params: { conversationId } })
-                                : undefined
-                        }
-                    />
-                ) : (
-                    <TouchableOpacity
-                        style={[styles.showFiltersButton, { backgroundColor: isDark ? '#0a0d12ff' : '#FFFFFF', borderBottomColor: colors.border }]}
-                        onPress={() => setShowImportantMembersCard(true)}
-                    >
-                        <Text style={[styles.showFiltersText, { color: colors.primary }]}>Show Filters</Text>
-                        <Ionicons name="chevron-down" size={16} color={colors.primary} />
-                    </TouchableOpacity>
-                ))}
-
-                {/* Filter Indicator & Sub-filters */}
-                {filteredUserId && (
-                    <View style={[styles.filterIndicator, { backgroundColor: isDark ? '#2e3d52ff' : '#F3F4F6' }]}>
-                        <View style={styles.filterRow}>
-                            <Ionicons name="filter" size={16} color="#10B981" />
-                            <Text style={[styles.filterText, { color: colors.text }]}>
-                                Filtering: {importantMembers.find(m => m.id === filteredUserId)?.name}
-                            </Text>
-                        </View>
-
-                        {/* Media Type Buttons */}
-                        <View style={styles.mediaFiltersRow}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.mediaFilterChip,
-                                    filteredMediaType === 'all' && styles.mediaFilterChipActive
-                                ]}
-                                onPress={() => setFilteredMediaType('all')}
-                            >
-                                <Text style={[
-                                    styles.mediaFilterText,
-                                    filteredMediaType === 'all' && styles.mediaFilterTextActive,
-                                    { color: filteredMediaType === 'all' ? '#FFF' : colors.text }
-                                ]}>
-                                    All ({counts.all})
-                                </Text>
-                            </TouchableOpacity>
-
-                            {counts.image > 0 && (
-                                <TouchableOpacity
-                                    style={[
-                                        styles.mediaFilterChip,
-                                        filteredMediaType === 'image' && styles.mediaFilterChipActive
-                                    ]}
-                                    onPress={() => setFilteredMediaType('image')}
-                                >
-                                    <Text style={[
-                                        styles.mediaFilterText,
-                                        filteredMediaType === 'image' && styles.mediaFilterTextActive,
-                                        { color: filteredMediaType === 'image' ? '#FFF' : colors.text }
-                                    ]}>
-                                        Images ({counts.image})
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
-
-                            {counts.pdf > 0 && (
-                                <TouchableOpacity
-                                    style={[
-                                        styles.mediaFilterChip,
-                                        filteredMediaType === 'pdf' && styles.mediaFilterChipActive
-                                    ]}
-                                    onPress={() => setFilteredMediaType('pdf')}
-                                >
-                                    <Text style={[
-                                        styles.mediaFilterText,
-                                        filteredMediaType === 'pdf' && styles.mediaFilterTextActive,
-                                        { color: filteredMediaType === 'pdf' ? '#FFF' : colors.text }
-                                    ]}>
-                                        PDFs ({counts.pdf})
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
-
-                            {counts.other > 0 && (
-                                <TouchableOpacity
-                                    style={[
-                                        styles.mediaFilterChip,
-                                        filteredMediaType === 'other' && styles.mediaFilterChipActive
-                                    ]}
-                                    onPress={() => setFilteredMediaType('other')}
-                                >
-                                    <Text style={[
-                                        styles.mediaFilterText,
-                                        filteredMediaType === 'other' && styles.mediaFilterTextActive,
-                                        { color: filteredMediaType === 'other' ? '#FFF' : colors.text }
-                                    ]}>
-                                        Others ({counts.other})
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-                )}
-
-                {/* Messages */}
-                <KeyboardAvoidingView
-                    style={styles.chatContainer}
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            {/* Custom Professional Background */}
+            {/* Custom Pattern Background */}
+            <View style={{ flex: 1, backgroundColor: '#0a1f1f' }}>
+                <ImageBackground
+                    source={require('../assets/chat-background.png')}
+                    style={{ flex: 1 }}
+                    resizeMode="repeat"
+                    imageStyle={{ opacity: 0.6 }}
                 >
-                    {loading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color={colors.primary} />
-                        </View>
-                    ) : (
-                        <FlatList
-                            ref={flatListRef}
-                            data={displayedMessages}
-                            renderItem={renderMessage}
-                            keyExtractor={(item) => item.id}
-                            contentContainerStyle={styles.messagesList}
-                            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-                            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+
+                    {/* Important Members Filter Card */}
+                    {importantMembers.length > 0 && (showImportantMembersCard ? (
+                        <ImportantMembersCard
+                            importantMembers={importantMembers}
+                            onSelectMember={handleSelectMember}
+                            onClearFilter={handleClearFilter}
+                            activeMemberId={filteredUserId}
+                            onHide={() => {
+                                setShowImportantMembersCard(false);
+                                setFilteredUserId(null); // Clear filter
+                                setFilteredMediaType('all');
+                            }}
+                            onAddMember={
+                                groupData?.admins?.includes(auth.currentUser?.uid || '')
+                                    ? () => router.push({ pathname: '/group-info', params: { conversationId } })
+                                    : undefined
+                            }
                         />
-                    )}
-                    {messages.length === 0 && !loading && (
-                        <View style={styles.emptyState}>
-                            <View style={[styles.emptyIconContainer, { backgroundColor: colors.card }]}>
-                                <Ionicons name="people-outline" size={48} color={colors.primary} />
+                    ) : (
+                        <TouchableOpacity
+                            style={[styles.showFiltersButton, { backgroundColor: 'rgba(30, 41, 59, 0.9)', borderBottomColor: 'rgba(255,255,255,0.1)' }]}
+                            onPress={() => setShowImportantMembersCard(true)}
+                        >
+                            <Text style={[styles.showFiltersText, { color: colors.primary }]}>Show Filters</Text>
+                            <Ionicons name="chevron-down" size={16} color={colors.primary} />
+                        </TouchableOpacity>
+                    ))}
+
+                    {/* Filter Indicator & Sub-filters */}
+                    {filteredUserId && (
+                        <View style={[styles.filterIndicator, { backgroundColor: 'rgba(30, 41, 59, 0.9)' }]}>
+                            <View style={styles.filterRow}>
+                                <Ionicons name="filter" size={16} color="#10B981" />
+                                <Text style={[styles.filterText, { color: colors.text }]}>
+                                    Filtering: {importantMembers.find(m => m.id === filteredUserId)?.name}
+                                </Text>
                             </View>
-                            <Text style={[styles.emptyTitle, { color: colors.text }]}>Welcome to {groupName}!</Text>
-                            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                                Start the conversation with your group members
-                            </Text>
-                        </View>
-                    )}
 
-                    {/* Input Area */}
-                    <View style={[styles.inputContainer, {
-                        backgroundColor: 'transparent',
-                    }]}>
-                        <View style={[styles.inputWrapper, {
-                            backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-                            borderWidth: 1,
-                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
-                        }]}>
-                            <TouchableOpacity style={styles.attachButton}>
-                                <Ionicons name="happy-outline" size={24} color={colors.textSecondary} />
-                            </TouchableOpacity>
-
-                            <TextInput
-                                style={[styles.input, { color: isDark ? '#F8FAFC' : '#1E293B' }]}
-                                placeholder="Message"
-                                placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
-                                value={inputText}
-                                onChangeText={setInputText}
-                                multiline
-                            />
-
-                            <View style={styles.inputRightIcons}>
-                                <TouchableOpacity style={styles.attachButton}>
-                                    <Ionicons name="attach" size={24} color={colors.textSecondary} />
+                            {/* Media Type Buttons */}
+                            <View style={styles.mediaFiltersRow}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.mediaFilterChip,
+                                        filteredMediaType === 'all' && styles.mediaFilterChipActive
+                                    ]}
+                                    onPress={() => setFilteredMediaType('all')}
+                                >
+                                    <Text style={[
+                                        styles.mediaFilterText,
+                                        filteredMediaType === 'all' && styles.mediaFilterTextActive,
+                                        { color: filteredMediaType === 'all' ? '#FFF' : colors.text }
+                                    ]}>
+                                        All ({counts.all})
+                                    </Text>
                                 </TouchableOpacity>
-                                {!inputText.trim() && (
-                                    <TouchableOpacity style={styles.attachButton}>
-                                        <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
+
+                                {counts.image > 0 && (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.mediaFilterChip,
+                                            filteredMediaType === 'image' && styles.mediaFilterChipActive
+                                        ]}
+                                        onPress={() => setFilteredMediaType('image')}
+                                    >
+                                        <Text style={[
+                                            styles.mediaFilterText,
+                                            filteredMediaType === 'image' && styles.mediaFilterTextActive,
+                                            { color: filteredMediaType === 'image' ? '#FFF' : colors.text }
+                                        ]}>
+                                            Images ({counts.image})
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {counts.pdf > 0 && (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.mediaFilterChip,
+                                            filteredMediaType === 'pdf' && styles.mediaFilterChipActive
+                                        ]}
+                                        onPress={() => setFilteredMediaType('pdf')}
+                                    >
+                                        <Text style={[
+                                            styles.mediaFilterText,
+                                            filteredMediaType === 'pdf' && styles.mediaFilterTextActive,
+                                            { color: filteredMediaType === 'pdf' ? '#FFF' : colors.text }
+                                        ]}>
+                                            PDFs ({counts.pdf})
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {counts.other > 0 && (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.mediaFilterChip,
+                                            filteredMediaType === 'other' && styles.mediaFilterChipActive
+                                        ]}
+                                        onPress={() => setFilteredMediaType('other')}
+                                    >
+                                        <Text style={[
+                                            styles.mediaFilterText,
+                                            filteredMediaType === 'other' && styles.mediaFilterTextActive,
+                                            { color: filteredMediaType === 'other' ? '#FFF' : colors.text }
+                                        ]}>
+                                            Others ({counts.other})
+                                        </Text>
                                     </TouchableOpacity>
                                 )}
                             </View>
                         </View>
+                    )}
 
-                        <TouchableOpacity
-                            style={[
-                                styles.sendButton,
-                                { backgroundColor: '#10B981' }
-                            ]}
-                            onPress={handleSend}
-                            disabled={!inputText.trim() || sending}
-                        >
-                            {sending ? (
-                                <ActivityIndicator size="small" color="#FFF" />
-                            ) : (
-                                <Ionicons name={inputText.trim() ? "send" : "mic"} size={22} color="#FFF" />
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </KeyboardAvoidingView>
-            </LinearGradient>
+                    {/* Messages */}
+                    <KeyboardAvoidingView
+                        style={styles.chatContainer}
+                        behavior="padding"
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
+                    >
+                        {loading ? (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator size="large" color={colors.primary} />
+                            </View>
+                        ) : (
+                            <FlatList
+                                ref={flatListRef}
+                                data={displayedMessages}
+                                renderItem={renderMessage}
+                                keyExtractor={(item) => item.id}
+                                contentContainerStyle={styles.messagesList}
+                                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                                onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                            />
+                        )}
+                        {messages.length === 0 && !loading && (
+                            <View style={styles.emptyState}>
+                                <View style={[styles.emptyIconContainer, { backgroundColor: colors.card }]}>
+                                    <Ionicons name="people-outline" size={48} color={colors.primary} />
+                                </View>
+                                <Text style={[styles.emptyTitle, { color: colors.text }]}>Welcome to {groupName}!</Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                                    Start the conversation with your group members
+                                </Text>
+                            </View>
+                        )}
+                        {/* Input Area */}
+                        <View style={[styles.inputContainer, { paddingBottom: Platform.OS === 'ios' ? 0 : 8 }]}>
+                            <TouchableOpacity
+                                style={[styles.plusButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}
+                                onPress={() => setShowAttachmentMenu(true)}
+                            >
+                                <Ionicons name="add" size={24} color={isDark ? '#FFF' : '#0F172A'} />
+                            </TouchableOpacity>
+
+                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#1F2937' : '#F1F5F9' }]}>
+                                <TextInput
+                                    style={[styles.input, { color: isDark ? '#FFFFFF' : '#0F172A' }]}
+                                    placeholder="Message"
+                                    placeholderTextColor={isDark ? "#9CA3AF" : "#64748B"}
+                                    value={inputText}
+                                    onChangeText={setInputText}
+                                    multiline
+                                    cursorColor={isDark ? "#FFFFFF" : "#0F172A"}
+                                />
+                            </View>
+
+                            <TouchableOpacity
+                                style={[
+                                    styles.sendButton,
+                                    { backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? '#4B5563' : '#CBD5E1') }
+                                ]}
+                                onPress={handleSend}
+                                disabled={!inputText.trim() || sending}
+                            >
+                                {sending ? (
+                                    <ActivityIndicator size="small" color="#FFF" />
+                                ) : (
+                                    <Ionicons name="send" size={20} color="#FFF" />
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </KeyboardAvoidingView>
+                </ImageBackground>
+            </View>
+
+            {/* Poll Creator Modal */}
+            <PollCreator
+                visible={showPollCreator}
+                onClose={() => setShowPollCreator(false)}
+                onSubmit={handleCreatePoll}
+            />
+
+            {/* Attachment Menu */}
+            <ChatAttachmentMenu
+                visible={showAttachmentMenu}
+                onClose={() => setShowAttachmentMenu(false)}
+                onSelect={handleAttachmentSelect}
+            />
 
             {/* Group Options Bottom Sheet */}
             <GroupOptionsSheet
@@ -577,7 +745,17 @@ export default function GroupChatScreen() {
                     }
                 ]}
             />
-        </SafeAreaView >
+            <MediaPreviewModal
+                visible={showPreview}
+                attachment={previewAttachment}
+                onClose={() => {
+                    setShowPreview(false);
+                    setPreviewAttachment(null);
+                }}
+                onSend={handleSendAttachment}
+                uploading={sending}
+            />
+        </SafeAreaView>
     );
 }
 
@@ -588,12 +766,12 @@ const styles = StyleSheet.create({
     headerContainer: {
         backgroundColor: '#000000',
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-        zIndex: 10,
-        elevation: 4,
+        zIndex: 100,
+        elevation: 8,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
     },
     headerContent: {
         flexDirection: 'row',
@@ -668,8 +846,8 @@ const styles = StyleSheet.create({
     dateHeaderText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#94A3B8',
-        backgroundColor: '#F1F5F9',
+        color: '#E2E8F0',
+        backgroundColor: 'rgba(30, 41, 59, 0.8)',
         paddingHorizontal: 12,
         paddingVertical: 4,
         borderRadius: 12,
@@ -678,6 +856,7 @@ const styles = StyleSheet.create({
     messageContainer: {
         marginBottom: 4,
         maxWidth: '75%',
+        alignItems: 'flex-start',
     },
     ownMessageContainer: {
         alignSelf: 'flex-end',
@@ -721,28 +900,24 @@ const styles = StyleSheet.create({
         marginLeft: 12,
     },
     messageBubble: {
-        borderRadius: 16,
-        paddingHorizontal: 8,
-        paddingVertical: 5,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
         elevation: 1,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 1,
-    },
-    ownMessageBubble: {
-        borderBottomRightRadius: 4,
-        borderTopRightRadius: 20,
-        borderBottomLeftRadius: 20,
-        borderTopLeftRadius: 20,
+        alignSelf: 'flex-start',
         overflow: 'hidden',
     },
+    ownMessageBubble: {
+        backgroundColor: '#6366F1', // Fallback if no gradient
+        borderBottomRightRadius: 2,
+    },
     otherMessageBubble: {
-        backgroundColor: '#1E293B', // Slate 800
-        borderBottomLeftRadius: 4,
-        borderTopLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        borderTopRightRadius: 20,
+        backgroundColor: '#334155', // Slate 700 for better contrast
+        borderBottomLeftRadius: 2,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)', // Glass border
         shadowColor: '#000',
@@ -750,10 +925,40 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 3,
     },
-    messageText: {
+    mediaImage: {
+        width: 240,
+        height: 180,
+        borderRadius: 8,
+        marginBottom: 4,
+    },
+    fileContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        width: 240,
+        marginBottom: 4,
+    },
+    fileInfo: {
+        flex: 1,
+        marginLeft: 12,
+    },
+    fileName: {
         fontSize: 14,
+        fontWeight: '600',
+        color: '#FFF',
+        marginBottom: 2,
+    },
+    fileType: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.8)',
+    },
+    messageText: {
+        fontSize: 15,
         lineHeight: 20,
         marginBottom: 2,
+        flexShrink: 1,
     },
     ownMessageText: {
         color: '#FFFFFF',
@@ -799,19 +1004,20 @@ const styles = StyleSheet.create({
     },
     inputContainer: {
         flexDirection: 'row',
-        alignItems: 'flex-end',
+        alignItems: 'center', // Center vertically
         paddingHorizontal: 8,
-        paddingVertical: 8,
+        paddingVertical: 12,
+        backgroundColor: 'transparent', // Ensure it blends with background
     },
     inputWrapper: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 24,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        marginRight: 6,
-        minHeight: 48,
+        borderRadius: 25, // Full pill shape
+        paddingHorizontal: 16,
+        paddingVertical: 4, // Reduce vertical padding a bit
+        marginRight: 8,
+        minHeight: 50,
         maxHeight: 120,
     },
     input: {
@@ -828,10 +1034,20 @@ const styles = StyleSheet.create({
     attachButton: {
         padding: 8,
     },
+    plusButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+        borderWidth: 1.5, // Add border for the outlined look in screenshot
+        borderColor: '#6366F1', // Match theme
+    },
     sendButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 48,
+        height: 48, // Slightly larger for emphasis
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
     },

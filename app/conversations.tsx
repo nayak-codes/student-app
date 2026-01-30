@@ -15,6 +15,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import TabSwipeNavigator from '../src/components/TabSwipeNavigator';
 import { auth } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import {
@@ -494,35 +495,41 @@ const ConversationsScreen = () => {
                     <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             ) : (
-                <FlatList
-                    data={filteredConversations}
-                    renderItem={renderConversation}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={[styles.listContent, { paddingTop: 240 }]}
-                    showsVerticalScrollIndicator={false}
-                    onScroll={Animated.event(
-                        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                        { useNativeDriver: false }
-                    )}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={refreshing}
-                            onRefresh={handleRefresh}
-                            colors={[colors.primary]}
-                            tintColor={colors.primary}
-                            progressViewOffset={190}
-                        />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
-                            <Text style={[styles.emptyTitle, { color: colors.text }]}>No conversations yet</Text>
-                            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                                Start chatting by visiting a user's profile
-                            </Text>
-                        </View>
-                    }
-                />
+                <TabSwipeNavigator
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    homeRoute="/(tabs)"
+                >
+                    <FlatList
+                        data={filteredConversations}
+                        renderItem={renderConversation}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={[styles.listContent, { paddingTop: 240 }]}
+                        showsVerticalScrollIndicator={false}
+                        onScroll={Animated.event(
+                            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                            { useNativeDriver: false }
+                        )}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={handleRefresh}
+                                colors={[colors.primary]}
+                                tintColor={colors.primary}
+                                progressViewOffset={190}
+                            />
+                        }
+                        ListEmptyComponent={
+                            <View style={styles.emptyState}>
+                                <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
+                                <Text style={[styles.emptyTitle, { color: colors.text }]}>No conversations yet</Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                                    Start chatting by visiting a user's profile
+                                </Text>
+                            </View>
+                        }
+                    />
+                </TabSwipeNavigator>
             )}
 
             {/* Floating Action Buttons - Show based on active tab */}

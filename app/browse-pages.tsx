@@ -14,6 +14,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BidirectionalSwipeNavigator from '../src/components/BidirectionalSwipeNavigator';
 import { auth } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { Conversation, getPublicPages, subscribeToPage, unsubscribeFromPage } from '../src/services/chatService';
@@ -200,85 +201,87 @@ export default function BrowsePagesScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Browse Pages</Text>
-                <TouchableOpacity
-                    onPress={() => router.push('/create-page')}
-                    style={styles.createButton}
-                >
-                    <Ionicons name="add-circle" size={24} color={colors.primary} />
-                </TouchableOpacity>
-            </View>
-
-            {/* Search Bar */}
-            <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.background : '#F8FAFC', borderColor: colors.border }]}>
-                    <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
-                    <TextInput
-                        style={[styles.searchInput, { color: colors.text }]}
-                        placeholder="Search pages..."
-                        placeholderTextColor={colors.textSecondary}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    )}
+        <BidirectionalSwipeNavigator swipeLeftRoute="/conversations">
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+                {/* Header */}
+                <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.headerTitle, { color: colors.text }]}>Browse Pages</Text>
+                    <TouchableOpacity
+                        onPress={() => router.push('/create-page')}
+                        style={styles.createButton}
+                    >
+                        <Ionicons name="add-circle" size={24} color={colors.primary} />
+                    </TouchableOpacity>
                 </View>
-            </View>
 
-            {/* Pages List */}
-            {loading ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
-            ) : (
-                <FlatList
-                    data={filteredPages}
-                    renderItem={renderPage}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={refreshing}
-                            onRefresh={handleRefresh}
-                            colors={[colors.primary]}
-                            tintColor={colors.primary}
+                {/* Search Bar */}
+                <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                    <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.background : '#F8FAFC', borderColor: colors.border }]}>
+                        <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+                        <TextInput
+                            style={[styles.searchInput, { color: colors.text }]}
+                            placeholder="Search pages..."
+                            placeholderTextColor={colors.textSecondary}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
                         />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <Ionicons name="megaphone-outline" size={64} color={colors.textSecondary} />
-                            <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                                {searchQuery ? 'No pages found' : 'No pages yet'}
-                            </Text>
-                            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                                {searchQuery
-                                    ? 'Try a different search term'
-                                    : 'Be the first to create a broadcast page!'}
-                            </Text>
-                            {!searchQuery && (
-                                <TouchableOpacity
-                                    style={[styles.emptyCreateButton, { backgroundColor: '#8B5CF6' }]}
-                                    onPress={() => router.push('/create-page')}
-                                >
-                                    <Ionicons name="add-circle-outline" size={20} color="#FFF" />
-                                    <Text style={styles.emptyCreateButtonText}>Create Page</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    }
-                />
-            )}
-        </SafeAreaView>
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                                <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+
+                {/* Pages List */}
+                {loading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                    </View>
+                ) : (
+                    <FlatList
+                        data={filteredPages}
+                        renderItem={renderPage}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={styles.listContent}
+                        showsVerticalScrollIndicator={false}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={handleRefresh}
+                                colors={[colors.primary]}
+                                tintColor={colors.primary}
+                            />
+                        }
+                        ListEmptyComponent={
+                            <View style={styles.emptyState}>
+                                <Ionicons name="megaphone-outline" size={64} color={colors.textSecondary} />
+                                <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                                    {searchQuery ? 'No pages found' : 'No pages yet'}
+                                </Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                                    {searchQuery
+                                        ? 'Try a different search term'
+                                        : 'Be the first to create a broadcast page!'}
+                                </Text>
+                                {!searchQuery && (
+                                    <TouchableOpacity
+                                        style={[styles.emptyCreateButton, { backgroundColor: '#8B5CF6' }]}
+                                        onPress={() => router.push('/create-page')}
+                                    >
+                                        <Ionicons name="add-circle-outline" size={20} color="#FFF" />
+                                        <Text style={styles.emptyCreateButtonText}>Create Page</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        }
+                    />
+                )}
+            </SafeAreaView>
+        </BidirectionalSwipeNavigator>
     );
 }
 

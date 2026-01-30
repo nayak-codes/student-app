@@ -20,7 +20,7 @@ import { db } from '../config/firebase';
 
 export type PostCategory = 'achievement' | 'internship' | 'project' | 'notes' | 'question' | 'announcement' | 'general';
 
-export type ReactionType = 'like' | 'celebrate' | 'support' | 'insightful' | 'love' | 'funny' | 'doubt';
+export type ReactionType = 'like' | 'celebrate' | 'support' | 'insightful' | 'love' | 'funny' | 'hype';
 
 export interface Reactions {
     like: number;
@@ -29,7 +29,7 @@ export interface Reactions {
     insightful: number;
     love: number;
     funny: number;
-    doubt: number;
+    hype: number;
 }
 
 export interface Post {

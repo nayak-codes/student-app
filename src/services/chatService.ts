@@ -22,11 +22,21 @@ export interface Message {
     senderName: string;
     senderPhoto?: string;
     text: string;
-    messageType: 'text' | 'sharedPost' | 'sharedPDF';
+    messageType: 'text' | 'sharedPost' | 'sharedPDF' | 'image' | 'video' | 'file' | 'poll';
     sharedContent?: {
         contentType: 'post' | 'pdf';
         contentId: string;
         contentData: any;
+    };
+    mediaUrl?: string; // For images/files
+    poll?: {
+        question: string;
+        options: {
+            id: string;
+            text: string;
+            votes: string[]; // Array of user IDs who voted
+        }[];
+        allowMultiple: boolean;
     };
     timestamp: Timestamp;
     read: boolean;
@@ -137,22 +147,26 @@ export const getOrCreateConversation = async (
 export const sendMessage = async (
     conversationId: string,
     text: string,
-    messageType: 'text' | 'sharedPost' | 'sharedPDF' = 'text',
-    sharedContent?: { contentType: 'post' | 'pdf'; contentId: string; contentData: any }
+    senderId: string,
+    senderName: string,
+    messageType: 'text' | 'image' | 'video' | 'file' | 'sharedPost' | 'sharedPDF' | 'poll' = 'text',
+    mediaUrl?: string,
+    sharedContent?: { contentType: 'post' | 'pdf'; contentId: string; contentData: any },
+    pollData?: { question: string; options: string[]; allowMultiple: boolean }
 ): Promise<void> => {
     try {
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error('User not authenticated');
 
         // Get sender details
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const userDoc = await getDoc(doc(db, 'users', senderId));
         const userData = userDoc.data();
 
         // Prepare message data
         const messageData: any = {
             conversationId,
-            senderId: currentUser.uid,
-            senderName: userData?.name || currentUser.displayName || 'User',
+            senderId,
+            senderName,
             senderPhoto: userData?.photoURL || currentUser.photoURL || '',
             text,
             messageType,
@@ -160,9 +174,26 @@ export const sendMessage = async (
             read: false,
         };
 
+        if (mediaUrl) {
+            messageData.mediaUrl = mediaUrl;
+        }
+
         // Add shared content if present
         if (sharedContent) {
             messageData.sharedContent = sharedContent;
+        }
+
+        // Add poll data if present
+        if (messageType === 'poll' && pollData) {
+            messageData.poll = {
+                question: pollData.question,
+                options: pollData.options.map((opt, index) => ({
+                    id: `opt_${index}_${Date.now()}`,
+                    text: opt,
+                    votes: [] as string[]
+                })),
+                allowMultiple: pollData.allowMultiple
+            };
         }
 
         // Add message to messages subcollection
@@ -235,10 +266,20 @@ export const sendSharedPost = async (
     }, {});
 
     const messageText = `Shared a post: ${postData.content.substring(0, 50)}...`;
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('User not authenticated');
+
+    // Get sender details - simplistic approach, ideally fetch or pass down
+    // Since this is a utility, we assume caller has auth context or we fetch efficiently
+    // To minimize reads, let's use auth.currentUser. But strictly sendMessage needs senderId/Name
+
     await sendMessage(
         conversationId,
         messageText,
+        currentUser.uid,
+        currentUser.displayName || 'User',
         'sharedPost',
+        undefined, // No mediaUrl for shared post logic here, or maybe extract image from post?
         {
             contentType: 'post',
             contentId: postData.id,
@@ -263,10 +304,16 @@ export const sendSharedPDF = async (
     }, {});
 
     const messageText = `Shared a document: ${pdfData.title || 'Untitled'}`;
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('User not authenticated');
+
     await sendMessage(
         conversationId,
         messageText,
+        currentUser.uid,
+        currentUser.displayName || 'User',
         'sharedPDF',
+        undefined,
         {
             contentType: 'pdf',
             contentId: pdfData.id,
@@ -383,6 +430,58 @@ export const getTotalUnreadCount = async (userId: string): Promise<number> => {
     } catch (error) {
         console.error('Error getting total unread count:', error);
         return 0;
+    }
+};
+
+/**
+ * Vote on a poll
+ */
+export const voteOnPoll = async (
+    conversationId: string,
+    messageId: string,
+    optionId: string,
+    userId: string
+): Promise<void> => {
+    try {
+        const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+        const messageDoc = await getDoc(messageRef);
+
+        if (!messageDoc.exists()) {
+            throw new Error('Message not found');
+        }
+
+        const messageData = messageDoc.data() as Message;
+        if (messageData.messageType !== 'poll' || !messageData.poll) {
+            throw new Error('Message is not a poll');
+        }
+
+        const updatedOptions = messageData.poll.options.map(option => {
+            if (option.id === optionId) {
+                // Toggle vote
+                const hasVoted = option.votes.includes(userId);
+                let newVotes = option.votes;
+                if (hasVoted) {
+                    newVotes = option.votes.filter(id => id !== userId);
+                } else {
+                    newVotes = [...option.votes, userId];
+                }
+                return { ...option, votes: newVotes };
+            } else {
+                // If not allowing multiple, remove vote from other options
+                if (!messageData.poll!.allowMultiple && option.votes.includes(userId)) {
+                    return { ...option, votes: option.votes.filter(id => id !== userId) };
+                }
+                return option;
+            }
+        });
+
+        await updateDoc(messageRef, {
+            'poll.options': updatedOptions
+        });
+
+    } catch (error) {
+        console.error('Error voting on poll:', error);
+        throw error;
     }
 };
 
@@ -896,7 +995,14 @@ export const sendPageBroadcast = async (
         }
 
         // Send the broadcast message
-        await sendMessage(pageId, text);
+        // Send the broadcast message
+        await sendMessage(
+            pageId,
+            text,
+            currentUser.uid,
+            currentUser.displayName || pageData.pageName || 'Admin',
+            'text'
+        );
 
         // Notify all subscribers
         const subscribers = pageData.subscribers || [];
