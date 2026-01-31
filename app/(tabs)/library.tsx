@@ -107,10 +107,26 @@ const LibraryScreen = () => {
 
     // 1. Category Filter (Global)
     if (activeCategory !== 'All') {
-      if (activeCategory === 'Ebooks') filtered = filtered.filter(r => r.type === 'pdf');
-      else if (activeCategory === 'Notes') filtered = filtered.filter(r => r.type === 'notes');
-      else if (activeCategory === 'JEE') filtered = filtered.filter(r => r.exam === 'JEE');
-      else if (activeCategory === 'NEET') filtered = filtered.filter(r => r.exam === 'NEET');
+      const selected = activeCategory.toLowerCase();
+      filtered = filtered.filter(r => {
+        // Map Display Types to Internal Types
+        if (selected === 'ebooks') return r.type === 'pdf';
+        if (selected === 'audiobooks') return r.type === 'book'; // Assuming mapping for now
+        if (selected === 'notes') return r.type === 'notes';
+        if (selected === 'videos') return r.type === 'video';
+        if (selected === 'formula') return r.type === 'formula';
+
+        // Check Exam (Case Insensitive)
+        if (r.exam && r.exam.toLowerCase() === selected) return true;
+
+        // Check Subject (Case Insensitive)
+        if (r.subject && r.subject.toLowerCase() === selected) return true;
+
+        return false;
+      });
+
+      // If we are filtering, we probably just want a single "Results" shelf instead of categorized segments
+      return [{ title: `${activeCategory} Resources`, data: filtered }];
     }
 
     // 2. Search Filter
