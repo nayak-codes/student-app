@@ -20,7 +20,7 @@ export interface LibraryResource {
     id: string;
     title: string;
     description: string;
-    type: 'pdf' | 'notes' | 'formula' | 'video';
+    type: 'pdf' | 'notes' | 'formula' | 'video' | 'book';
     exam: 'JEE' | 'NEET' | 'EAPCET' | 'ALL';
     subject: 'Physics' | 'Chemistry' | 'Maths' | 'Biology' | 'General';
     topic: string;
@@ -51,6 +51,20 @@ export interface LibraryResource {
 
     createdAt: Date;
     updatedAt: Date;
+
+    // Marketplace Fields
+    isPremium?: boolean;
+    price?: number;
+    currency?: 'INR' | 'USD';
+    resourceType?: 'file' | 'course';
+    courseModules?: CourseModule[];
+}
+
+export interface CourseModule {
+    id: string;
+    title: string;
+    videos: { title: string; url: string; duration: number }[];
+    notes: { title: string; url: string }[];
 }
 
 export interface ResourceReview {
@@ -85,7 +99,7 @@ export const uploadResource = async (
     metadata: {
         title: string;
         description: string;
-        type: 'pdf' | 'notes' | 'formula' | 'video';
+        type: 'pdf' | 'notes' | 'formula' | 'video' | 'book';
         exam: string;
         subject: string;
         topic: string;
@@ -94,6 +108,12 @@ export const uploadResource = async (
         uploaderName: string;
         uploaderExam: string;
         customCoverUrl?: string; // Optional custom cover
+        pages?: number;
+
+        // Marketplace
+        isPremium?: boolean;
+        price?: number;
+        resourceType?: 'file' | 'course';
     },
     onProgress?: (progress: number) => void
 ): Promise<string> => {
@@ -126,6 +146,12 @@ export const uploadResource = async (
             approved: true, // Auto-approve for now
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now(),
+
+            // Marketplace defaults
+            isPremium: metadata.isPremium || false,
+            price: metadata.price || 0,
+            currency: 'INR',
+            resourceType: metadata.resourceType || 'file',
         });
 
         console.log('✅ Resource saved to Firestore:', docRef.id);
@@ -143,7 +169,7 @@ export const createResourceWithLink = async (
     metadata: {
         title: string;
         description: string;
-        type: 'pdf' | 'notes' | 'formula' | 'video';
+        type: 'pdf' | 'notes' | 'formula' | 'video' | 'book';
         exam: string;
         subject: string;
         topic: string;
@@ -214,6 +240,13 @@ export const getResourceById = async (resourceId: string): Promise<LibraryResour
                 approved: data.approved,
                 createdAt: data.createdAt?.toDate() || new Date(),
                 updatedAt: data.updatedAt?.toDate() || new Date(),
+
+                // Marketplace
+                isPremium: data.isPremium || false,
+                price: data.price || 0,
+                currency: data.currency || 'INR',
+                resourceType: data.resourceType || 'file',
+                courseModules: data.courseModules || [],
             };
         }
         return null;
@@ -265,6 +298,11 @@ export const getAllResources = async (limitCount: number = 50): Promise<LibraryR
                 approved: data.approved,
                 createdAt: data.createdAt?.toDate() || new Date(),
                 updatedAt: data.updatedAt?.toDate() || new Date(),
+
+                isPremium: data.isPremium || false,
+                price: data.price || 0,
+                currency: data.currency || 'INR',
+                resourceType: data.resourceType || 'file',
             });
         });
 

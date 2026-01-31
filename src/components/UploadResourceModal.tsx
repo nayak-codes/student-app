@@ -31,7 +31,8 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
     const [description, setDescription] = useState('');
     const [topic, setTopic] = useState('');
     const [selectedFile, setSelectedFile] = useState<any>(null);
-    const [resourceType, setResourceType] = useState<'pdf' | 'notes' | 'formula'>('pdf');
+    const [pages, setPages] = useState('');
+    const [resourceType, setResourceType] = useState<'pdf' | 'notes' | 'formula' | 'book'>('pdf');
     const [exam, setExam] = useState<'JEE' | 'NEET' | 'EAPCET' | 'ALL'>('ALL');
     const [subject, setSubject] = useState<'Physics' | 'Chemistry' | 'Maths' | 'Biology' | 'General'>('General');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -40,6 +41,10 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
 
     const [coverType, setCoverType] = useState<'pdf' | 'custom' | 'none'>('pdf');
     const [customCover, setCustomCover] = useState<any>(null);
+
+    // Marketplace State
+    const [isPremium, setIsPremium] = useState(false);
+    const [price, setPrice] = useState('');
 
     const availableTags = [
         'Formulas', 'Notes', 'Quick Revision',
@@ -109,6 +114,16 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
             return;
         }
 
+        // Cloudinary Free Tier Limit: 10MB (10,485,760 bytes)
+        const MAX_SIZE = 10 * 1024 * 1024;
+        if (selectedFile.size && selectedFile.size > MAX_SIZE) {
+            Alert.alert(
+                'File too large',
+                `Your file is ${(selectedFile.size / 1024 / 1024).toFixed(2)}MB. The limit is 10MB.\nPlease compress your PDF and try again.`
+            );
+            return;
+        }
+
         if (!user) {
             Alert.alert('Error', 'You must be logged in to upload');
             return;
@@ -136,6 +151,7 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                     title: title.trim(),
                     description: description.trim() || 'No description',
                     type: resourceType,
+                    pages: pages ? parseInt(pages) : undefined,
                     exam,
                     subject,
                     topic: topic.trim() || 'General',
@@ -144,6 +160,9 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                     uploaderName: userProfile?.name || 'Anonymous',
                     uploaderExam: userProfile?.exam || 'Student',
                     customCoverUrl: coverUrl,
+                    isPremium,
+                    price: isPremium ? parseFloat(price) : 0,
+                    resourceType: 'file', // Default to file for now
                 },
                 (progress) => {
                     setUploadProgress(progress);
@@ -156,7 +175,9 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
             setTitle('');
             setDescription('');
             setTopic('');
+            setTopic('');
             setSelectedFile(null);
+            setPages('');
             setCustomCover(null);
             setCoverType('pdf');
             setResourceType('pdf');
@@ -164,6 +185,8 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
             setSubject('General');
             setSelectedTags([]);
             setUploadProgress(0);
+            setIsPremium(false);
+            setPrice('');
 
             onUploadComplete();
             onClose();
@@ -315,6 +338,19 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                             editable={!isUploading}
                         />
 
+                        {/* Pages - Added */}
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Pages (Optional)</Text>
+                        <TextInput
+                            style={[styles.input, { color: colors.text, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
+                            placeholder="e.g., 120"
+                            placeholderTextColor={colors.textSecondary}
+                            value={pages}
+                            onChangeText={(text) => setPages(text.replace(/[^0-9]/g, ''))}
+                            keyboardType="numeric"
+                            maxLength={5}
+                            editable={!isUploading}
+                        />
+
                         {/* Resource Type */}
                         <Text style={[styles.label, { color: colors.textSecondary }]}>Type</Text>
                         <View style={styles.typeButtons}>
@@ -362,6 +398,57 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                                     Formula
                                 </Text>
                             </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.typeButton, resourceType === 'book' && styles.typeButtonActive]}
+                                onPress={() => setResourceType('book')}
+                                disabled={isUploading}
+                            >
+                                <Ionicons
+                                    name="book-outline"
+                                    size={18}
+                                    color={resourceType === 'book' ? '#FFF' : '#64748B'}
+                                />
+                                <Text style={[styles.typeButtonText, resourceType === 'book' && styles.typeButtonTextActive]}>
+                                    Book
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Marketplace / Pricing */}
+                        <View style={styles.pricingContainer}>
+                            <TouchableOpacity
+                                style={styles.premiumToggle}
+                                onPress={() => setIsPremium(!isPremium)}
+                                disabled={isUploading}
+                            >
+                                <Ionicons
+                                    name={isPremium ? "checkbox" : "square-outline"}
+                                    size={24}
+                                    color={isPremium ? "#059669" : colors.textSecondary}
+                                />
+                                <View style={{ marginLeft: 8 }}>
+                                    <Text style={[styles.label, { marginTop: 0, marginBottom: 2 }]}>Sell this Resource?</Text>
+                                    <Text style={styles.helperText}>Enable to set a price for this content</Text>
+                                </View>
+                            </TouchableOpacity>
+
+                            {isPremium && (
+                                <View style={styles.priceInputRow}>
+                                    <Text style={[styles.currencyLabel, { color: colors.text }]}>₹</Text>
+                                    <TextInput
+                                        style={[styles.input, styles.priceInput, { color: colors.text, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
+                                        placeholder="Price (e.g. 49)"
+                                        placeholderTextColor={colors.textSecondary}
+                                        value={price}
+                                        onChangeText={(text) => setPrice(text.replace(/[^0-9]/g, ''))}
+                                        keyboardType="numeric"
+                                        maxLength={5}
+                                        editable={!isUploading}
+                                    />
+                                    <Text style={[styles.helperText, { marginTop: 12, marginLeft: 8 }]}>Platform Fee: 10%</Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* Exam */}
@@ -424,8 +511,8 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                         </View>
                     </ScrollView>
                 </View>
-            </View>
-        </Modal>
+            </View >
+        </Modal >
     );
 };
 
@@ -673,6 +760,37 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         flex: 1,
     },
+    pricingContainer: {
+        marginTop: 16,
+        padding: 16,
+        backgroundColor: 'rgba(5, 150, 105, 0.05)', // Light green tint
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(5, 150, 105, 0.2)',
+    },
+    premiumToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    helperText: {
+        fontSize: 12,
+        color: '#64748B',
+    },
+    priceInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 12,
+    },
+    currencyLabel: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginRight: 8,
+    },
+    priceInput: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: 'bold',
+    }
 });
 
 export default UploadResourceModal;

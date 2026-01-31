@@ -28,6 +28,7 @@ import ClipsFeed from '../src/components/ClipsFeed';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
 import { EventCard } from '../src/components/EventCard';
+import BookCard from '../src/components/library/BookCard';
 import { db } from '../src/config/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -1266,13 +1267,33 @@ const ProfileScreen = () => {
                                         </ScrollView>
                                     </View>
                                 ) : activeTab === 'docs' ? (
-                                    getFilteredAndSortedContent().map((item: any) => (
-                                        <ResourceGridItem
-                                            key={item.id}
-                                            resource={item}
-                                            onPress={openResource}
-                                        />
-                                    ))
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', paddingHorizontal: 16 }}>
+                                        {getFilteredAndSortedContent().map((item: any, index: number) => (
+                                            <BookCard
+                                                key={item.id}
+                                                item={item}
+                                                onPressCover={(resource) => {
+                                                    // PDF/Notes -> Open Viewer
+                                                    if (!resource.isPremium && (resource.type === 'pdf' || resource.type === 'notes')) {
+                                                        setSelectedDoc(resource);
+                                                        setDocViewerVisible(true);
+                                                    } else {
+                                                        // Fallback to details (or if premium)
+                                                        router.push({ pathname: '/document-detail', params: { id: resource.id } });
+                                                    }
+                                                }}
+                                                onPressInfo={(resource) => {
+                                                    // Info -> Open Details Page
+                                                    router.push({ pathname: '/document-detail', params: { id: resource.id } });
+                                                }}
+                                                style={{
+                                                    marginBottom: 16,
+                                                    width: '30%',
+                                                    marginRight: index % 3 === 2 ? 0 : '5%'
+                                                }}
+                                            />
+                                        ))}
+                                    </View>
                                 ) : activeTab === 'videos' ? (
                                     getFilteredAndSortedContent().map((item: any) => (
                                         <VideoListItem

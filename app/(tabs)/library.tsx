@@ -1,11 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Animated,
-  FlatList,
-  Image,
-  Modal,
   RefreshControl,
   StatusBar,
   StyleSheet,
@@ -16,6 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DocumentViewer from '../../src/components/DocumentViewer';
+import BookShelf from '../../src/components/library/BookShelf';
+import CategoryPills, { CategoryType } from '../../src/components/library/CategoryPills';
+import HeroCarousel from '../../src/components/library/HeroCarousel';
 import UploadResourceModal from '../../src/components/UploadResourceModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
@@ -26,31 +26,21 @@ type ExamFilter = 'ALL' | 'JEE' | 'NEET' | 'EAPCET';
 type SubjectFilter = 'All' | 'Physics' | 'Chemistry' | 'Maths' | 'Biology';
 
 const LibraryScreen = () => {
-  // const { user } = useAuth(); // Removed duplicate
   const { colors, isDark } = useTheme();
+  const { user, userProfile } = useAuth();
+
+  // State
   const [resources, setResources] = useState<LibraryResource[]>([]);
-  const [filteredResources, setFilteredResources] = useState<LibraryResource[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Tabs
-  const [activeTab, setActiveTab] = useState<'home' | 'suggested' | 'network'>('home');
-
-  // Filters
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [examFilter, setExamFilter] = useState<ExamFilter>('ALL');
-  const [subjectFilter, setSubjectFilter] = useState<SubjectFilter>('All');
-  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<CategoryType>('All');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  // Document Viewer State
+  // Viewer State
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedResource, setSelectedResource] = useState<LibraryResource | null>(null);
-
-  // Get User Profile for Network/Suggested Logic
-  const { user, userProfile } = useAuth();
 
   useFocusEffect(
     useCallback(() => {
@@ -58,15 +48,11 @@ const LibraryScreen = () => {
     }, [])
   );
 
-  // Load resources
   const loadResources = async () => {
     try {
-      // Don't set loading on focus refresh to avoid flicker, only on initial mount if needed
       if (resources.length === 0) setIsLoading(true);
-
       const data = await getAllResources();
       setResources(data);
-      applyFilters(data, activeTab, activeFilter, examFilter, subjectFilter, searchQuery);
     } catch (error) {
       console.error('Error loading resources:', error);
     } finally {
@@ -74,410 +60,240 @@ const LibraryScreen = () => {
     }
   };
 
-  // Refresh
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await loadResources();
     setIsRefreshing(false);
   };
 
-  // Apply filters
-  const applyFilters = (
-    data: LibraryResource[],
-    tab: 'home' | 'suggested' | 'network',
-    type: FilterType,
-    exam: ExamFilter,
-    subject: SubjectFilter,
-    search: string
-  ) => {
-    let filtered = data;
 
-    // 1. Tab Logic
-    if (tab === 'suggested') {
-      // Filter by exam matching user profile if available, otherwise just show highly rated/viewed
-      if (userProfile?.exam) {
-        filtered = filtered.filter(r => r.exam === userProfile.exam || r.exam === 'ALL');
-      }
-      // Sort by views/downloads for "Suggested" feel
-      filtered.sort((a, b) => (b.views || 0) - (a.views || 0));
-    } else if (tab === 'network') {
-      // Filter by following
-      const following = userProfile?.following || [];
-      if (following.length > 0) {
-        filtered = filtered.filter(r => following.includes(r.uploadedBy));
-      } else {
-        // If following no one, show empty or maybe highly rated as fallback? 
-        // Better to show empty state with "Follow people to see their resources"
-        filtered = [];
-      }
-    } else {
-      // Home - Default sorting (newest first usually)
-      // Ensure data is sorted by createdAt if not already from backend
-      // filtered.sort((a,b) => b.createdAt - a.createdAt); // Assuming date objects or timestamps
-    }
-
-    // 2. Filter by type
-    if (type !== 'all') {
-      filtered = filtered.filter(r => r.type === type);
-    }
-
-    // 3. Filter by exam
-    if (exam !== 'ALL') {
-      filtered = filtered.filter(r => r.exam === exam || r.exam === 'ALL');
-    }
-
-    // 4. Filter by subject
-    if (subject !== 'All') {
-      filtered = filtered.filter(r => r.subject === subject);
-    }
-
-    // 5. Search
-    if (search) {
-      filtered = filtered.filter(r =>
-        r.title.toLowerCase().includes(search.toLowerCase()) ||
-        r.description.toLowerCase().includes(search.toLowerCase()) ||
-        r.topic.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    setFilteredResources(filtered);
+  const handlePressInfo = (item: LibraryResource) => {
+    router.push({
+      pathname: '/document-detail',
+      params: { id: item.id }
+    });
   };
 
-  const handleQuickView = async (item: LibraryResource) => {
-    if (item.type === 'pdf') {
-      setSelectedResource(item);
-      setViewerVisible(true);
+  const handlePressCover = async (item: LibraryResource) => {
+    // If premium, go to details page to buy/unlock
+    if (item.isPremium) {
+      handlePressInfo(item);
+      return;
+    }
+
+    // If free and PDF, open viewer directly
+    if (item.type === 'pdf' || item.type === 'notes') {
       try {
         await incrementViews(item.id);
-      } catch (e) {
-        console.error("View count error", e);
+        setSelectedResource(item);
+        setViewerVisible(true);
+      } catch (error) {
+        console.error("Error opening pdf:", error);
       }
     } else {
-      router.push({ pathname: '/document-detail', params: { id: item.id } });
+      handlePressInfo(item);
     }
   };
 
-  useEffect(() => {
-    loadResources();
-  }, []);
+  // --- Data processing for Shelves & Hero ---
+  const getHeroData = () => {
+    // Simple logic: Highest views or rating
+    if (resources.length === 0) return [];
+    return [...resources].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5);
+  };
 
-  useEffect(() => {
-    applyFilters(resources, activeTab, activeFilter, examFilter, subjectFilter, searchQuery);
-  }, [activeTab, activeFilter, examFilter, subjectFilter, searchQuery, resources]);
+  const getShelves = () => {
+    let filtered = resources;
 
-  // Helper to get thumbnail URL
-  const getThumbnailUrl = (item: LibraryResource) => {
-    // 1. Custom Cover selected during upload
-    if (item.customCoverUrl) return item.customCoverUrl;
-
-    // 2. Explicitly "No Cover" selected (empty string)
-    if (item.customCoverUrl === '') return null;
-
-    // 3. Auto-generate from PDF (Default)
-    if (item.fileUrl && item.fileUrl.includes('cloudinary.com') && item.fileUrl.endsWith('.pdf')) {
-      return item.fileUrl.replace('.pdf', '.jpg');
+    // 1. Category Filter (Global)
+    if (activeCategory !== 'All') {
+      if (activeCategory === 'Ebooks') filtered = filtered.filter(r => r.type === 'pdf');
+      else if (activeCategory === 'Notes') filtered = filtered.filter(r => r.type === 'notes');
+      else if (activeCategory === 'JEE') filtered = filtered.filter(r => r.exam === 'JEE');
+      else if (activeCategory === 'NEET') filtered = filtered.filter(r => r.exam === 'NEET');
     }
 
-    return null;
+    // 2. Search Filter
+    if (searchQuery) {
+      filtered = filtered.filter(r =>
+        r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.description.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      return [{ title: `Results for "${searchQuery}"`, data: filtered }];
+    }
+
+    const shelves = [];
+
+    // ---------------------------------------------------------
+    // SMART SEGMENTATION (The "Store" Feel)
+    // ---------------------------------------------------------
+
+    // 1. Engineering / B.Tech (Group by Subjects or Tag if available, or just explicit "B.Tech" exam/stream)
+    // Since we don't have explicit "Stream" field yet, we infer from 'exam' or 'subject' or just generic mixing for now.
+    // Assuming we will add 'stream' later. For now, let's group by "Exam" which acts like Stream.
+
+    // Shelf: Competitive Exams (JEE/NEET)
+    const competitive = filtered.filter(r => ['JEE', 'NEET', 'EAPCET'].includes(r.exam));
+    if (competitive.length > 0) shelves.push({ title: "Competitive Exams (JEE/NEET)", data: competitive });
+
+    // Shelf: Physics & Maths (Subject based - useful for both Inter & B.Tech often)
+    const physics = filtered.filter(r => r.subject === 'Physics');
+    if (physics.length > 0) shelves.push({ title: "Physics Resources", data: physics });
+
+    const maths = filtered.filter(r => r.subject === 'Maths');
+    if (maths.length > 0) shelves.push({ title: "Mathematics", data: maths });
+
+    // Shelf: Computer Science (If subject exists, or keywords)
+    // Placeholder logic until explicit tag
+    const cs = filtered.filter(r => r.title.toLowerCase().includes('python') || r.title.toLowerCase().includes('java') || r.title.toLowerCase().includes('c++'));
+    if (cs.length > 0) shelves.push({ title: "Computer Science & Coding", data: cs });
+
+    // Shelf: Handy Notes (Type = Notes) - Always popular
+    const notes = filtered.filter(r => r.type === 'notes');
+    if (notes.length > 0) shelves.push({ title: "Handwritten Notes", data: notes });
+
+    // Shelf: Network
+    const following = userProfile?.following || [];
+    const network = filtered.filter(r => following.includes(r.uploadedBy));
+    if (network.length > 0) shelves.push({ title: "From Your Network", data: network });
+
+    return shelves;
   };
 
-  const renderResource = ({ item }: { item: LibraryResource }) => {
-    // const thumbnailUrl = getThumbnailUrl(item);
-    // const [isExpanded, setIsExpanded] = useState(false); // Can't use hook in render item easily directly like this without component, 
-    // but FlatList renderItem isn't a hook component.
-    // Better to make a sub-component for the card if we want state.
-    // OR just use a simple hack for now: Show description only if length < X, or show truncated version. 
-    // User wants "...more", usually implying interactability, but doing that on a card in a grid might be tricky if it changes height.
-    // Let's implement a clean "Component" for the card to handle state safely.
-    return <ResourceCard item={item} />;
-  };
+  const shelvesData = getShelves();
+  const heroData = getHeroData();
 
-  // Create a separate component to safely use state
-  const ResourceCard = ({ item }: { item: LibraryResource }) => {
-    const thumbnailUrl = getThumbnailUrl(item);
-
-    return (
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        {/* Cover Image Area - Quick View */}
-        <TouchableOpacity
-          style={[styles.cardCover, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
-          onPress={() => handleQuickView(item)}
-          activeOpacity={0.8}
-        >
-          {thumbnailUrl ? (
-            <Image
-              source={{ uri: thumbnailUrl }}
-              style={styles.coverImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.placeholderCover, { backgroundColor: item.type === 'pdf' ? (isDark ? 'rgba(147, 51, 234, 0.2)' : '#F3E8FF') : (isDark ? 'rgba(2, 132, 199, 0.2)' : '#E0F2FE') }]}>
-              <Ionicons
-                name={item.type === 'pdf' ? 'document-text' : 'create'}
-                size={32}
-                color={item.type === 'pdf' ? '#9333EA' : '#0284C7'}
-              />
-            </View>
-          )}
-
-          {/* Badges Overlay */}
-          <View style={styles.badgeOverlay}>
-            <View style={[styles.examBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255, 255, 255, 0.9)' }]}>
-              <Text style={[styles.examBadgeText, { color: isDark ? '#FFF' : '#0F172A' }]}>{item.exam}</Text>
-            </View>
-            {item.type === 'pdf' && (
-              <View style={styles.typeBadgeOverlay}>
-                <Text style={styles.typeText}>PDF</Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-
-        {/* Content - Details */}
-        <TouchableOpacity
-          style={styles.cardContent}
-          onPress={() => router.push({ pathname: '/document-detail', params: { id: item.id } })}
-          activeOpacity={0.5}
-        >
-          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-
-          {/* Description */}
-          {item.description ? (
-            <Text style={[styles.cardDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-              {item.description}
-            </Text>
-          ) : null}
-
-          <View style={styles.authorRow}>
-            <Ionicons name="person-circle-outline" size={14} color={colors.textSecondary} />
-            <Text style={[styles.authorName, { color: colors.textSecondary }]} numberOfLines={1}>{item.uploaderName || 'Unknown'}</Text>
-          </View>
-
-          <View style={[styles.statsContainer, { borderTopColor: colors.border }]}>
-            {/* Rating */}
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={12} color="#EAB308" />
-              <Text style={[styles.ratingValue, { color: colors.text }]}>{item.rating !== undefined ? `${item.rating.toFixed(1)}/5` : '0.0/5'}</Text>
-              {item.ratingCount ? <Text style={[styles.ratingCount, { color: colors.textSecondary }]}>({item.ratingCount})</Text> : null}
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={styles.viewStat}>
-                <Ionicons name="heart-outline" size={12} color="#EF4444" />
-                <Text style={[styles.statText, { color: colors.textSecondary }]}>{item.likes || 0}</Text>
-              </View>
-              <View style={styles.viewStat}>
-                <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
-                <Text style={[styles.statText, { color: colors.textSecondary }]}>{item.views}</Text>
-              </View>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
+  // Scroll Animation
   const scrollY = useRef(new Animated.Value(0)).current;
-  const diffClamp = Animated.diffClamp(scrollY, 0, 120); // Header height approx 120
-  const translateY = diffClamp.interpolate({
-    inputRange: [0, 120],
-    outputRange: [0, -120],
+
+  // Header Animation (Fade out title?)
+  const headerTranslateY = scrollY.interpolate({
+    inputRange: [0, 50],
+    outputRange: [0, -50],
+    extrapolate: 'clamp'
   });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Collapsible Header */}
-      <Animated.View style={[
-        styles.header,
-        {
-          backgroundColor: colors.background,
-          borderBottomColor: isDark ? '#333' : colors.border,
-          transform: [{ translateY }],
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1000,
-          elevation: 4,
-        }
-      ]}>
-        <SafeAreaView edges={['top']}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10 }}>
-            <View>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>Library</Text>
-              <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Study Resources</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.uploadButtonIcon, { backgroundColor: colors.primary }]}
-              onPress={() => setShowUploadModal(true)}
-            >
-              <Ionicons name="add" size={24} color="#FFF" />
-            </TouchableOpacity>
+      {/* Header Area */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }}>
+        <View style={[styles.header, { backgroundColor: colors.background }]}>
+          {/* Search Bar - Professional Pill Style */}
+          <View style={[
+            styles.searchBar,
+            {
+              backgroundColor: isDark ? '#1E293B' : '#FFF',
+              borderColor: isDark ? '#334155' : '#E2E8F0',
+              borderWidth: 1,
+              // Shadow for light mode
+              shadowColor: isDark ? '#000' : '#64748B',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: isDark ? 0 : 0.08,
+              shadowRadius: 8,
+              elevation: isDark ? 0 : 2,
+              marginRight: 0, // Removed margin as profile button is gone
+            }
+          ]}>
+            <Ionicons name="search" size={20} color={isDark ? '#94A3B8' : '#64748B'} style={{ marginLeft: 16 }} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Search Books, Notes..."
+              placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {/* Clear Button */}
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 8 }}>
+                <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
           </View>
-        </SafeAreaView>
-      </Animated.View>
+        </View>
 
-      {/* Resources List */}
-      <FlatList
-        data={filteredResources}
-        renderItem={renderResource}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.list, { paddingTop: 120 }]}
+        {/* Search Suggestions */}
+        {searchQuery.length > 0 && (
+          <View style={[styles.suggestionsContainer, { backgroundColor: isDark ? '#1E293B' : '#FFF' }]}>
+            {resources
+              .filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
+              .slice(0, 5)
+              .map(r => (
+                <TouchableOpacity
+                  key={r.id}
+                  style={[styles.suggestionItem, { borderBottomColor: isDark ? '#334155' : '#F1F5F9' }]}
+                  onPress={() => handlePressInfo(r)}
+                >
+                  <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+                  <Text style={[styles.suggestionText, { color: colors.text }]} numberOfLines={1}>{r.title}</Text>
+                </TouchableOpacity>
+              ))
+            }
+          </View>
+        )}
+
+        {/* Category Pills */}
+        <CategoryPills
+          activeCategory={activeCategory}
+          onSelectCategory={setActiveCategory}
+        />
+      </SafeAreaView>
+
+      {/* Main Content */}
+      <Animated.ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
-        numColumns={2}
-        key={2}
-        columnWrapperStyle={{ justifyContent: 'space-between' }}
+        scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
-        ListHeaderComponent={
-          <>
-            {/* Search & Filter */}
-            <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}>
-              <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder="Search resources..."
-                placeholderTextColor={colors.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              <TouchableOpacity style={styles.filterButtonIcon} onPress={() => setShowFilterModal(true)}>
-                <Ionicons name="filter" size={20} color={(activeFilter !== 'all' || examFilter !== 'ALL') ? colors.primary : colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Tabs */}
-            <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity
-                style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
-                onPress={() => setActiveTab('home')}
-              >
-                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.primary, fontWeight: '700' }]}>Home</Text>
-                {activeTab === 'home' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabItem, activeTab === 'suggested' && styles.tabItemActive]}
-                onPress={() => setActiveTab('suggested')}
-              >
-                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'suggested' && { color: colors.primary, fontWeight: '700' }]}>Suggested</Text>
-                {activeTab === 'suggested' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabItem, activeTab === 'network' && styles.tabItemActive]}
-                onPress={() => setActiveTab('network')}
-              >
-                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'network' && { color: colors.primary, fontWeight: '700' }]}>Your Network</Text>
-                {activeTab === 'network' && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
-              </TouchableOpacity>
-            </View>
-          </>
-        }
         refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-            progressViewOffset={120}
-          />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="folder-open-outline" size={64} color={colors.textSecondary} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No resources found</Text>
-            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              {searchQuery ? 'Try different keywords' : 'Be the first to upload!'}
-            </Text>
-          </View>
-        }
-      />
-
-      {/* Filter Modal */}
-      <Modal
-        visible={showFilterModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowFilterModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Filter Resources</Text>
-              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[styles.filterLabel, { color: colors.text }]}>Resource Type</Text>
-            <View style={styles.filterOptions}>
-              {(['all', 'pdf', 'notes', 'formula'] as FilterType[]).map((filter) => (
-                <TouchableOpacity
-                  key={filter}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                    activeFilter === filter && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
-                  ]}
-                  onPress={() => setActiveFilter(filter)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    { color: colors.textSecondary },
-                    activeFilter === filter && { color: colors.primary, fontWeight: '600' }
-                  ]}>
-                    {filter === 'all' ? 'All' : filter.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.filterLabel, { color: colors.text }]}>Exam</Text>
-            <View style={styles.filterOptions}>
-              {(['ALL', 'JEE', 'NEET', 'EAPCET'] as ExamFilter[]).map((exam) => (
-                <TouchableOpacity
-                  key={exam}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                    examFilter === exam && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
-                  ]}
-                  onPress={() => setExamFilter(exam)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    { color: colors.textSecondary },
-                    examFilter === exam && { color: colors.primary, fontWeight: '600' }
-                  ]}>
-                    {exam}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.applyButton, { backgroundColor: colors.primary }]}
-              onPress={() => setShowFilterModal(false)}
-            >
-              <Text style={styles.applyButtonText}>Apply Filters</Text>
-            </TouchableOpacity>
+        {!searchQuery && <HeroCarousel data={heroData} onItemPress={handlePressInfo} />}
+        {shelvesData.length > 0 ? (
+          shelvesData.map((shelf, index) => (
+            <BookShelf
+              key={index}
+              title={shelf.title}
+              data={shelf.data}
+              onPressCover={handlePressCover}
+              onPressInfo={handlePressInfo}
+              onViewAll={() => {
+                // Handle view all (navigate to full list filtered)
+                setActiveCategory('All');
+                setSearchQuery(shelf.title.replace("Results for ", "").replace('"', '').replace('"', '')); // Hacky for now
+                // Ideally, navigate to a 'ShelfDetail' screen
+              }}
+            />
+          ))
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="library-outline" size={64} color={colors.textSecondary} />
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No resources found here.</Text>
           </View>
-        </View>
-      </Modal>
+        )}
+      </Animated.ScrollView>
 
-      {/* Upload Modal */}
+      {/* Floating Upload Button - Bottom Right */}
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: colors.primary }]}
+        onPress={() => setShowUploadModal(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={32} color="#FFF" />
+      </TouchableOpacity>
+
       <UploadResourceModal
         visible={showUploadModal}
         onClose={() => setShowUploadModal(false)}
         onUploadComplete={loadResources}
       />
 
-      {/* Document Viewer */}
       {selectedResource && (
         <DocumentViewer
           visible={viewerVisible}
@@ -487,10 +303,7 @@ const LibraryScreen = () => {
           documentType={selectedResource.type}
         />
       )}
-
-      {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
-      <View style={styles.topBlackCard} />
-    </View >
+    </View>
   );
 };
 
@@ -503,11 +316,76 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 0,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 50,
+    borderRadius: 25, // Fully rounded
+    marginRight: 16,
+    paddingHorizontal: 4,
+    // Add subtle shadow/border for "professional" depth
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 8,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  profilePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInitials: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    marginTop: 16,
   },
   headerTitle: {
     fontSize: 24,
@@ -549,12 +427,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 14,
-    color: '#1E293B',
   },
   filterButtonIcon: {
     padding: 4,
@@ -681,23 +553,36 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
   },
-  emptyState: {
+
+  suggestionsContainer: {
+    marginHorizontal: 16,
+    borderRadius: 12,
+    marginTop: -8,
+    marginBottom: 12,
+    padding: 8,
+    zIndex: 10,
+    elevation: 5,
+    // Shadow will be handled inline or needs theme awareness here if possible, 
+    // but simpler to handle background via style array in render or just use standard light/dark hexes here if passed.
+    // Since StyleSheet is static, we'll keep layout here and move colors to the render method or dynamic style.
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    gap: 8,
+    borderBottomWidth: 1,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#64748B',
-    marginTop: 16,
-  },
-  emptySubtitle: {
+  suggestionText: {
     fontSize: 14,
-    color: '#94A3B8',
-    marginTop: 8,
-    textAlign: 'center',
+    fontWeight: '500',
   },
+
   // Modal Styles
   modalOverlay: {
     flex: 1,
