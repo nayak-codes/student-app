@@ -43,7 +43,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     const [downloading, setDownloading] = useState(false);
 
     const isImage = documentType.includes('image');
-    const isPDF = documentType.includes('pdf');
+    const isPDF = documentType.includes('pdf') || documentUrl.toLowerCase().endsWith('.pdf') || documentUrl.toLowerCase().includes('.pdf');
 
     const handleSaveToGallery = async () => {
         if (!isImage) {

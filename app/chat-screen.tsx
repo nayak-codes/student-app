@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ChatAttachmentMenu, { AttachmentType } from '../src/components/ChatAttachmentMenu';
+import DocumentViewer from '../src/components/DocumentViewer';
 import { MediaPreviewModalProps } from '../src/components/MediaPreviewModal';
 import PollCreator from '../src/components/PollCreator';
 import PollMessage from '../src/components/PollMessage';
@@ -35,6 +36,7 @@ import {
     subscribeToMessages,
     voteOnPoll
 } from '../src/services/chatService';
+import { incrementViews, LibraryResource } from '../src/services/libraryService';
 import { pickDocument, pickImage, takePhoto, uploadMedia } from '../src/services/mediaService';
 import { getPostById } from '../src/services/postsService';
 
@@ -186,6 +188,20 @@ const ChatScreen = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
+
+    // Document Viewer State
+    const [viewerVisible, setViewerVisible] = useState(false);
+    const [selectedResource, setSelectedResource] = useState<LibraryResource | null>(null);
+
+    const handleOpenDocument = async (resource: LibraryResource) => {
+        try {
+            if (resource.id) await incrementViews(resource.id);
+            setSelectedResource(resource);
+            setViewerVisible(true);
+        } catch (error) {
+            console.error("Error opening document:", error);
+        }
+    };
     const [sending, setSending] = useState(false);
     const [postModalVisible, setPostModalVisible] = useState(false);
     const [selectedPost, setSelectedPost] = useState<any>(null);
@@ -424,7 +440,7 @@ const ChatScreen = () => {
                     ) : (
                         /* Standard Bubble or Shared Content */
                         isSharedContent ? (
-                            <TouchableOpacity
+                            <View
                                 style={[
                                     styles.sharedContentCard,
                                     isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard,
@@ -437,65 +453,126 @@ const ChatScreen = () => {
                                         borderRadius: isClip ? 20 : 12,
                                     }
                                 ]}
-                                onPress={() => {
-                                    if (item.messageType === 'sharedPost' && item.sharedContent?.contentData) {
-                                        const data = item.sharedContent.contentData;
-                                        if (data.type === 'clip') {
-                                            router.push({
-                                                pathname: '/screens/shorts-player' as any,
-                                                params: { shortId: data.id },
-                                            });
-                                        } else if (isClip && data.videoLink) {
-                                            router.push({
-                                                pathname: '/screens/video-player' as any,
-                                                params: {
-                                                    videoUri: data.videoLink,
-                                                    postId: data.id,
-                                                    title: data.content || 'Untitled Video',
-                                                    description: data.content || '',
-                                                    authorName: data.userName,
-                                                    authorId: data.userId,
-                                                    likes: data.likes,
-                                                    views: data.viewCount || 0,
-                                                    date: data.createdAt ? new Date(data.createdAt).toISOString() : '',
-                                                    thumbnail: data.thumbnailUrl || data.imageUrl || data.userProfilePhoto,
-                                                    authorImage: data.userProfilePhoto
-                                                },
-                                            });
-                                        } else {
-                                            setSelectedPost(data);
-                                            setPostModalVisible(true);
-                                        }
-                                    }
-                                }}
-                                activeOpacity={0.7}
                             >
-                                {/* Shared Content Interior (Same as before) */}
-                                {item.messageType !== 'sharedPost' && (
-                                    <View style={[styles.sharedContentHeader, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC', borderBottomColor: colors.border }]}>
-                                        <Ionicons name={'document'} size={20} color={colors.primary} />
-                                        <Text style={[styles.sharedContentLabel, { color: colors.primary }]}>{'Shared Document'}</Text>
-                                    </View>
-                                )}
                                 {item.messageType === 'sharedPost' && item.sharedContent?.contentData ? (
-                                    isClip ? (
-                                        <SharedPostCard itemData={item.sharedContent.contentData} onPress={() => { /* duplicate onPress? */ }} />
-                                    ) : (
-                                        <StandardSharedPostCard itemData={item.sharedContent.contentData} />
-                                    )
-                                ) : item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
-                                    <View style={styles.sharedPDFContent}>
-                                        <Ionicons name="document" size={32} color={colors.primary} />
-                                        <Text style={[styles.sharedPDFTitle, { color: colors.text }]}>
-                                            {item.sharedContent?.contentData?.title || 'Untitled Document'}
+                                    <TouchableOpacity
+                                        activeOpacity={0.9}
+                                        onPress={() => {
+                                            const data = item.sharedContent!.contentData;
+                                            if (data.type === 'clip') {
+                                                router.push({
+                                                    pathname: '/screens/shorts-player' as any,
+                                                    params: { shortId: data.id },
+                                                });
+                                            } else if (isClip && data.videoLink) {
+                                                router.push({
+                                                    pathname: '/screens/video-player' as any,
+                                                    params: {
+                                                        videoUri: data.videoLink,
+                                                        postId: data.id,
+                                                        title: data.content || 'Untitled Video',
+                                                        description: data.content || '',
+                                                        authorName: data.userName,
+                                                        authorId: data.userId,
+                                                        likes: data.likes,
+                                                        views: data.viewCount || 0,
+                                                        date: data.createdAt ? new Date(data.createdAt).toISOString() : '',
+                                                        thumbnail: data.thumbnailUrl || data.imageUrl || data.userProfilePhoto,
+                                                        authorImage: data.userProfilePhoto
+                                                    },
+                                                });
+                                            } else {
+                                                setSelectedPost(data);
+                                                setPostModalVisible(true);
+                                            }
+                                        }}
+                                    >
+                                        {isClip ? (
+                                            <SharedPostCard itemData={item.sharedContent.contentData} onPress={() => { }} />
+                                        ) : (
+                                            <StandardSharedPostCard itemData={item.sharedContent.contentData} />
+                                        )}
+                                        <Text style={[styles.sharedContentTime, { color: isClip ? '#FFF' : colors.textSecondary }]}>
+                                            {formatMessageTime(item.timestamp)}
                                         </Text>
-                                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                ) : item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
+                                    /* Unified Library Book Card (Always Card View) */
+                                    <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#1E293B' : '#FFF', overflow: 'hidden', borderRadius: 12 }}>
+                                        {/* Cover - Opens Viewer */}
+                                        <TouchableOpacity
+                                            activeOpacity={0.8}
+                                            onPress={() => handleOpenDocument(item.sharedContent!.contentData)}
+                                            style={{ width: 90, height: 120, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}
+                                        >
+                                            {item.sharedContent!.contentData.coverImage ? (
+                                                <Image
+                                                    source={{ uri: item.sharedContent!.contentData.coverImage }}
+                                                    style={{ width: '100%', height: '100%' }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : (
+                                                <View style={{ width: '100%', height: '100%' }}>
+                                                    {item.sharedContent!.contentData.fileUrl &&
+                                                        item.sharedContent!.contentData.fileUrl.includes('cloudinary') &&
+                                                        item.sharedContent!.contentData.fileUrl.toLowerCase().endsWith('.pdf') && (
+                                                            <Image
+                                                                source={{ uri: item.sharedContent!.contentData.fileUrl.replace(/\.pdf$/i, '.jpg') }}
+                                                                style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 2 }}
+                                                                resizeMode="cover"
+                                                            />
+                                                        )}
+
+                                                    <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: 4, zIndex: 1 }}>
+                                                        <LinearGradient
+                                                            colors={['#4F46E5', '#312E81']}
+                                                            style={StyleSheet.absoluteFill}
+                                                        />
+                                                        <Ionicons name="book" size={32} color="#FFF" style={{ opacity: 0.9 }} />
+                                                        <Text style={{ color: '#FFF', fontSize: 8, marginTop: 4, textAlign: 'center', fontWeight: '700' }} numberOfLines={2}>
+                                                            {item.sharedContent!.contentData.type === 'notes' ? 'NOTES' : 'PDF'}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+
+                                        {/* Details - Opens Detail Page */}
+                                        <TouchableOpacity
+                                            activeOpacity={0.7}
+                                            onPress={() => router.push({ pathname: '/document-detail', params: { id: item.sharedContent!.contentData.id } })}
+                                            style={{ flex: 1, padding: 12, justifyContent: 'center' }}
+                                        >
+                                            <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4 }} numberOfLines={2}>
+                                                {item.sharedContent!.contentData.title || 'Untitled Book'}
+                                            </Text>
+                                            <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }} numberOfLines={1}>
+                                                {item.sharedContent!.contentData.author || 'Unknown Author'}
+                                            </Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                {item.sharedContent!.contentData.rating ? (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#B45309' }}>
+                                                            {item.sharedContent!.contentData.rating}
+                                                        </Text>
+                                                        <Ionicons name="star" size={10} color="#B45309" style={{ marginLeft: 2 }} />
+                                                    </View>
+                                                ) : (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>New</Text>
+                                                    </View>
+                                                )}
+                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                    <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+                                                    <Text style={{ fontSize: 10, color: colors.textSecondary, marginLeft: 2 }}>
+                                                        {item.sharedContent!.contentData.views || '0'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
                                     </View>
                                 ) : null}
-                                <Text style={[styles.sharedContentTime, { color: isClip ? '#FFF' : colors.textSecondary }]}>
-                                    {formatMessageTime(item.timestamp)}
-                                </Text>
-                            </TouchableOpacity>
+                            </View>
                         ) : (
                             /* Regular Text / Image / File Bubble */
                             <View style={[
@@ -699,6 +776,16 @@ const ChatScreen = () => {
                 onClose={() => setPostModalVisible(false)}
                 postData={selectedPost}
             />
+
+            {selectedResource && (
+                <DocumentViewer
+                    visible={viewerVisible}
+                    onClose={() => setViewerVisible(false)}
+                    documentUrl={selectedResource.fileUrl}
+                    documentName={selectedResource.title}
+                    documentType={selectedResource.type}
+                />
+            )}
         </SafeAreaView>
     );
 };

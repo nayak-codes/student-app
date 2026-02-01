@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -21,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ChatAttachmentMenu, { AttachmentType } from '../src/components/ChatAttachmentMenu';
+import DocumentViewer from '../src/components/DocumentViewer';
 import GroupOptionsSheet from '../src/components/GroupOptionsSheet';
 import ImportantMembersCard from '../src/components/ImportantMembersCard';
 import MediaPreviewModal, { AttachmentPreview } from '../src/components/MediaPreviewModal';
@@ -37,6 +39,7 @@ import {
     subscribeToMessages,
     voteOnPoll
 } from '../src/services/chatService';
+import { incrementViews, LibraryResource } from '../src/services/libraryService';
 import { pickDocument, pickImage, takePhoto, uploadMedia } from '../src/services/mediaService';
 
 
@@ -145,6 +148,20 @@ export default function GroupChatScreen() {
             unsubscribeGroup();
         };
     }, [conversationId]);
+
+    // Document Viewer State
+    const [viewerVisible, setViewerVisible] = useState(false);
+    const [selectedResource, setSelectedResource] = useState<LibraryResource | null>(null);
+
+    const handleOpenDocument = async (resource: LibraryResource) => {
+        try {
+            if (resource.id) await incrementViews(resource.id);
+            setSelectedResource(resource);
+            setViewerVisible(true);
+        } catch (error) {
+            console.error("Error opening document:", error);
+        }
+    };
 
     const handleAttachmentSelect = async (type: AttachmentType) => {
         setShowAttachmentMenu(false);
@@ -398,7 +415,79 @@ export default function GroupChatScreen() {
 
                                 {/* Shared Content Placeholders (Legacy) */}
                                 {item.messageType === 'sharedPost' && <Text style={{ color: '#FFF', fontStyle: 'italic' }}>[Shared Post]</Text>}
-                                {item.messageType === 'sharedPDF' && <Text style={{ color: '#FFF', fontStyle: 'italic' }}>[Shared PDF]</Text>}
+                                {item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
+                                    <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#1E293B' : '#FFF', overflow: 'hidden', borderRadius: 12, marginTop: 4 }}>
+                                        <TouchableOpacity
+                                            activeOpacity={0.8}
+                                            onPress={() => handleOpenDocument(item.sharedContent!.contentData)}
+                                            style={{ width: 80, height: 110, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}
+                                        >
+                                            {item.sharedContent!.contentData.coverImage ? (
+                                                <Image
+                                                    source={{ uri: item.sharedContent!.contentData.coverImage }}
+                                                    style={{ width: '100%', height: '100%' }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : (
+                                                <View style={{ width: '100%', height: '100%' }}>
+                                                    {item.sharedContent!.contentData.fileUrl &&
+                                                        item.sharedContent!.contentData.fileUrl.includes('cloudinary') &&
+                                                        item.sharedContent!.contentData.fileUrl.toLowerCase().endsWith('.pdf') && (
+                                                            <Image
+                                                                source={{ uri: item.sharedContent!.contentData.fileUrl.replace(/\.pdf$/i, '.jpg') }}
+                                                                style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 2 }}
+                                                                resizeMode="cover"
+                                                            />
+                                                        )}
+
+                                                    <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: 4, zIndex: 1 }}>
+                                                        <LinearGradient
+                                                            colors={['#4F46E5', '#312E81']}
+                                                            style={StyleSheet.absoluteFill}
+                                                        />
+                                                        <Ionicons name="book" size={24} color="#FFF" style={{ opacity: 0.9 }} />
+                                                        <Text style={{ color: '#FFF', fontSize: 8, marginTop: 4, textAlign: 'center', fontWeight: '700' }} numberOfLines={2}>
+                                                            {item.sharedContent!.contentData.type === 'notes' ? 'NOTES' : 'PDF'}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            activeOpacity={0.7}
+                                            onPress={() => router.push({ pathname: '/document-detail', params: { id: item.sharedContent!.contentData.id } })}
+                                            style={{ flex: 1, padding: 10, justifyContent: 'center', minWidth: 140 }}
+                                        >
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4 }} numberOfLines={2}>
+                                                {item.sharedContent!.contentData.title || 'Untitled Book'}
+                                            </Text>
+                                            <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 6 }} numberOfLines={1}>
+                                                {item.sharedContent!.contentData.author || 'Unknown Author'}
+                                            </Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                {item.sharedContent!.contentData.rating ? (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#B45309' }}>
+                                                            {item.sharedContent!.contentData.rating}
+                                                        </Text>
+                                                        <Ionicons name="star" size={10} color="#B45309" style={{ marginLeft: 2 }} />
+                                                    </View>
+                                                ) : (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
+                                                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>New</Text>
+                                                    </View>
+                                                )}
+                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                    <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+                                                    <Text style={{ fontSize: 10, color: colors.textSecondary, marginLeft: 2 }}>
+                                                        {item.sharedContent!.contentData.views || '0'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : null}
                             </View>
                         )}
 
@@ -532,11 +621,35 @@ export default function GroupChatScreen() {
                         />
                     ) : (
                         <TouchableOpacity
-                            style={[styles.showFiltersButton, { backgroundColor: 'rgba(30, 41, 59, 0.9)', borderBottomColor: 'rgba(255,255,255,0.1)' }]}
+                            style={[styles.showFiltersButton, {
+                                backgroundColor: '#0F172A',
+                                borderColor: 'rgba(255,255,255,0.1)',
+                                borderWidth: 1,
+                                borderTopWidth: 0,
+                                width: 44,
+                                height: 28,
+                                paddingHorizontal: 0,
+                                paddingVertical: 0,
+                                borderTopLeftRadius: 0,
+                                borderTopRightRadius: 0,
+                                borderBottomLeftRadius: 14,
+                                borderBottomRightRadius: 14,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginTop: 0,
+                                position: 'absolute',
+                                top: 0,
+                                right: 16,
+                                zIndex: 50,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.25,
+                                shadowRadius: 3.84,
+                                elevation: 5
+                            }]}
                             onPress={() => setShowImportantMembersCard(true)}
                         >
-                            <Text style={[styles.showFiltersText, { color: colors.primary }]}>Show Filters</Text>
-                            <Ionicons name="chevron-down" size={16} color={colors.primary} />
+                            <Ionicons name="chevron-down" size={18} color={colors.primary} />
                         </TouchableOpacity>
                     ))}
 
@@ -756,6 +869,15 @@ export default function GroupChatScreen() {
                     }
                 ]}
             />
+            {selectedResource && (
+                <DocumentViewer
+                    visible={viewerVisible}
+                    onClose={() => setViewerVisible(false)}
+                    documentUrl={selectedResource.fileUrl}
+                    documentName={selectedResource.title}
+                    documentType={selectedResource.type}
+                />
+            )}
             <MediaPreviewModal
                 visible={showPreview}
                 attachment={previewAttachment}
