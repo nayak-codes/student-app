@@ -760,9 +760,7 @@ const ChatScreen = () => {
                         {/* Input Area */}
                         <View style={[styles.inputContainer, {
                             backgroundColor: isDark ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255,255,255,0.9)',
-                            paddingBottom: 12, // Standard padding
-                            paddingTop: 12,
-                            height: undefined,
+                            paddingBottom: 12,
                         }]}>
                             <TouchableOpacity
                                 style={[styles.plusButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0', borderColor: 'transparent' }]}
@@ -1202,7 +1200,7 @@ const styles = StyleSheet.create({
     // Input Styles matching GroupChat
     inputContainer: {
         flexDirection: 'row',
-        alignItems: 'flex-end',
+        alignItems: 'flex-end', // Critical: Keep buttons at bottom
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderTopWidth: 1,
@@ -1218,18 +1216,22 @@ const styles = StyleSheet.create({
     },
     inputWrapper: {
         flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
         borderRadius: 24,
         marginRight: 8,
-        justifyContent: 'center',
+        minHeight: 40,
+        maxHeight: 120,
+        paddingVertical: 4,
     },
     input: {
         flex: 1,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
         fontSize: 16,
         maxHeight: 100,
-        paddingTop: 10,
-        paddingBottom: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        paddingTop: 8,
+        paddingBottom: 8,
     },
     sendButton: {
         width: 40,

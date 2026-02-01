@@ -1179,18 +1179,17 @@ const styles = StyleSheet.create({
     },
     inputContainer: {
         flexDirection: 'row',
-        alignItems: 'center', // Center vertically
+        alignItems: 'flex-end', // Align buttons to bottom as input grows
         paddingHorizontal: 8,
         paddingVertical: 12,
-        backgroundColor: 'transparent', // Ensure it blends with background
+        backgroundColor: 'transparent',
     },
     inputWrapper: {
         flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderRadius: 25, // Full pill shape
+        justifyContent: 'center',
+        borderRadius: 25,
         paddingHorizontal: 16,
-        paddingVertical: 4, // Reduce vertical padding a bit
+        paddingVertical: 4,
         marginRight: 8,
         minHeight: 50,
         maxHeight: 120,

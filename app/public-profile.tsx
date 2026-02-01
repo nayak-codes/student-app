@@ -206,52 +206,7 @@ const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void; onDel
     );
 };
 
-// Resource Grid Item Component - Professional Card Style
-const ResourceGridItem: React.FC<{ resource: LibraryResource; onPress: (resource: LibraryResource) => void }> = ({ resource, onPress }) => {
-    const { colors, isDark } = useTheme();
-    return (
-        <Pressable
-            style={({ pressed }) => [
-                styles.pdfCard,
-                {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                    opacity: pressed ? 0.95 : 1,
-                    transform: [{ scale: pressed ? 0.98 : 1 }]
-                }
-            ]}
-            onPress={() => onPress(resource)}
-        >
-            <View style={[styles.pdfIconContainer, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF' }]}>
-                <Ionicons name="document-text" size={40} color="#EF4444" />
-                <View style={styles.pdfBadge}>
-                    <Text style={styles.pdfBadgeText}>PDF</Text>
-                </View>
-            </View>
 
-            <View style={styles.pdfInfoContainer}>
-                <Text style={[styles.pdfTitle, { color: colors.text }]} numberOfLines={2}>
-                    {resource.title}
-                </Text>
-
-                <View style={styles.pdfMetaRow}>
-                    <View style={styles.pdfMetaItem}>
-                        <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
-                        <Text style={[styles.pdfMetaText, { color: colors.textSecondary }]}>{resource.views || 0}</Text>
-                    </View>
-                    <View style={[styles.pdfDividerSmall, { backgroundColor: colors.border }]} />
-                    <View style={styles.pdfMetaItem}>
-                        <Ionicons name="download-outline" size={12} color={colors.textSecondary} />
-                        <Text style={[styles.pdfMetaText, { color: colors.textSecondary }]}>{resource.downloads || 0}</Text>
-                    </View>
-                    {/* Mock file size if not available */}
-                    <View style={[styles.pdfDividerSmall, { backgroundColor: colors.border }]} />
-                    <Text style={[styles.pdfMetaText, { color: colors.textSecondary }]}>2.4 MB</Text>
-                </View>
-            </View>
-        </Pressable>
-    );
-};
 
 // ... (existing components)
 const PostGridItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({ post, onPress }) => {
@@ -1303,8 +1258,12 @@ const ProfileScreen = () => {
                                         </View>
                                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
                                             {resources.slice(0, 5).map((item) => (
-                                                <View key={item.id} style={{ width: 280, marginRight: 12 }}>
-                                                    <ResourceGridItem resource={item} onPress={openResource} />
+                                                <View key={item.id} style={{ marginRight: 12 }}>
+                                                    <BookCard
+                                                        item={item}
+                                                        onPressCover={openResource}
+                                                        onPressInfo={(r) => router.push({ pathname: '/document-detail', params: { id: r.id } })}
+                                                    />
                                                 </View>
                                             ))}
                                             {resources.length === 0 && (
@@ -2138,78 +2097,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#1E293B',
     },
-    // PDF Card Styles
-    pdfCard: {
-        width: '48%', // 2 Columns
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 12,
-        marginBottom: 16,
-        marginHorizontal: '1%',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#64748B',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-        alignItems: 'center',
-    },
-    pdfIconContainer: {
-        width: 64,
-        height: 80,
-        backgroundColor: '#FEF2F2',
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 12,
-        position: 'relative',
-    },
-    pdfBadge: {
-        position: 'absolute',
-        bottom: -6,
-        backgroundColor: '#EF4444',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    pdfBadgeText: {
-        color: '#FFF',
-        fontSize: 8,
-        fontWeight: '700',
-    },
-    pdfInfoContainer: {
-        width: '100%',
-    },
-    pdfTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1E293B',
-        textAlign: 'center',
-        marginBottom: 8,
-        height: 40, // Fixed height for 2 lines
-    },
-    pdfMetaRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-    },
-    pdfMetaItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-    },
-    pdfMetaText: {
-        fontSize: 10,
-        color: '#64748B',
-        fontWeight: '500',
-    },
-    pdfDividerSmall: {
-        width: 1,
-        height: 10,
-        backgroundColor: '#E2E8F0',
-    },
+
     // Highlights / Shortcuts Styles
     highlightsContainer: {
         marginVertical: 16,
