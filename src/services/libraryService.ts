@@ -34,6 +34,7 @@ export interface LibraryResource {
     uploadedBy: string; // User ID
     uploaderName: string;
     uploaderExam: string;
+    uploaderAvatar?: string; // Author's profile picture
 
     // Stats
     views: number;
@@ -107,6 +108,7 @@ export const uploadResource = async (
         uploadedBy: string;
         uploaderName: string;
         uploaderExam: string;
+        uploaderAvatar?: string;
         customCoverUrl?: string; // Optional custom cover
         pages?: number;
 
@@ -231,6 +233,7 @@ export const getResourceById = async (resourceId: string): Promise<LibraryResour
                 uploadedBy: data.uploadedBy,
                 uploaderName: data.uploaderName,
                 uploaderExam: data.uploaderExam,
+                uploaderAvatar: data.uploaderAvatar,
                 views: data.views || 0,
                 downloads: data.downloads || 0,
                 likes: data.likes || 0,
@@ -290,6 +293,7 @@ export const getAllResources = async (limitCount: number = 50): Promise<LibraryR
                 uploadedBy: data.uploadedBy,
                 uploaderName: data.uploaderName,
                 uploaderExam: data.uploaderExam,
+                uploaderAvatar: data.uploaderAvatar,
                 views: data.views || 0,
                 downloads: data.downloads || 0,
                 likes: data.likes || 0,

@@ -316,10 +316,13 @@ export default function GroupChatScreen() {
         );
     };
 
-    const renderMessage = ({ item, index }: { item: Message; index: number }) => {
+    const renderMessage = ({ item, index, currentMessages }: { item: Message; index: number; currentMessages: Message[] }) => {
         const isOwnMessage = item.senderId === auth.currentUser?.uid;
         const messageDate = item.timestamp?.toDate ? item.timestamp.toDate() : new Date();
-        const prevMessage = messages[index - 1];
+
+        // Fix for Inverted List: Calculate index in original chronological list
+        const originalIndex = currentMessages.length - 1 - index;
+        const prevMessage = currentMessages[originalIndex - 1]; // Previous in chronological order
         const prevMessageDate = prevMessage?.timestamp?.toDate ? prevMessage.timestamp.toDate() : null;
 
         const showDateHeader = !prevMessageDate || !isSameDay(messageDate, prevMessageDate);
@@ -434,7 +437,7 @@ export default function GroupChatScreen() {
                                                         item.sharedContent!.contentData.fileUrl.includes('cloudinary') &&
                                                         item.sharedContent!.contentData.fileUrl.toLowerCase().endsWith('.pdf') && (
                                                             <Image
-                                                                source={{ uri: item.sharedContent!.contentData.fileUrl.replace(/\.pdf$/i, '.jpg') }}
+                                                                source={{ uri: item.sharedContent!.contentData.fileUrl.replace('/upload/', '/upload/w_400,q_auto,f_jpg/').replace(/\.pdf$/i, '.jpg') }}
                                                                 style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 2 }}
                                                                 resizeMode="cover"
                                                             />
@@ -457,14 +460,53 @@ export default function GroupChatScreen() {
                                         <TouchableOpacity
                                             activeOpacity={0.7}
                                             onPress={() => router.push({ pathname: '/document-detail', params: { id: item.sharedContent!.contentData.id } })}
-                                            style={{ flex: 1, padding: 10, justifyContent: 'center', minWidth: 140 }}
+                                            style={{ flex: 1, padding: 10, paddingTop: 14, minWidth: 140 }}
                                         >
-                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4 }} numberOfLines={2}>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4, lineHeight: 18 }} numberOfLines={2}>
                                                 {item.sharedContent!.contentData.title || 'Untitled Book'}
                                             </Text>
-                                            <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 6 }} numberOfLines={1}>
-                                                {item.sharedContent!.contentData.author || 'Unknown Author'}
-                                            </Text>
+                                            {item.sharedContent!.contentData.uploaderName ? (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                                    {item.sharedContent!.contentData.uploaderAvatar ? (
+                                                        <Image
+                                                            source={{ uri: item.sharedContent!.contentData.uploaderAvatar }}
+                                                            style={{ width: 16, height: 16, borderRadius: 8, marginRight: 4 }}
+                                                        />
+                                                    ) : (
+                                                        <View style={{
+                                                            width: 16, height: 16, borderRadius: 8,
+                                                            backgroundColor: colors.primary,
+                                                            alignItems: 'center', justifyContent: 'center',
+                                                            marginRight: 4
+                                                        }}>
+                                                            <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '700' }}>
+                                                                {item.sharedContent!.contentData.uploaderName.charAt(0).toUpperCase()}
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                    <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '500' }} numberOfLines={1}>
+                                                        {item.sharedContent!.contentData.uploaderName}
+                                                    </Text>
+                                                </View>
+                                            ) : (!item.sharedContent!.contentData.author || item.sharedContent!.contentData.author === 'Unknown Author') ? (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                                    {item.senderPhoto ? (
+                                                        <Image
+                                                            source={{ uri: item.senderPhoto }}
+                                                            style={{ width: 14, height: 14, borderRadius: 7, marginRight: 4 }}
+                                                        />
+                                                    ) : (
+                                                        <Ionicons name="person-circle" size={14} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                                                    )}
+                                                    <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={1}>
+                                                        {isOwnMessage ? 'Shared by You' : (item.senderName ? `Shared by ${item.senderName}` : 'Shared Document')}
+                                                    </Text>
+                                                </View>
+                                            ) : (
+                                                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 8 }} numberOfLines={1}>
+                                                    {item.sharedContent!.contentData.author}
+                                                </Text>
+                                            )}
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                 {item.sharedContent!.contentData.rating ? (
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
@@ -752,12 +794,12 @@ export default function GroupChatScreen() {
                         ) : (
                             <FlatList
                                 ref={flatListRef}
-                                data={displayedMessages}
-                                renderItem={renderMessage}
+                                data={[...displayedMessages].reverse()}
+                                renderItem={(props) => renderMessage({ ...props, currentMessages: displayedMessages })}
                                 keyExtractor={(item) => item.id}
                                 contentContainerStyle={styles.messagesList}
-                                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-                                onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                                inverted={true}
+                                showsVerticalScrollIndicator={false}
                             />
                         )}
                         {messages.length === 0 && !loading && (

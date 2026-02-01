@@ -159,6 +159,7 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                     uploadedBy: user.uid,
                     uploaderName: userProfile?.name || 'Anonymous',
                     uploaderExam: userProfile?.exam || 'Student',
+                    uploaderAvatar: userProfile?.profilePhoto || userProfile?.photoURL,
                     customCoverUrl: coverUrl,
                     isPremium,
                     price: isPremium ? parseFloat(price) : 0,

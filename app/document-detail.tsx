@@ -536,7 +536,14 @@ const DocumentDetailScreen = () => {
                         onPress={() => router.push({ pathname: '/public-profile', params: { userId: resource.uploadedBy } })}
                     >
                         <View style={styles.authorAvatar}>
-                            <Text style={styles.authorInitials}>{resource.uploaderName.charAt(0)}</Text>
+                            {resource.uploaderAvatar ? (
+                                <Image
+                                    source={{ uri: resource.uploaderAvatar }}
+                                    style={{ width: '100%', height: '100%' }}
+                                />
+                            ) : (
+                                <Text style={styles.authorInitials}>{resource.uploaderName.charAt(0)}</Text>
+                            )}
                         </View>
                         <View style={styles.authorInfo}>
                             <Text style={[styles.authorName, { color: colors.text }]}>{resource.uploaderName}</Text>
