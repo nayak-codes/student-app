@@ -8,6 +8,7 @@ import {
     FlatList,
     Image,
     ImageBackground,
+    Keyboard,
     KeyboardAvoidingView,
     Linking,
     Platform,
@@ -18,7 +19,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ChatAttachmentMenu, { AttachmentType } from '../src/components/ChatAttachmentMenu';
 import GroupOptionsSheet from '../src/components/GroupOptionsSheet';
 import ImportantMembersCard from '../src/components/ImportantMembersCard';
@@ -47,6 +48,16 @@ export default function GroupChatScreen() {
     const router = useRouter();
     const { colors, isDark } = useTheme();
     const params = useLocalSearchParams();
+    const insets = useSafeAreaInsets();
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            const showSub = Keyboard.addListener('keyboardDidShow', (e: any) => setKeyboardHeight(e.endCoordinates.height));
+            const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+            return () => { showSub.remove(); hideSub.remove(); };
+        }
+    }, []);
 
     const getString = (val: string | string[] | undefined) => Array.isArray(val) ? val[0] : val;
 
@@ -493,13 +504,12 @@ export default function GroupChatScreen() {
             </View>
 
             {/* Custom Professional Background */}
-            {/* Custom Pattern Background */}
-            <View style={{ flex: 1, backgroundColor: '#0a1f1f' }}>
+            <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#E5E5E5' }}>
                 <ImageBackground
-                    source={require('../assets/chat-background.png')}
+                    source={require('../assets/chat-background-doodle.png')}
                     style={{ flex: 1 }}
-                    resizeMode="repeat"
-                    imageStyle={{ opacity: 0.6 }}
+                    resizeMode="cover"
+                    imageStyle={{ opacity: isDark ? 0.08 : 0.05 }}
                 >
 
                     {/* Important Members Filter Card */}
@@ -617,9 +627,10 @@ export default function GroupChatScreen() {
 
                     {/* Messages */}
                     <KeyboardAvoidingView
-                        style={styles.chatContainer}
-                        behavior="padding"
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
+                        style={[styles.chatContainer, Platform.OS === 'android' && { paddingBottom: Math.max(keyboardHeight, insets.bottom) }]}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        enabled={Platform.OS === 'ios'}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
                     >
                         {loading ? (
                             <View style={styles.loadingContainer}>
@@ -648,7 +659,7 @@ export default function GroupChatScreen() {
                             </View>
                         )}
                         {/* Input Area */}
-                        <View style={[styles.inputContainer, { paddingBottom: Platform.OS === 'ios' ? 0 : 8 }]}>
+                        <View style={[styles.inputContainer, { paddingBottom: 12 }]}>
                             <TouchableOpacity
                                 style={[styles.plusButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}
                                 onPress={() => setShowAttachmentMenu(true)}

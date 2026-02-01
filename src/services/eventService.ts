@@ -27,6 +27,13 @@ export interface EventItem {
     userId?: string;
     isOnline?: boolean;
     dynamicFields?: Record<string, any>; // Category-specific fields
+    // Enhanced Fields
+    logo?: string;
+    teamSize?: string;
+    registrationFee?: string;
+    eligibility?: string;
+    duration?: string;
+    isVerified?: boolean;
 }
 
 // Helper function to safely convert Firestore Timestamp to Date
@@ -192,5 +199,41 @@ export const updateUserEventPreferences = async (preferences: EventCategory[]): 
     } catch (error) {
         console.error('Error updating user preferences:', error);
         throw error;
+    }
+};
+
+// Toggle Save Event
+import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+
+export const toggleEventSave = async (userId: string, eventId: string): Promise<boolean> => {
+    try {
+        const savedRef = doc(db, 'users', userId, 'saved_events', eventId);
+        const docSnap = await getDoc(savedRef);
+
+        if (docSnap.exists()) {
+            await deleteDoc(savedRef);
+            return false; // Not saved
+        } else {
+            await setDoc(savedRef, {
+                eventId,
+                savedAt: Timestamp.now()
+            });
+            return true; // Saved
+        }
+    } catch (error) {
+        console.error('Error toggling event save:', error);
+        throw error;
+    }
+};
+
+// Get Saved Event IDs
+export const getSavedEventIds = async (userId: string): Promise<string[]> => {
+    try {
+        const savedRef = collection(db, 'users', userId, 'saved_events');
+        const querySnapshot = await getDocs(savedRef);
+        return querySnapshot.docs.map(doc => doc.id);
+    } catch (error) {
+        console.error('Error fetching saved event IDs:', error);
+        return [];
     }
 };

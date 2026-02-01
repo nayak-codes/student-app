@@ -18,6 +18,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { EventCard } from '../../src/components/EventCard';
 import { auth } from '../../src/config/firebase';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { getUserProfile } from '../../src/services/authService';
@@ -26,7 +27,9 @@ import {
     EventItem,
     getAllEvents,
     getRecommendedEvents,
+    getSavedEventIds,
     getUserEventPreferences,
+    toggleEventSave,
     updateUserEventPreferences
 } from '../../src/services/eventService';
 
@@ -83,6 +86,10 @@ const EventsScreen = () => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
 
+    // Force Dark Mode for this screen - REMOVED to fix status bar issue
+    // const isDark = true;
+    // const colors = Colors.dark;
+
     // Data State
     const [events, setEvents] = useState<EventItem[]>([]);
     const [filteredEvents, setFilteredEvents] = useState<EventItem[]>([]);
@@ -106,6 +113,37 @@ const EventsScreen = () => {
     // Advanced Filter State
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
+
+    // Saved Events State
+    const [savedEventIds, setSavedEventIds] = useState<Set<string>>(new Set());
+
+    const handleToggleSave = async (event: EventItem) => {
+        const user = auth.currentUser;
+        if (!user || !event.id) return;
+
+        // Optimistic Update
+        const isSaved = savedEventIds.has(event.id);
+        const newSavedIds = new Set(savedEventIds);
+        if (isSaved) {
+            newSavedIds.delete(event.id);
+        } else {
+            newSavedIds.add(event.id);
+        }
+        setSavedEventIds(newSavedIds);
+
+        try {
+            await toggleEventSave(user.uid, event.id);
+        } catch (error) {
+            console.error('Error toggling save', error);
+            // Revert on error
+            setSavedEventIds(prev => {
+                const reverted = new Set(prev);
+                if (isSaved) reverted.add(event.id!);
+                else reverted.delete(event.id!);
+                return reverted;
+            });
+        }
+    };
 
     useEffect(() => {
         loadInitialData();
@@ -180,10 +218,13 @@ const EventsScreen = () => {
         setLoading(true);
         try {
             const user = auth.currentUser;
-            const [prefs, userProfile] = await Promise.all([
+            const [prefs, userProfile, savedIds] = await Promise.all([
                 getUserEventPreferences(),
-                user ? getUserProfile(user.uid) : null
+                user ? getUserProfile(user.uid) : null,
+                user ? getSavedEventIds(user.uid) : Promise.resolve([])
             ]);
+
+            setSavedEventIds(new Set(savedIds));
 
             setUserPreferences(prefs);
 
@@ -333,56 +374,6 @@ const EventsScreen = () => {
         };
     };
 
-    // Full Width Card for Single Column Feed
-    const renderEventCard = ({ item }: { item: EventItem }) => {
-        const badgeColors = getBadgeColors(item.category);
-
-        const handleCardPress = () => {
-            router.push({
-                pathname: '/event-detail',
-                params: { event: JSON.stringify(item) }
-            });
-        };
-
-        return (
-            <TouchableOpacity
-                style={[styles.card, { backgroundColor: colors.card }]}
-                onPress={handleCardPress}
-                activeOpacity={0.7}
-            >
-                {item.image && (
-                    <View>
-                        <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
-                        {item.videoLink && (
-                            <View style={styles.playIconOverlay}>
-                                <Ionicons name="play-circle" size={32} color="rgba(255,255,255,0.9)" />
-                            </View>
-                        )}
-                    </View>
-                )}
-                <View style={styles.cardContent}>
-                    <View style={styles.badgeContainer}>
-                        <View style={[styles.badge, { backgroundColor: badgeColors.bg, borderColor: badgeColors.border, borderWidth: 1 }]}>
-                            <Text style={[styles.badgeText, { color: badgeColors.text }]}>{item.category}</Text>
-                        </View>
-                    </View>
-                    <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
-                    <View style={styles.metaRow}>
-                        <Ionicons name="business-outline" size={14} color={colors.textSecondary} />
-                        <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>{item.organization}</Text>
-                    </View>
-                    <View style={styles.metaRow}>
-                        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>{item.date}</Text>
-                    </View>
-                    <View style={styles.metaRow}>
-                        <Ionicons name={item.isOnline ? "globe-outline" : "location-outline"} size={14} color={colors.textSecondary} />
-                        <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>{item.location}</Text>
-                    </View>
-                </View>
-            </TouchableOpacity>
-        );
-    };
 
     // Horizontal Rec Card
     const renderRecommendedCard = ({ item }: { item: EventItem }) => {
@@ -557,7 +548,17 @@ const EventsScreen = () => {
             ) : (
                 <FlatList
                     data={filteredEvents}
-                    renderItem={renderEventCard}
+                    renderItem={({ item }) => (
+                        <EventCard
+                            event={item}
+                            forceWhite={true}
+                            isSaved={savedEventIds.has(item.id!)}
+                            onToggleSave={handleToggleSave}
+                            onPress={(event) => router.push({
+                                pathname: '/event-detail',
+                                params: { event: JSON.stringify(event) }
+                            })}
+                        />)}
                     keyExtractor={(item) => item.id || `event-${Math.random()}`}
                     contentContainerStyle={[styles.feed, { paddingTop: 160 }]}
                     onScroll={Animated.event(
@@ -762,7 +763,7 @@ const EventsScreen = () => {
             </TouchableOpacity>
 
             {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
-            <View style={styles.topBlackCard} />
+            <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />
         </View>
     );
 };
@@ -1397,6 +1398,353 @@ const styles = StyleSheet.create({
         height: 40,
         backgroundColor: '#000',
         zIndex: 1001,
+    },
+    // Sketch Layout Styles (Proportions Adjusted)
+    proCard: {
+        borderRadius: 16,
+        padding: 12, // Reduced padding
+        marginBottom: 12,
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    sketchHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start', // Logo aligns top "paiki"
+        marginBottom: 8, // Reduced spacing
+        gap: 10, // Tighter gap closer to logo
+    },
+    sketchLogoContainer: {
+        width: 48, // Reduced from 56
+        height: 48,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+    },
+    sketchLogo: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 10,
+    },
+    logoPlaceholderText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    sketchHeaderContent: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    sketchTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        lineHeight: 20,
+        marginBottom: 2,
+    },
+    sketchLocationRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6, // Reduced
+        gap: 4,
+    },
+    sketchLocation: {
+        fontSize: 12,
+    },
+    sketchChipsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6, // Tighter gap
+    },
+    sketchChip: {
+        paddingVertical: 2, // slimmer chips
+        paddingHorizontal: 8,
+        borderRadius: 6,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sketchChipText: {
+        fontSize: 9, // Smaller text
+        fontWeight: '600',
+    },
+
+    // Right Stack
+    rightStack: {
+        alignItems: 'flex-end',
+        gap: 6,
+        minWidth: 80,
+    },
+    miniBadge: {
+        paddingVertical: 3,
+        paddingHorizontal: 8,
+        borderRadius: 6,
+        borderWidth: 1,
+    },
+    miniBadgeText: {
+        fontSize: 10,
+        fontWeight: '600',
+    },
+
+    // Stats List (Expanded Body - "Body size ni increse chai")
+    statsContainer: {
+        paddingVertical: 16, // Increased padding
+        paddingHorizontal: 4,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        gap: 14, // Increased gap between items
+        marginBottom: 8,
+    },
+    statRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12, // More space between icon and text
+    },
+    iconCircle: {
+        width: 28, // Slightly larger touch targets
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+    },
+    statText: {
+        fontSize: 14, // Slightly clearer text
+        fontWeight: '500',
+        flex: 1,
+    },
+
+    // Footer (Compact)
+    proCardFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    footerLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 0,
+    },
+    feeText: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    registerBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16, // Compact button
+        paddingVertical: 8,
+        borderRadius: 20,
+        gap: 4,
+    },
+    registerBtnText: {
+        color: '#FFF',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+
+    // NEW SKETCH LAYOUT STYLES
+    topSection: {
+        flexDirection: 'row',
+        marginBottom: 14,
+        gap: 12,
+        alignItems: 'flex-start',
+    },
+    leftSection: {
+        flex: 1,
+        gap: 6,
+    },
+
+    eventName: {
+        fontSize: 18,
+        fontWeight: '800',
+        lineHeight: 24,
+    },
+    eventOrg: {
+        fontSize: 13,
+        fontWeight: '500',
+        marginTop: 2,
+    },
+    rightSection: {
+        alignItems: 'flex-end',
+        gap: 8,
+    },
+    headerLogo: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    headerLogoImage: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    headerLogoText: {
+        fontSize: 20,
+        fontWeight: '800',
+    },
+    infoBars: {
+        gap: 4,
+        alignItems: 'flex-end',
+    },
+    infoBar: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+        borderWidth: 1,
+        minWidth: 100,
+    },
+    infoBarText: {
+        fontSize: 11,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+
+
+    fullLocationSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        padding: 10,
+        borderRadius: 10,
+        marginBottom: 10,
+        borderWidth: 1,
+    },
+    fullLocationText: {
+        fontSize: 11,
+        fontWeight: '700',
+        flex: 1,
+        letterSpacing: 0.3,
+    },
+    detailsGrid: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 10,
+        flexWrap: 'wrap',
+    },
+    detailChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    detailChipText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    eligibilityCard: {
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 12,
+        gap: 10,
+        borderWidth: 1,
+    },
+    eligibilityItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    eligibilityIconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+    },
+    eligibilityContent: {
+        flex: 1,
+    },
+    eligibilityLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    eligibilityValue: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    footer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        gap: 12,
+    },
+    prizeSection: {
+        flex: 1,
+    },
+    prizeLabel: {
+        fontSize: 9,
+        fontWeight: '700',
+        letterSpacing: 0.8,
+        marginBottom: 6,
+    },
+    prizeBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        borderWidth: 2,
+        borderColor: '#FDE68A',
+    },
+    prizeText: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#D97706',
+    },
+    freeBox: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 2,
+        alignSelf: 'flex-start',
+    },
+    freeText: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#10B981',
+    },
+    saveEventButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 2,
+    },
+    saveEventButtonActive: {
+        // backgroundColor will be set dynamically
+    },
+    saveEventButtonText: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    saveEventButtonTextActive: {
+        // color will be set dynamically
     },
 });
 

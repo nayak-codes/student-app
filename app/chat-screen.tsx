@@ -9,6 +9,7 @@ import {
     FlatList,
     Image,
     ImageBackground,
+    Keyboard,
     KeyboardAvoidingView,
     Linking,
     Platform,
@@ -19,7 +20,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ChatAttachmentMenu, { AttachmentType } from '../src/components/ChatAttachmentMenu';
 import { MediaPreviewModalProps } from '../src/components/MediaPreviewModal';
 import PollCreator from '../src/components/PollCreator';
@@ -163,6 +164,16 @@ const ChatScreen = () => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
     const params = useLocalSearchParams();
+    const insets = useSafeAreaInsets();
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            const showSub = Keyboard.addListener('keyboardDidShow', (e: any) => setKeyboardHeight(e.endCoordinates.height));
+            const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+            return () => { showSub.remove(); hideSub.remove(); };
+        }
+    }, []);
 
     // Helper to ensure we access string params, not arrays
     const getString = (val: string | string[] | undefined) => Array.isArray(val) ? val[0] : val;
@@ -589,17 +600,18 @@ const ChatScreen = () => {
                 </View>
             </View>
 
-            {/* Chat Background with Wallpaper */}
-            <View style={{ flex: 1, backgroundColor: isDark ? '#0a1f1f' : '#F0F4F8' }}>
+            {/* Chat Background with Doodle Wallpaper */}
+            <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#E5E5E5' }}>
                 <ImageBackground
-                    source={require('../assets/chat-background.png')}
-                    style={{ flex: 1 }}
-                    resizeMode="repeat"
-                    imageStyle={{ opacity: isDark ? 0.6 : 0.05 }} // Subtle in light mode
+                    source={require('../assets/chat-background-doodle.png')}
+                    style={{ flex: 1, width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                    imageStyle={{ opacity: isDark ? 0.08 : 0.05 }} // Subtle texturere
                 >
                     <KeyboardAvoidingView
-                        style={styles.chatContainer}
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={[styles.chatContainer, Platform.OS === 'android' && { paddingBottom: Math.max(keyboardHeight, insets.bottom) }]}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        enabled={Platform.OS === 'ios'}
                         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
                     >
                         {loading ? (
@@ -619,29 +631,35 @@ const ChatScreen = () => {
                         )}
                         {messages.length === 0 && !loading && (
                             <View style={styles.emptyState}>
-                                <Ionicons name="chatbubbles-outline" size={64} color={colors.border} />
-                                <Text style={styles.emptyTitle}>No messages yet</Text>
-                                <Text style={styles.emptySubtitle}>Start the conversation!</Text>
+                                <Ionicons name="chatbubbles-outline" size={64} color={isDark ? 'rgba(255,255,255,0.5)' : colors.border} />
+                                <Text style={[styles.emptyTitle, { color: isDark ? '#FFF' : '#1E293B' }]}>No messages yet</Text>
+                                <Text style={[styles.emptySubtitle, { color: isDark ? 'rgba(255,255,255,0.7)' : '#64748B' }]}>Start the conversation!</Text>
                             </View>
                         )}
 
                         {/* Input Area */}
-                        <View style={[styles.inputContainer, { backgroundColor: 'transparent' }]}>
+                        <View style={[styles.inputContainer, {
+                            backgroundColor: isDark ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255,255,255,0.9)',
+                            paddingBottom: 12, // Standard padding
+                            paddingTop: 12,
+                            height: undefined,
+                        }]}>
                             <TouchableOpacity
-                                style={[styles.plusButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0', borderColor: 'transparent' }]}
+                                style={[styles.plusButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0', borderColor: 'transparent' }]}
                                 onPress={() => setShowAttachmentMenu(true)}
                             >
                                 <Ionicons name="add" size={24} color={isDark ? '#FFF' : '#0F172A'} />
                             </TouchableOpacity>
 
                             <View style={[styles.inputWrapper, {
-                                backgroundColor: isDark ? '#1F2937' : '#F1F5F9',
-                                borderWidth: 0,
+                                backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : '#F1F5F9',
+                                borderWidth: 1,
+                                borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'transparent'
                             }]}>
                                 <TextInput
                                     style={[styles.input, { color: isDark ? '#FFFFFF' : '#0F172A' }]}
                                     placeholder="Message"
-                                    placeholderTextColor={isDark ? "#9CA3AF" : "#64748B"}
+                                    placeholderTextColor={isDark ? "rgba(255,255,255,0.5)" : "#64748B"}
                                     value={inputText}
                                     onChangeText={setInputText}
                                     multiline
@@ -652,12 +670,12 @@ const ChatScreen = () => {
                             <TouchableOpacity
                                 style={[
                                     styles.sendButton,
-                                    { backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? '#4B5563' : '#CBD5E1') }
+                                    { backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1') }
                                 ]}
                                 onPress={handleSend}
                                 disabled={!inputText.trim() || sending}
                             >
-                                <Ionicons name="send" size={20} color="#FFF" />
+                                <Ionicons name="send" size={20} color={inputText.trim() || isDark ? "#FFF" : "#94A3B8"} />
                             </TouchableOpacity>
                         </View>
                     </KeyboardAvoidingView>
@@ -832,18 +850,19 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     ownMessageBubble: {
-        backgroundColor: '#243266ff', // Pure Red
+        backgroundColor: '#6366F1', // Primary Indigo
         borderBottomRightRadius: 4,
         borderTopRightRadius: 18,
         borderBottomLeftRadius: 18,
         borderTopLeftRadius: 18,
     },
     otherMessageBubble: {
-        backgroundColor: '#334155', // Dark Slate Gray
+        backgroundColor: '#334155', // Solid Dark Slate for readability
         borderBottomLeftRadius: 4,
         borderTopLeftRadius: 18,
         borderBottomRightRadius: 18,
         borderTopRightRadius: 18,
+        borderWidth: 0, // Remove border for clean look
     },
     messageText: {
         fontSize: 15,

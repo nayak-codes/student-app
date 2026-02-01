@@ -530,7 +530,7 @@ const ExploreScreen: React.FC = () => {
       )}
 
       {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
-      <View style={styles.topBlackCard} />
+      <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />
     </View >
   );
 };

@@ -302,7 +302,7 @@ const ProfileMenuScreen = () => {
             </ScrollView >
 
             {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
-            <View style={styles.topBlackCard} />
+            <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />
 
         </View >
     );
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         height: 40,
-        backgroundColor: '#000',
+        // backgroundColor: '#000', // FIXED: now uses dynamic background in component
         zIndex: 1001,
     },
 });

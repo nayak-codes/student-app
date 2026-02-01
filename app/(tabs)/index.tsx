@@ -140,7 +140,7 @@ export default function HomeScreen() {
         />
 
         {/* Static Top Black Card - Instagram Style (outside FeedList) */}
-        <View style={styles.topBlackCard} />
+        <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />
 
       </View>
     </SwipeNavigator>
