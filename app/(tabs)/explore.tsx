@@ -25,6 +25,7 @@ import CreatePostModal from '../../src/components/CreatePostModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useVideoPlayerContext } from '../../src/contexts/VideoPlayerContext';
+import { useUnreadCount } from '../../src/hooks/useUnreadCount';
 import { addToHistory } from '../../src/services/historyService';
 import { getAllPosts, incrementViewCount, likePost, Post, unlikePost } from '../../src/services/postsService';
 
@@ -97,6 +98,7 @@ const ExploreScreen: React.FC = () => {
   const router = useRouter();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
+  const unreadCount = useUnreadCount();
   const [activeTab, setActiveTab] = useState<ContentType>('video');
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
   const [feedData, setFeedData] = useState<FeedItem[]>([]);
@@ -450,6 +452,30 @@ const ExploreScreen: React.FC = () => {
                     onPress={() => router.push('/conversations')}
                   >
                     <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
+                    {unreadCount > 0 && (
+                      <View style={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 2,
+                        backgroundColor: '#EF4444',
+                        borderRadius: 10,
+                        minWidth: 18,
+                        height: 18,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        paddingHorizontal: 4,
+                        borderWidth: 2,
+                        borderColor: isDark ? colors.background : '#FFF',
+                      }}>
+                        <Text style={{
+                          fontSize: 10,
+                          fontWeight: '700',
+                          color: '#FFF',
+                        }}>
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>

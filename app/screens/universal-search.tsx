@@ -20,12 +20,14 @@ import {
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { getAllUsers, UserProfile } from '../../src/services/authService';
 import { College, getAllColleges } from '../../src/services/collegeService';
-import { getAllResources, LibraryResource } from '../../src/services/libraryService';
+import { getAllResources, incrementViews, LibraryResource } from '../../src/services/libraryService';
 import { getAllPosts, Post } from '../../src/services/postsService';
 
 const SEARCH_HISTORY_KEY = 'studentverse_search_history';
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = width / 2 - 24; // 2 columns with padding (16px outer + 12px gap approx)
+const LIBRARY_COLUMN_WIDTH = (width - 48) / 3; // 3 columns with padding (16px outer + gaps)
+
 
 type SearchCategory = 'all' | 'users' | 'colleges' | 'posts' | 'library' | 'videos' | 'clips';
 
@@ -869,7 +871,124 @@ const SearchScreen = () => {
             );
         }
 
-        // 3. Standard List Item (Colleges, Resources, Posts)
+
+        // 3. Library Resource Result (Library Home Page Style)
+        if (item.type === 'resource') {
+            const resource = item.data as LibraryResource;
+
+            // Helper to get thumbnail URL
+            const getThumbnailUrl = () => {
+                if (resource.customCoverUrl) return resource.customCoverUrl;
+                if (resource.customCoverUrl === '') return null;
+                if (resource.fileUrl && resource.fileUrl.includes('cloudinary.com') && resource.fileUrl.endsWith('.pdf')) {
+                    return resource.fileUrl.replace('.pdf', '.jpg');
+                }
+                return null;
+            };
+
+            const thumbnailUrl = getThumbnailUrl();
+
+            return (
+                <View style={styles.libraryResourceCard}>
+                    {/* Thumbnail/Cover - Click to Open Document */}
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={async () => {
+                            // If premium, go to details page to buy/unlock
+                            if (resource.isPremium) {
+                                router.push({
+                                    pathname: '/document-detail',
+                                    params: { id: resource.id }
+                                });
+                                return;
+                            }
+
+                            // If free and PDF, open viewer directly
+                            if (resource.type === 'pdf' || resource.type === 'notes') {
+                                try {
+                                    await incrementViews(resource.id);
+                                    // Open document directly
+                                    Linking.openURL(resource.fileUrl).catch(err => console.error("Couldn't load page", err));
+                                } catch (error) {
+                                    console.error("Error opening pdf:", error);
+                                }
+                            } else {
+                                router.push({
+                                    pathname: '/document-detail',
+                                    params: { id: resource.id }
+                                });
+                            }
+                        }}
+                    >
+                        <View style={[styles.resourceCoverContainer, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+                            {thumbnailUrl ? (
+                                <Image
+                                    source={{ uri: thumbnailUrl }}
+                                    style={styles.resourceCoverImage}
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <View style={[styles.resourcePlaceholderCover, { backgroundColor: resource.type === 'pdf' ? (isDark ? 'rgba(147, 51, 234, 0.2)' : '#F3E8FF') : (isDark ? 'rgba(2, 132, 199, 0.2)' : '#E0F2FE') }]}>
+                                    <Ionicons
+                                        name={resource.type === 'pdf' ? 'document-text' : 'create'}
+                                        size={32}
+                                        color={resource.type === 'pdf' ? '#9333EA' : '#0284C7'}
+                                    />
+                                    <Text style={[styles.resourcePlaceholderText, { color: resource.type === 'pdf' ? '#9333EA' : '#0284C7' }]}>
+                                        {resource.title.substring(0, 2).toUpperCase()}
+                                    </Text>
+                                </View>
+                            )}
+                            {/* Type Badge */}
+                            <View style={styles.resourceBadgeOverlay}>
+                                {resource.isPremium ? (
+                                    <View style={[styles.resourceBadge, { backgroundColor: '#F59E0B' }]}>
+                                        <Text style={styles.resourceBadgeText}>₹{resource.price}</Text>
+                                    </View>
+                                ) : (
+                                    resource.type === 'pdf' && (
+                                        <View style={styles.resourceBadge}>
+                                            <Text style={styles.resourceBadgeText}>PDF</Text>
+                                        </View>
+                                    )
+                                )}
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Info - Click for Details */}
+                    <TouchableOpacity
+                        onPress={() => {
+                            router.push({
+                                pathname: '/document-detail',
+                                params: { id: resource.id }
+                            });
+                        }}
+                        activeOpacity={0.6}
+                    >
+                        <View style={styles.resourceInfoContainer}>
+                            <Text style={[styles.resourceTitle, { color: colors.text }]} numberOfLines={2}>
+                                {resource.title}
+                            </Text>
+                            <Text style={[styles.resourceAuthor, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {resource.uploaderName || 'Unknown'}
+                            </Text>
+                            <View style={styles.resourceRatingRow}>
+                                <Ionicons name="star" size={12} color="#EAB308" />
+                                <Text style={[styles.resourceRatingValue, { color: colors.text }]}>
+                                    {resource.rating ? resource.rating.toFixed(1) : '0.0'}
+                                </Text>
+                                {resource.ratingCount ? (
+                                    <Text style={[styles.resourceRatingCount, { color: colors.textSecondary }]}>({resource.ratingCount})</Text>
+                                ) : null}
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        // 4. Standard List Item (Colleges, Posts)
         return (
             <TouchableOpacity
                 style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -901,7 +1020,6 @@ const SearchScreen = () => {
                                 styles.badge,
                                 item.type === 'college' && { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#DBEAFE' },
                                 item.type === 'post' && { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7' },
-                                item.type === 'resource' && { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5' },
                             ]}>
                                 <Text style={[styles.badgeText, { color: colors.text }]}>{item.badge}</Text>
                             </View>
@@ -1009,15 +1127,15 @@ const SearchScreen = () => {
                         {results.length} result{results.length !== 1 ? 's' : ''} found
                     </Text>
                     <FlatList
-                        key={activeCategory === 'clips' ? 'grid' : 'list'}
+                        key={activeCategory === 'clips' ? 'grid-2' : activeCategory === 'library' ? 'grid-3' : 'list'}
                         data={results}
                         renderItem={renderResult}
                         keyExtractor={(item) => item.id}
-                        numColumns={activeCategory === 'clips' ? 2 : 1}
-                        columnWrapperStyle={activeCategory === 'clips' ? { justifyContent: 'space-between', marginBottom: 16 } : undefined}
+                        numColumns={activeCategory === 'clips' ? 2 : activeCategory === 'library' ? 3 : 1}
+                        columnWrapperStyle={(activeCategory === 'clips' || activeCategory === 'library') ? { justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 16 } : undefined}
                         contentContainerStyle={[
                             styles.resultsList,
-                            activeCategory === 'clips' ? { paddingHorizontal: 16 } : undefined
+                            (activeCategory === 'clips' || activeCategory === 'library') ? { paddingHorizontal: 0 } : undefined
                         ]}
                         showsVerticalScrollIndicator={false}
                         ListEmptyComponent={
@@ -1651,6 +1769,83 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '600',
         marginLeft: 4,
+    },
+    // Library Resource Card Styles (matching BookCard component)
+    libraryResourceCard: {
+        width: LIBRARY_COLUMN_WIDTH,
+        marginBottom: 8,
+    },
+    resourceCoverContainer: {
+        width: '100%',
+        aspectRatio: 2 / 3,
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginBottom: 8,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+    },
+    resourceCoverImage: {
+        width: '100%',
+        height: '100%',
+    },
+    resourcePlaceholderCover: {
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 8,
+    },
+    resourcePlaceholderText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginTop: 4,
+    },
+    resourceBadgeOverlay: {
+        position: 'absolute',
+        top: 6,
+        left: 6,
+    },
+    resourceBadge: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    resourceBadgeText: {
+        color: '#FFF',
+        fontSize: 8,
+        fontWeight: 'bold',
+    },
+    resourceInfoContainer: {
+        paddingRight: 4,
+    },
+    resourceTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 2,
+        lineHeight: 18,
+    },
+    resourceAuthor: {
+        fontSize: 11,
+        marginBottom: 2,
+    },
+    resourceRatingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        marginTop: 4,
+    },
+    resourceRatingValue: {
+        fontSize: 11,
+        fontWeight: '700',
+        marginLeft: 2,
+    },
+    resourceRatingCount: {
+        fontSize: 10,
+        marginLeft: 2,
     },
     // Keep container styles for other types
 });

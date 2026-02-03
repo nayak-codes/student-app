@@ -106,13 +106,28 @@ export default function ImageViewerScreen() {
 
     const parseImages = (param: string | string[]): string[] => {
         if (!param) return [];
-        try {
-            const parsed = typeof param === 'string' ? JSON.parse(param) : param;
-            return Array.isArray(parsed) ? parsed : [parsed];
-        } catch (e) {
-            console.error('Failed to parse images:', e);
-            return typeof param === 'string' ? [param] : [];
+
+        // If it's already an array (from expo-router parsing), use it
+        if (Array.isArray(param)) return param;
+
+        // If it's a string, check if it's a JSON array
+        if (typeof param === 'string') {
+            const trimmed = param.trim();
+            if (trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    return Array.isArray(parsed) ? parsed : [parsed];
+                } catch (e) {
+                    // If parse fails, assume it's a single weird URL or just treat as is
+                    return [param];
+                }
+            } else {
+                // Regular string URL (e.g. from chat screen)
+                return [param];
+            }
         }
+
+        return [];
     };
 
     const images: string[] = parseImages(params.images as string | string[]);

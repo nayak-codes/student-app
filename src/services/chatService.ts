@@ -206,15 +206,19 @@ export const sendMessage = async (
         const conversationData = conversationDoc.data();
 
         if (conversationData) {
-            // Increment unread count for other participant
-            const otherUserId = conversationData.participants.find(
+            // Update unread count for all other participants
+            const unreadCountMap = conversationData.unreadCount || {};
+            const updatedUnreadCount = { ...unreadCountMap };
+
+            // Get all participants who should receive unread count increment
+            const participantsToUpdate = conversationData.participants.filter(
                 (id: string) => id !== currentUser.uid
             );
 
-            const updatedUnreadCount = {
-                ...conversationData.unreadCount,
-                [otherUserId]: (conversationData.unreadCount[otherUserId] || 0) + 1,
-            };
+            // Increment unread count for each participant
+            participantsToUpdate.forEach((participantId: string) => {
+                updatedUnreadCount[participantId] = (updatedUnreadCount[participantId] || 0) + 1;
+            });
 
             await updateDoc(conversationRef, {
                 lastMessage: {
@@ -226,8 +230,14 @@ export const sendMessage = async (
                 updatedAt: serverTimestamp(),
             });
 
-            // Send Push Notification
-            if (otherUserId) {
+            // Send Push Notification to all other participants
+            participantsToUpdate.forEach(async (otherUserId: string) => {
+                // Determine notification title based on conversation type
+                let title = userData?.name || currentUser.displayName || 'User';
+                if (conversationData.type === 'group' && conversationData.groupName) {
+                    title = `${title} in ${conversationData.groupName}`;
+                }
+
                 try {
                     const { sendNotification } = require('./notificationService');
                     await sendNotification(
@@ -236,13 +246,13 @@ export const sendMessage = async (
                         userData?.name || currentUser.displayName || 'User',
                         userData?.photoURL || currentUser.photoURL,
                         'message',
-                        `${userData?.name || currentUser.displayName || 'User'} sent you a message`,
+                        `${userData?.name || currentUser.displayName || 'User'} sent a message`,
                         { conversationId }
                     );
                 } catch (notifError) {
                     console.error('Error sending message notification:', notifError);
                 }
-            }
+            });
         }
     } catch (error) {
         console.error('Error sending message:', error);

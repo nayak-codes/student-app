@@ -2,18 +2,18 @@
 import { useRouter } from 'expo-router';
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import FeedList from '../../src/components/feed/FeedList';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
-import { getTotalUnreadCount } from '../../src/services/chatService';
 import { testFirebaseConnection } from '../../src/utils/testFirebase';
 
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 
 import { useFriendRequests } from '../../src/hooks/useFriendRequests';
+import { useUnreadCount } from '../../src/hooks/useUnreadCount';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SwipeNavigator from '../../src/components/SwipeNavigator';
@@ -22,7 +22,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, userProfile, loading } = useAuth();
   const { colors, isDark } = useTheme();
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // Friend Requests Logic
   const {
@@ -46,19 +45,7 @@ export default function HomeScreen() {
   }, []);
 
   // Load unread count
-  useEffect(() => {
-    if (user) {
-      const loadUnreadCount = async () => {
-        const count = await getTotalUnreadCount(user.uid);
-        setUnreadCount(count);
-      };
-      loadUnreadCount();
-
-      // Refresh unread count every 30 seconds
-      const interval = setInterval(loadUnreadCount, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [user]);
+  const unreadCount = useUnreadCount();
 
   // Collapsible Header Logic
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -93,7 +80,7 @@ export default function HomeScreen() {
           <SafeAreaView edges={['top']}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
               <View style={styles.brandContainer}>
-                <Text style={styles.brandText}>Vidhyardi</Text>
+                <Text style={styles.brandText}>Vidhyardhi</Text>
               </View>
 
               <View style={styles.headerActions}>

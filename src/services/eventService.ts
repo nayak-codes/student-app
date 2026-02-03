@@ -82,6 +82,17 @@ export const addEvent = async (eventData: Omit<EventItem, 'id' | 'createdAt'>) =
     }
 };
 
+// Delete an event
+export const deleteEvent = async (eventId: string) => {
+    try {
+        await deleteDoc(doc(db, 'events', eventId));
+        console.log('Event deleted:', eventId);
+    } catch (error) {
+        console.error('Error deleting event:', error);
+        throw error;
+    }
+};
+
 // Get all events
 export const getAllEvents = async (): Promise<EventItem[]> => {
     try {

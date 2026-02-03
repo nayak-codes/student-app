@@ -12,9 +12,11 @@ interface EventCardProps {
     forceWhite?: boolean;
     isSaved?: boolean;
     onToggleSave?: (event: EventItem) => void;
+    onOptionPress?: (event: EventItem) => void;
+    style?: any;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, onPress, forceWhite = false, isSaved = false, onToggleSave }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, onPress, forceWhite = false, isSaved = false, onToggleSave, onOptionPress, style }) => {
     const themeContext = useTheme();
 
     // Override theme values if forceWhite is true
@@ -145,7 +147,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress, forceWhite
 
     return (
         <TouchableOpacity
-            style={[styles.card, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#888' }]}
+            style={[styles.card, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#888' }, style]}
             onPress={() => onPress && onPress(event)}
             activeOpacity={0.96}
         >
@@ -171,6 +173,15 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress, forceWhite
                         <Text style={[styles.eventName, { color: colors.text }]} numberOfLines={1}>
                             {event.title}
                         </Text>
+                        {onOptionPress && (
+                            <TouchableOpacity
+                                onPress={() => onOptionPress(event)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                style={{ padding: 4 }}
+                            >
+                                <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     <Text style={[styles.eventOrg, { color: colors.textSecondary }]} numberOfLines={1}>

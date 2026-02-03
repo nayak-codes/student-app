@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect } from 'react';
 import {
     Animated,
@@ -14,13 +15,8 @@ import {
 export type AttachmentType =
     | 'gallery'
     | 'camera'
-    | 'location'
-    | 'contact'
     | 'document'
-    | 'audio'
-    | 'poll'
-    | 'event'
-    | 'ai-images';
+    | 'poll';
 
 interface ChatAttachmentMenuProps {
     visible: boolean;
@@ -34,18 +30,12 @@ const MENU_ITEMS: {
     id: AttachmentType;
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
-    color: string;
-    gradient: string[]
+    gradient: string[];
 }[] = [
-        { id: 'gallery', label: 'Gallery', icon: 'images', color: '#3B82F6', gradient: ['#3B82F6', '#2563EB'] },
-        { id: 'camera', label: 'Camera', icon: 'camera', color: '#EC4899', gradient: ['#EC4899', '#DB2777'] },
-        { id: 'location', label: 'Location', icon: 'location', color: '#10B981', gradient: ['#10B981', '#059669'] },
-        { id: 'contact', label: 'Contact', icon: 'person', color: '#0EA5E9', gradient: ['#0EA5E9', '#0284C7'] },
-        { id: 'document', label: 'Document', icon: 'document-text', color: '#8B5CF6', gradient: ['#8B5CF6', '#7C3AED'] },
-        { id: 'audio', label: 'Audio', icon: 'headset', color: '#F97316', gradient: ['#F97316', '#EA580C'] },
-        { id: 'poll', label: 'Poll', icon: 'bar-chart', color: '#EAB308', gradient: ['#EAB308', '#CA8A04'] },
-        { id: 'event', label: 'Event', icon: 'calendar', color: '#EF4444', gradient: ['#EF4444', '#DC2626'] },
-        { id: 'ai-images', label: 'AI images', icon: 'sparkles', color: '#06b6d4', gradient: ['#06b6d4', '#0891b2'] },
+        { id: 'camera', label: 'Camera', icon: 'camera', gradient: ['#EC4899', '#DB2777'] },
+        { id: 'gallery', label: 'Gallery', icon: 'images', gradient: ['#3B82F6', '#2563EB'] },
+        { id: 'document', label: 'Document', icon: 'document-text', gradient: ['#8B5CF6', '#7C3AED'] },
+        { id: 'poll', label: 'Poll', icon: 'bar-chart', gradient: ['#EAB308', '#CA8A04'] },
     ];
 
 export default function ChatAttachmentMenu({ visible, onClose, onSelect }: ChatAttachmentMenuProps) {
@@ -62,7 +52,7 @@ export default function ChatAttachmentMenu({ visible, onClose, onSelect }: ChatA
                 }),
                 Animated.timing(fadeAnim, {
                     toValue: 1,
-                    duration: 300,
+                    duration: 200,
                     useNativeDriver: true,
                 })
             ]).start();
@@ -105,18 +95,20 @@ export default function ChatAttachmentMenu({ visible, onClose, onSelect }: ChatA
                             <TouchableOpacity
                                 key={item.id}
                                 style={styles.menuItem}
+                                activeOpacity={0.8}
                                 onPress={() => {
                                     onSelect(item.id);
                                     onClose();
                                 }}
                             >
-                                <View style={[styles.iconContainer, { backgroundColor: 'transparent' }]}>
-                                    {/* We could use LinearGradient here if needed, but for simplicity we'll check plain colors or View with opacity */}
-                                    {/* For professional look, let's just use the solid color with opacity or a dark theme circle */}
-                                    <View style={[styles.iconCircle, { borderColor: item.color }]}>
-                                        <Ionicons name={item.icon} size={28} color={item.color} />
-                                    </View>
-                                </View>
+                                <LinearGradient
+                                    colors={item.gradient}
+                                    style={styles.iconCircle}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                >
+                                    <Ionicons name={item.icon} size={28} color="#FFF" />
+                                </LinearGradient>
                                 <Text style={styles.label}>{item.label}</Text>
                             </TouchableOpacity>
                         ))}
@@ -131,61 +123,54 @@ const styles = StyleSheet.create({
     overlay: {
         flex: 1,
         justifyContent: 'flex-end',
+        alignItems: 'center',
     },
     backdrop: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
     },
     menuContainer: {
-        backgroundColor: '#0F172A', // Slate 900
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        paddingTop: 24,
-        paddingBottom: 40,
-        paddingHorizontal: 20,
+        backgroundColor: '#1E293B', // Slate 800
+        width: width - 32,
+        borderRadius: 24,
+        paddingTop: 20,
+        paddingBottom: 20,
+        paddingHorizontal: 16,
         elevation: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
-        marginBottom: 70, // Float slightly above the input bar area
-        marginHorizontal: 10,
-        borderRadius: 24,
+        marginBottom: 80, // Position above the input field
     },
     menuGrid: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        gap: 10,
+        justifyContent: 'space-around', // Distribute evenly in one line
+        alignItems: 'center',
     },
     menuItem: {
-        width: (width - 80) / 4, // 4 items per row accounting for padding
         alignItems: 'center',
-        marginBottom: 20,
+        width: '22%', // Fit 4 items comfortably
     },
-    iconContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+    iconCircle: {
+        width: 50, // Slightly smaller for single line
+        height: 50,
+        borderRadius: 25,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 8,
-    },
-    iconCircle: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1.5,
-        backgroundColor: 'rgba(30, 41, 59, 0.8)', // Slate 800 semi-transparent
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 5,
     },
     label: {
-        color: '#E2E8F0', // Slate 200
+        color: '#F1F5F9', // Slate 100
         fontSize: 12,
-        fontWeight: '500',
-        marginTop: 4,
+        fontWeight: '600',
+        textAlign: 'center',
     }
 });

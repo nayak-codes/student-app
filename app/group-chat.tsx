@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -98,7 +98,17 @@ export default function GroupChatScreen() {
         }
     }, [showImportantMembersCard, params.conversationId]);
 
+
     const flatListRef = useRef<FlatList>(null);
+
+    // Mark messages as read only when screen comes into focus
+    useFocusEffect(
+        useCallback(() => {
+            if (conversationId && auth.currentUser) {
+                markMessagesAsRead(conversationId, auth.currentUser.uid);
+            }
+        }, [conversationId])
+    );
 
     useEffect(() => {
         if (!conversationId || typeof conversationId !== 'string') {
@@ -133,14 +143,11 @@ export default function GroupChatScreen() {
             }
         });
 
-        // Mark messages as read
-        if (auth.currentUser) {
-            markMessagesAsRead(conversationId, auth.currentUser.uid);
-        }
-
         const unsubscribe = subscribeToMessages(conversationId, (newMessages) => {
             setMessages(newMessages);
             setLoading(false);
+            // Don't auto-mark as read when new messages arrive
+            // Only mark as read when user focuses the screen (handled by useFocusEffect above)
         });
 
         return () => {

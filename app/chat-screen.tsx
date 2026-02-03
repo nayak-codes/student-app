@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -23,7 +23,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ChatAttachmentMenu, { AttachmentType } from '../src/components/ChatAttachmentMenu';
 import DocumentViewer from '../src/components/DocumentViewer';
-import { MediaPreviewModalProps } from '../src/components/MediaPreviewModal';
+import MediaPreviewModal, { MediaPreviewModalProps } from '../src/components/MediaPreviewModal';
 import PollCreator from '../src/components/PollCreator';
 import PollMessage from '../src/components/PollMessage';
 import PostDetailModal from '../src/components/PostDetailModal';
@@ -218,19 +218,25 @@ const ChatScreen = () => {
     // const scrollY = React.useRef(new Animated.Value(0)).current; 
     // Static Header implementation requires no animation logic
 
+    // Mark messages as read only when screen comes into focus
+    useFocusEffect(
+        useCallback(() => {
+            if (conversationId && auth.currentUser) {
+                markMessagesAsRead(conversationId, auth.currentUser.uid);
+            }
+        }, [conversationId])
+    );
+
     useEffect(() => {
         if (!conversationId || typeof conversationId !== 'string') {
             return;
         }
 
-        // Mark messages as read when entering screen
-        if (auth.currentUser) {
-            markMessagesAsRead(conversationId, auth.currentUser.uid);
-        }
-
         const unsubscribe = subscribeToMessages(conversationId, (newMessages) => {
             setMessages(newMessages);
             setLoading(false);
+            // Don't auto-mark as read when new messages arrive
+            // Only mark as read when user focuses the screen (handled by useFocusEffect above)
         });
 
         return () => unsubscribe();
@@ -621,13 +627,16 @@ const ChatScreen = () => {
                             <View style={[
                                 styles.messageBubble,
                                 isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+                                (item.messageType === 'image') && { paddingHorizontal: 0, paddingVertical: 0, overflow: 'hidden' } // Full bleed for images
                             ]}>
                                 {/* Image Attachment */}
                                 {item.messageType === 'image' && item.mediaUrl && (
-                                    <TouchableOpacity onPress={() => router.push({
-                                        pathname: '/image-viewer',
-                                        params: { images: item.mediaUrl }
-                                    })}>
+                                    <TouchableOpacity
+                                        activeOpacity={0.9}
+                                        onPress={() => router.push({
+                                            pathname: '/image-viewer',
+                                            params: { images: item.mediaUrl }
+                                        })}>
                                         <Image
                                             source={{ uri: item.mediaUrl }}
                                             style={styles.mediaImage}
@@ -655,6 +664,7 @@ const ChatScreen = () => {
                                     <Text style={[
                                         styles.messageText,
                                         isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                                        (item.messageType === 'image') && { marginHorizontal: 12, marginTop: 8 } // Add spacing for caption if image exists
                                     ]}>
                                         {item.text}
                                     </Text>
@@ -662,7 +672,8 @@ const ChatScreen = () => {
 
                                 <Text style={[
                                     styles.messageTimeInline,
-                                    isOwnMessage ? styles.ownMessageTimeInline : [styles.otherMessageTimeInline, { color: colors.textSecondary }]
+                                    isOwnMessage ? styles.ownMessageTimeInline : [styles.otherMessageTimeInline, { color: colors.textSecondary }],
+                                    (item.messageType === 'image') && { marginRight: 12, marginBottom: 8 } // Add spacing for time overlay
                                 ]}>
                                     {formatMessageTime(item.timestamp)}
                                 </Text>
@@ -689,7 +700,15 @@ const ChatScreen = () => {
                     <TouchableOpacity
                         style={styles.headerProfileContainer}
                         activeOpacity={0.7}
-                        onPress={() => router.push({ pathname: '/public-profile', params: { userId: otherUserId } })}
+                        onPress={() => router.push({
+                            pathname: '/chat-user-info',
+                            params: {
+                                userId: otherUserId,
+                                name: otherUserName,
+                                photoURL: otherUserPhoto,
+                                conversationId
+                            }
+                        })}
                     >
                         {otherUserPhoto ? (
                             <Image source={{ uri: otherUserPhoto }} style={styles.headerAvatar} />
@@ -806,6 +825,17 @@ const ChatScreen = () => {
                 onSelect={handleAttachmentSelect}
             />
 
+            <MediaPreviewModal
+                visible={showPreview}
+                attachment={previewAttachment}
+                onClose={() => {
+                    setShowPreview(false);
+                    setPreviewAttachment(null);
+                }}
+                onSend={handleSendAttachment}
+                uploading={sending}
+            />
+
             <PollCreator
                 visible={showPollCreator}
                 onClose={() => setShowPollCreator(false)}
@@ -915,8 +945,8 @@ const styles = StyleSheet.create({
     },
     messagesList: {
         paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 16,
+        paddingTop: 4, // Visual bottom (near input) - Reduced from 16 to 4
+        paddingBottom: 16, // Visual top (near header)
     },
     dateHeader: {
         alignItems: 'center',
@@ -933,8 +963,19 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     messageContainer: {
-        marginBottom: 16,
+        marginBottom: 8, // Reduced from 16 to tighten spacing between messages
         maxWidth: '80%',
+    },
+    // ... (intermediate styles skipped) ...
+    // Input Styles matching GroupChat
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-end', // Critical: Keep buttons at bottom
+        paddingHorizontal: 16,
+        paddingTop: 8, // Reduced from 12
+        paddingBottom: 12,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.05)',
     },
     ownMessageContainer: {
         alignSelf: 'flex-end',
@@ -973,8 +1014,10 @@ const styles = StyleSheet.create({
     },
     messageBubble: {
         borderRadius: 18,
-        padding: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 6, // Reduced vertical padding
         maxWidth: '100%',
+        minWidth: 85,
         elevation: 2,
     },
     ownMessageBubble: {
@@ -995,7 +1038,8 @@ const styles = StyleSheet.create({
     messageText: {
         fontSize: 15,
         lineHeight: 20,
-        marginBottom: 2,
+        marginBottom: 0,
+        textAlign: 'left', // Ensure text is always left-aligned
     },
     ownMessageText: {
         color: '#FFFFFF',
@@ -1019,10 +1063,10 @@ const styles = StyleSheet.create({
 
     // MEDIA & FILE STYLES
     mediaImage: {
-        width: 240,
-        height: 180,
-        borderRadius: 8,
-        marginBottom: 4,
+        width: 260,
+        height: 320, // Taller portrait look
+        borderRadius: 18, // Matches bubble radius
+        // marginBottom: 4, // Removed to let caption/time sit better
     },
     fileContainer: {
         flexDirection: 'row',
@@ -1197,15 +1241,7 @@ const styles = StyleSheet.create({
         color: '#64748B',
         textAlign: 'center',
     },
-    // Input Styles matching GroupChat
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'flex-end', // Critical: Keep buttons at bottom
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0,0,0,0.05)',
-    },
+
     plusButton: {
         width: 40,
         height: 40,

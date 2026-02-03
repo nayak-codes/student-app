@@ -1,22 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { LibraryResource } from '../../services/libraryService';
-
-import { StyleProp, ViewStyle } from 'react-native';
 
 interface BookCardProps {
     item: LibraryResource;
     onPressCover: (item: LibraryResource) => void;
     onPressInfo: (item: LibraryResource) => void;
+    onOptionPress?: (item: LibraryResource) => void;
     style?: StyleProp<ViewStyle>;
 }
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = 120;
 
-const BookCard = ({ item, onPressCover, onPressInfo, style }: BookCardProps) => {
+const BookCard = ({ item, onPressCover, onPressInfo, onOptionPress, style }: BookCardProps) => {
     const { colors, isDark } = useTheme();
 
     // Helper to get thumbnail URL (same logic as before)
@@ -57,7 +56,8 @@ const BookCard = ({ item, onPressCover, onPressInfo, style }: BookCardProps) => 
                             </Text>
                         </View>
                     )}
-                    {/* Type Badge (small icon/text overlay) */}
+
+                    {/* Badge Overlay */}
                     <View style={styles.badgeOverlay}>
                         {item.isPremium ? (
                             <View style={[styles.badge, { backgroundColor: '#F59E0B' }]}>
@@ -71,6 +71,17 @@ const BookCard = ({ item, onPressCover, onPressInfo, style }: BookCardProps) => 
                             )
                         )}
                     </View>
+
+                    {/* Options Button (Overlay) - Only show if callback provided */}
+                    {onOptionPress && (
+                        <TouchableOpacity
+                            style={styles.optionsButton}
+                            onPress={() => onOptionPress(item)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Ionicons name="ellipsis-vertical" size={16} color="#FFF" />
+                        </TouchableOpacity>
+                    )}
                 </View>
             </TouchableOpacity>
 
@@ -107,9 +118,8 @@ const styles = StyleSheet.create({
         marginRight: 16,
     },
     coverContainer: {
-        width: '100%', // Changed from CARD_WIDTH to 100% so it fills the parent container
+        width: '100%',
         aspectRatio: 2 / 3, // Maintain aspect ratio
-        height: undefined, // Let aspect ratio control height
         borderRadius: 8,
         overflow: 'hidden',
         marginBottom: 8,
@@ -118,6 +128,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 4,
+        position: 'relative',
     },
     coverImage: {
         width: '100%',
@@ -151,6 +162,17 @@ const styles = StyleSheet.create({
         fontSize: 8,
         fontWeight: 'bold',
     },
+    optionsButton: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     infoContainer: {
         paddingRight: 4,
     },
@@ -177,7 +199,7 @@ const styles = StyleSheet.create({
     ratingCount: {
         fontSize: 10,
         marginLeft: 2,
-    }
+    },
 });
 
 export default BookCard;

@@ -13,7 +13,7 @@ export const pickImage = async (): Promise<string | null> => {
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            allowsEditing: true,
+            allowsEditing: false, // Changed to false to allow full image selection
             aspect: [4, 3],
             quality: 0.8,
         });
@@ -55,7 +55,7 @@ export const takePhoto = async (): Promise<string | null> => {
 
         const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
-            allowsEditing: true,
+            allowsEditing: false, // Changed to false to allow full photo capture
             aspect: [4, 3],
             quality: 0.8,
         });

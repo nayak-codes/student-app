@@ -17,9 +17,11 @@ interface PostOptionsModalProps {
     onEdit?: () => void;
     onDelete?: () => void;
     onSave?: () => void;
-    onReport: () => void; // Made required as it should always be available
+    onReport: () => void;
     isOwnPost: boolean;
     isSaved?: boolean;
+    title?: string; // New prop for custom title
+    contentType?: string; // New prop for content type (e.g., 'Post', 'Event')
 }
 
 const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
@@ -31,13 +33,15 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
     onReport,
     isOwnPost,
     isSaved = false,
+    title,
+    contentType = 'Post'
 }) => {
     const { colors, isDark } = useTheme();
 
     const handleDelete = () => {
         Alert.alert(
-            'Delete Post',
-            'Are you sure you want to delete this post? This action cannot be undone.',
+            `Delete ${contentType}`,
+            `Are you sure you want to delete this ${contentType.toLowerCase()}? This action cannot be undone.`,
             [
                 {
                     text: 'Cancel',
@@ -58,8 +62,8 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
 
     const handleReport = () => {
         Alert.alert(
-            'Report Post',
-            'Why are you reporting this post?',
+            `Report ${contentType}`,
+            `Why are you reporting this ${contentType.toLowerCase()}?`,
             [
                 { text: 'Cancel', style: 'cancel', onPress: onClose },
                 {
@@ -100,7 +104,7 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
                     {/* Header */}
                     <View style={styles.header}>
                         <Text style={[styles.title, { color: colors.text }]}>
-                            {isOwnPost ? 'Manage Post' : 'Post Options'}
+                            {title || (isOwnPost ? `Manage ${contentType}` : `${contentType} Options`)}
                         </Text>
                         <TouchableOpacity onPress={onClose}>
                             <Ionicons name="close" size={24} color={colors.text} />
@@ -126,7 +130,7 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
                                 </View>
                                 <View style={styles.optionText}>
                                     <Text style={[styles.optionTitle, { color: colors.text }]}>
-                                        {isSaved ? 'Unsave Post' : 'Save Post'}
+                                        {isSaved ? `Unsave ${contentType}` : `Save ${contentType}`}
                                     </Text>
                                     <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
                                         {isSaved ? 'Remove from your saved items' : 'Save this for later'}
@@ -153,7 +157,7 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
                                 </View>
                                 <View style={styles.optionText}>
                                     <Text style={[styles.optionTitle, { color: colors.text }]}>
-                                        Edit Post
+                                        Edit {contentType}
                                     </Text>
                                     <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
                                         Modify the caption or details
@@ -177,10 +181,10 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
                                 </View>
                                 <View style={styles.optionText}>
                                     <Text style={[styles.optionTitle, { color: '#EF4444' }]}>
-                                        Delete Post
+                                        Delete {contentType}
                                     </Text>
                                     <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-                                        Remove this post permanently
+                                        Remove this {contentType.toLowerCase()} permanently
                                     </Text>
                                 </View>
                                 <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -197,10 +201,10 @@ const PostOptionsModal: React.FC<PostOptionsModalProps> = ({
                             </View>
                             <View style={styles.optionText}>
                                 <Text style={[styles.optionTitle, { color: colors.text }]}>
-                                    Report Post
+                                    Report {contentType}
                                 </Text>
                                 <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-                                    I'm concerned about this post
+                                    I'm concerned about this {contentType.toLowerCase()}
                                 </Text>
                             </View>
                             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />

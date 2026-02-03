@@ -29,6 +29,7 @@ import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
 import { EventCard } from '../src/components/EventCard';
 import BookCard from '../src/components/library/BookCard';
+import PostOptionsModal from '../src/components/PostOptionsModal';
 import { db } from '../src/config/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -43,8 +44,8 @@ import {
     subscribeToNetworkStats,
     unfollowUser
 } from '../src/services/connectionService';
-import { EventItem, getUserEvents } from '../src/services/eventService';
-import { getUserResources, LibraryResource } from '../src/services/libraryService';
+import { deleteEvent, EventItem, getUserEvents } from '../src/services/eventService';
+import { deleteResource, getUserResources, LibraryResource } from '../src/services/libraryService';
 import { deletePost, getAllPosts, incrementViewCount, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
@@ -135,28 +136,34 @@ const PostCard: React.FC<{
     onPress?: (post: Post) => void;
     onDelete?: (post: Post) => void;
     onEdit?: (post: Post) => void;
-}> = ({ post, onImagePress, onVideoPress, onPress, onDelete, onEdit }) => {
+    onOptionsPress?: (post: Post) => void;
+}> = ({ post, onImagePress, onVideoPress, onPress, onDelete, onEdit, onOptionsPress }) => {
     const { colors, isDark } = useTheme();
     const [imageError, setImageError] = React.useState(false);
 
     const handleOptionsPress = () => {
-        Alert.alert(
-            "Post Options",
-            "Choose an action",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Edit", onPress: () => {
-                        if (onEdit) onEdit(post);
+        if (onOptionsPress) {
+            onOptionsPress(post);
+        } else {
+            // Fallback to alert if no handler provided (legacy behavior)
+            Alert.alert(
+                "Post Options",
+                "Choose an action",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                        text: "Edit", onPress: () => {
+                            if (onEdit) onEdit(post);
+                        }
+                    },
+                    {
+                        text: "Delete", style: "destructive", onPress: () => {
+                            if (onDelete) onDelete(post);
+                        }
                     }
-                },
-                {
-                    text: "Delete", style: "destructive", onPress: () => {
-                        if (onDelete) onDelete(post);
-                    }
-                }
-            ]
-        );
+                ]
+            );
+        }
     };
 
     const Content = (
@@ -251,7 +258,11 @@ const PostCard: React.FC<{
 // ... (existing imports)
 
 // Video List Item Component - YouTube Style
-const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = ({ post, onPress }) => {
+const VideoListItem: React.FC<{
+    post: Post;
+    onPress: (post: Post) => void;
+    onOptionPress?: (post: Post) => void;
+}> = ({ post, onPress, onOptionPress }) => {
     const { colors, isDark } = useTheme();
     return (
         <TouchableOpacity
@@ -277,9 +288,15 @@ const VideoListItem: React.FC<{ post: Post; onPress: (post: Post) => void }> = (
             <View style={styles.videoListDetails}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={[styles.videoListTitle, { color: colors.text }]} numberOfLines={2}>{post.content || 'Untitled Video'}</Text>
-                    <TouchableOpacity style={{ paddingLeft: 8 }}>
-                        <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
-                    </TouchableOpacity>
+                    {onOptionPress && (
+                        <TouchableOpacity
+                            style={{ padding: 8 }}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            onPress={() => onOptionPress(post)}
+                        >
+                            <Ionicons name="ellipsis-vertical" size={16} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
                 <Text style={[styles.videoListMeta, { color: colors.textSecondary }]}>
                     {post.userName} • {post.likes || 0} views • 2 hours ago
@@ -378,7 +395,8 @@ const PostDetailModal: React.FC<{
     onVideoPress: (link: string, post: Post) => void;
     onDelete?: (post: Post) => void | Promise<void>;
     onEdit?: (post: Post) => void | Promise<void>;
-}> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit }) => {
+    onOptionsPress?: (post: Post) => void;
+}> = ({ visible, post, onClose, onImagePress, onVideoPress, onDelete, onEdit, onOptionsPress }) => {
     const { colors, isDark } = useTheme();
 
     if (!post) return null;
@@ -400,6 +418,7 @@ const PostDetailModal: React.FC<{
                         onVideoPress={onVideoPress}
                         onDelete={onDelete}
                         onEdit={onEdit}
+                        onOptionsPress={onOptionsPress}
                     />
                 </ScrollView>
             </SafeAreaView>
@@ -434,6 +453,14 @@ const ProfileScreen = () => {
     // Profile Data (either own or fetched)
     const [publicUserProfile, setPublicUserProfile] = useState<any | null>(null); // Using any for now to match UserProfile/User mix
     const [loadingProfile, setLoadingProfile] = useState(false);
+
+    // Profile Pic Viewer State
+    const [showProfilePicViewer, setShowProfilePicViewer] = useState(false);
+
+    // Options Modal State
+    const [showOptionsModal, setShowOptionsModal] = useState(false);
+    const [selectedOptionsItem, setSelectedOptionsItem] = useState<any>(null);
+    const [optionsItemType, setOptionsItemType] = useState<'post' | 'video' | 'doc' | 'event' | 'clip'>('post');
 
     // UI State
     const [activeTab, setActiveTab] = useState<ProfileTabType>('posts');
@@ -777,6 +804,64 @@ const ProfileScreen = () => {
         );
     };
 
+    const handleDeleteResource = async (resource: LibraryResource) => {
+        Alert.alert(
+            "Delete Document",
+            "Are you sure you want to delete this document?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete", style: "destructive", onPress: async () => {
+                        try {
+                            if (!authUser?.uid) return;
+                            await deleteResource(resource.id, authUser.uid);
+                            handleRefresh();
+                        } catch (error) {
+                            Alert.alert("Error", "Failed to delete document");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleDeleteEvent = async (event: EventItem) => {
+        Alert.alert(
+            "Delete Event",
+            "Are you sure you want to delete this event?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete", style: "destructive", onPress: async () => {
+                        try {
+                            if (event.id) {
+                                await deleteEvent(event.id);
+                                handleRefresh();
+                            }
+                        } catch (error) {
+                            Alert.alert("Error", "Failed to delete event");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleOptionsPress = (type: 'post' | 'video' | 'clip' | 'doc' | 'event', item: any) => {
+        if (!isOwnProfile) return;
+
+        // Map internal type to display content type
+        let displayType = 'Post';
+        if (type === 'video') displayType = 'Video';
+        if (type === 'clip') displayType = 'Clip';
+        if (type === 'doc') displayType = 'Document';
+        if (type === 'event') displayType = 'Event';
+
+        setOptionsItemType(type as any); // Type assertion if needed, or update state type definition
+        setSelectedOptionsItem(item);
+        setShowOptionsModal(true);
+    };
+
     const savePostEdit = async (postId: string, newContent: string) => {
         try {
             if (!authUser?.uid) return;
@@ -960,15 +1045,17 @@ const ProfileScreen = () => {
                     {/* Profile Info */}
                     <View style={styles.profileInfoContainer}>
                         <View style={styles.ytAvatarContainer}>
-                            {photoURL ? (
-                                <Image source={{ uri: photoURL }} style={[styles.ytAvatar, { borderColor: colors.background }]} />
-                            ) : (
-                                <View style={[styles.ytAvatar, { backgroundColor: colors.primary, borderColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-                                    <Text style={{ color: '#FFF', fontSize: 24, fontWeight: 'bold' }}>
-                                        {displayName.charAt(0).toUpperCase()}
-                                    </Text>
-                                </View>
-                            )}
+                            <TouchableOpacity activeOpacity={0.9} onPress={() => setShowProfilePicViewer(true)}>
+                                {photoURL ? (
+                                    <Image source={{ uri: photoURL }} style={[styles.ytAvatar, { borderColor: colors.background }]} />
+                                ) : (
+                                    <View style={[styles.ytAvatar, { backgroundColor: colors.primary, borderColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+                                        <Text style={{ color: '#FFF', fontSize: 24, fontWeight: 'bold' }}>
+                                            {displayName.charAt(0).toUpperCase()}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
                         </View>
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
@@ -1223,6 +1310,7 @@ const ProfileScreen = () => {
                                                         onPress={openPostModal}
                                                         onImagePress={openImageViewer}
                                                         onVideoPress={openVideo}
+                                                        onOptionsPress={isOwnProfile ? (p) => handleOptionsPress('post', p) : undefined}
                                                     // Minimal props for preview
                                                     />
                                                 </View>
@@ -1286,6 +1374,7 @@ const ProfileScreen = () => {
                                                     // Info -> Open Details Page
                                                     router.push({ pathname: '/document-detail', params: { id: resource.id } });
                                                 }}
+                                                onOptionPress={isOwnProfile ? (resource) => handleOptionsPress('doc', resource) : undefined}
                                                 style={{
                                                     marginBottom: 16,
                                                     width: '30%',
@@ -1300,6 +1389,7 @@ const ProfileScreen = () => {
                                             key={item.id}
                                             post={item}
                                             onPress={(p) => openVideo(p.videoLink || '', p)}
+                                            onOptionPress={isOwnProfile ? (p) => handleOptionsPress('video', p) : undefined}
                                         />
                                     ))
                                 ) : activeTab === 'clips' ? (
@@ -1326,6 +1416,16 @@ const ProfileScreen = () => {
                                                         setShowClipsFeed(true);
                                                     }}
                                                 >
+                                                    {/* Options Button */}
+                                                    {isOwnProfile && (
+                                                        <TouchableOpacity
+                                                            style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, padding: 4 }}
+                                                            onPress={() => handleOptionsPress('clip', item)}
+                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                        >
+                                                            <Ionicons name="ellipsis-vertical" size={20} color="#FFF" style={{ textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} />
+                                                        </TouchableOpacity>
+                                                    )}
                                                     {/* Thumbnail */}
                                                     {thumbnailUrl ? (
                                                         <Image
@@ -1393,7 +1493,7 @@ const ProfileScreen = () => {
                                         )}
                                     </View>
                                 ) : activeTab === 'events' ? (
-                                    <View>
+                                    <View style={{ width: '100%' }}>
                                         <ScrollView
                                             horizontal
                                             showsHorizontalScrollIndicator={false}
@@ -1415,7 +1515,10 @@ const ProfileScreen = () => {
                                                 <EventCard
                                                     key={event.id}
                                                     event={event}
+                                                    forceWhite={true}
+                                                    style={{ width: '100%' }}
                                                     onPress={(item) => router.push({ pathname: '/event-detail', params: { event: JSON.stringify(item) } })}
+                                                    onOptionPress={isOwnProfile ? (item) => handleOptionsPress('event', item) : undefined}
                                                 />
                                             ))}
                                             {events.filter(e => eventFilter === 'All' || e.category === eventFilter).length === 0 && (
@@ -1622,6 +1725,43 @@ const ProfileScreen = () => {
             </Modal>
 
             <DocumentViewer
+                visible={showProfilePicViewer}
+                onClose={() => setShowProfilePicViewer(false)}
+                documentUrl={photoURL || ''}
+                documentName={`${displayName}'s Profile`}
+                documentType="image"
+            />
+
+            <PostOptionsModal
+                visible={showOptionsModal}
+                onClose={() => setShowOptionsModal(false)}
+                title={`Manage ${optionsItemType.charAt(0).toUpperCase() + optionsItemType.slice(1)}`}
+                contentType={optionsItemType.charAt(0).toUpperCase() + optionsItemType.slice(1)}
+                isOwnPost={true}
+                onReport={() => { }} // Not needed for own profile content usually
+                onEdit={() => {
+                    const type = optionsItemType;
+                    const item = selectedOptionsItem;
+                    if (type === 'post' || type === 'video' || type === 'clip') {
+                        handleEditPost(item);
+                    } else {
+                        Alert.alert("Coming Soon", "Edit functionality not yet available.");
+                    }
+                }}
+                onDelete={() => {
+                    const type = optionsItemType;
+                    const item = selectedOptionsItem;
+                    if (type === 'post' || type === 'video' || type === 'clip') {
+                        handleDeletePost(item);
+                    } else if (type === 'doc') {
+                        handleDeleteResource(item);
+                    } else if (type === 'event') {
+                        handleDeleteEvent(item);
+                    }
+                }}
+            />
+
+            <DocumentViewer
                 visible={docViewerVisible}
                 onClose={() => {
                     setDocViewerVisible(false);
@@ -1679,11 +1819,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16, // Keep standard edge spacing
         paddingTop: 12,
         paddingBottom: 4,
+        zIndex: 20, // Ensure it sits above banner for touches
     },
     ytAvatarContainer: {
         marginTop: -48, // Overlap banner slightly (half of 96)
         marginBottom: 12,
         alignItems: 'flex-start', // Left align
+        zIndex: 10,
+        elevation: 10,
         // paddingLeft removed to align with parent container
     },
     ytAvatar: {

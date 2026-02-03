@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import TabSwipeNavigator from '../src/components/TabSwipeNavigator';
 import { auth } from '../src/config/firebase';
+import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import {
     Conversation,
@@ -26,6 +27,7 @@ import {
 const ConversationsScreen = () => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
+    const { user } = useAuth();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -48,21 +50,25 @@ const ConversationsScreen = () => {
         // Ensure navigation is ready
         if (!rootNavigationState?.key) return;
 
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-            router.replace('/login');
-            return;
-        }
+        const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+            if (!user) {
+                // Only redirect if navigation is ready and user is definitely not logged in
+                router.replace('/login');
+            } else {
+                // User is logged in, subscribe to conversations
+                const unsubscribeSnapshot = subscribeToConversations(user.uid, (convos) => {
+                    setConversations(convos);
+                    setFilteredConversations(convos);
+                    setLoading(false);
+                    setRefreshing(false);
+                });
 
-        // Subscribe to conversations
-        const unsubscribe = subscribeToConversations(currentUser.uid, (convos) => {
-            setConversations(convos);
-            setFilteredConversations(convos);
-            setLoading(false);
-            setRefreshing(false);
+                // Cleanup subscription when user changes or component unmounts
+                return () => unsubscribeSnapshot();
+            }
         });
 
-        return () => unsubscribe();
+        return () => unsubscribeAuth();
     }, [rootNavigationState?.key]);
 
     useEffect(() => {
@@ -415,13 +421,19 @@ const ConversationsScreen = () => {
                             >
                                 Chats
                             </Text>
-                            {filteredConversations.filter(c => (c.type || 'chat') === 'chat').length > 0 && (
-                                <View style={[styles.tabBadge, { backgroundColor: activeTab === 'chats' ? colors.primary : colors.textSecondary }]}>
-                                    <Text style={styles.tabBadgeText}>
-                                        {filteredConversations.filter(c => (c.type || 'chat') === 'chat').length}
-                                    </Text>
-                                </View>
-                            )}
+                            {(() => {
+                                const totalUnread = conversations
+                                    .filter(c => (c.type || 'chat') === 'chat')
+                                    .reduce((sum, c) => sum + (c.unreadCount?.[user?.uid || ''] || 0), 0);
+
+                                return totalUnread > 0 ? (
+                                    <View style={[styles.tabBadge, { backgroundColor: activeTab === 'chats' ? colors.primary : colors.textSecondary }]}>
+                                        <Text style={styles.tabBadgeText}>
+                                            {totalUnread > 99 ? '99+' : totalUnread}
+                                        </Text>
+                                    </View>
+                                ) : null;
+                            })()}
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -446,13 +458,19 @@ const ConversationsScreen = () => {
                             >
                                 Groups
                             </Text>
-                            {filteredConversations.filter(c => c.type === 'group').length > 0 && (
-                                <View style={[styles.tabBadge, { backgroundColor: activeTab === 'groups' ? colors.primary : colors.textSecondary }]}>
-                                    <Text style={styles.tabBadgeText}>
-                                        {filteredConversations.filter(c => c.type === 'group').length}
-                                    </Text>
-                                </View>
-                            )}
+                            {(() => {
+                                const totalUnread = conversations
+                                    .filter(c => c.type === 'group')
+                                    .reduce((sum, c) => sum + (c.unreadCount?.[user?.uid || ''] || 0), 0);
+
+                                return totalUnread > 0 ? (
+                                    <View style={[styles.tabBadge, { backgroundColor: activeTab === 'groups' ? colors.primary : colors.textSecondary }]}>
+                                        <Text style={styles.tabBadgeText}>
+                                            {totalUnread > 99 ? '99+' : totalUnread}
+                                        </Text>
+                                    </View>
+                                ) : null;
+                            })()}
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -477,13 +495,19 @@ const ConversationsScreen = () => {
                             >
                                 Pages
                             </Text>
-                            {filteredConversations.filter(c => c.type === 'page').length > 0 && (
-                                <View style={[styles.tabBadge, { backgroundColor: activeTab === 'pages' ? colors.primary : colors.textSecondary }]}>
-                                    <Text style={styles.tabBadgeText}>
-                                        {filteredConversations.filter(c => c.type === 'page').length}
-                                    </Text>
-                                </View>
-                            )}
+                            {(() => {
+                                const totalUnread = conversations
+                                    .filter(c => c.type === 'page')
+                                    .reduce((sum, c) => sum + (c.unreadCount?.[user?.uid || ''] || 0), 0);
+
+                                return totalUnread > 0 ? (
+                                    <View style={[styles.tabBadge, { backgroundColor: activeTab === 'pages' ? colors.primary : colors.textSecondary }]}>
+                                        <Text style={styles.tabBadgeText}>
+                                            {totalUnread > 99 ? '99+' : totalUnread}
+                                        </Text>
+                                    </View>
+                                ) : null;
+                            })()}
                         </TouchableOpacity>
                     </View>
                 </SafeAreaView>

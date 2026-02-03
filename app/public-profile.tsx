@@ -29,6 +29,7 @@ import AddEducationModal from '../src/components/AddEducationModal';
 import ClipsFeed from '../src/components/ClipsFeed';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
+import { EventCard } from '../src/components/EventCard';
 import FeedPost from '../src/components/feed/FeedPost';
 import BookCard from '../src/components/library/BookCard';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -324,6 +325,7 @@ const ProfileScreen = () => {
     // Profile Data (either own or fetched)
     const [publicUserProfile, setPublicUserProfile] = useState<any | null>(null); // Using any for now to match UserProfile/User mix
     const [loadingProfile, setLoadingProfile] = useState(false);
+    const [showProfilePicViewer, setShowProfilePicViewer] = useState(false);
 
     // UI State
     const [activeTab, setActiveTab] = useState<TabType>('posts');
@@ -881,15 +883,17 @@ const ProfileScreen = () => {
                     {/* Profile Info */}
                     <View style={styles.profileInfoContainer}>
                         <View style={styles.ytAvatarContainer}>
-                            {photoURL ? (
-                                <Image source={{ uri: photoURL }} style={[styles.ytAvatar, { borderColor: colors.background }]} />
-                            ) : (
-                                <View style={[styles.ytAvatar, { backgroundColor: colors.primary, borderColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-                                    <Text style={{ color: '#FFF', fontSize: 24, fontWeight: 'bold' }}>
-                                        {displayName.charAt(0).toUpperCase()}
-                                    </Text>
-                                </View>
-                            )}
+                            <TouchableOpacity activeOpacity={0.9} onPress={() => setShowProfilePicViewer(true)}>
+                                {photoURL ? (
+                                    <Image source={{ uri: photoURL }} style={[styles.ytAvatar, { borderColor: colors.background }]} />
+                                ) : (
+                                    <View style={[styles.ytAvatar, { backgroundColor: colors.primary, borderColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+                                        <Text style={{ color: '#FFF', fontSize: 24, fontWeight: 'bold' }}>
+                                            {displayName.charAt(0).toUpperCase()}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
                         </View>
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
@@ -1400,13 +1404,15 @@ const ProfileScreen = () => {
                                         )}
                                     </View>
                                 ) : activeTab === 'events' ? (
-                                    <View style={{ padding: 16 }}>
+                                    <View style={{ padding: 16, width: '100%' }}>
                                         {events.map(event => (
-                                            <View key={event.id} style={{ padding: 16, backgroundColor: colors.card, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 }}>{event.title}</Text>
-                                                <Text style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 8 }}>{event.category} • {new Date(event.date).toLocaleDateString()}</Text>
-                                                <Text style={{ fontSize: 14, color: colors.text }} numberOfLines={2}>{event.description}</Text>
-                                            </View>
+                                            <EventCard
+                                                key={event.id}
+                                                event={event}
+                                                forceWhite={true}
+                                                style={{ width: '100%' }}
+                                                onPress={(item: any) => router.push({ pathname: '/event-detail', params: { event: JSON.stringify(item) } })}
+                                            />
                                         ))}
                                         {events.length === 0 && (
                                             <View style={{ padding: 40, alignItems: 'center' }}>
@@ -1513,6 +1519,14 @@ const ProfileScreen = () => {
                 </View>
             </Modal>
 
+            <DocumentViewer
+                visible={showProfilePicViewer}
+                onClose={() => setShowProfilePicViewer(false)}
+                documentUrl={photoURL || ''}
+                documentName={`${displayName}'s Profile`}
+                documentType="image"
+            />
+
             {/* ClipsFeed Modal */}
             <Modal
                 visible={showClipsFeed}
@@ -1599,6 +1613,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16, // Keep standard edge spacing
         paddingTop: 12,
         paddingBottom: 4,
+        zIndex: 20, // Ensure it sits above banner for touches
     },
     ytAvatarContainer: {
         marginTop: -48, // Overlap banner slightly (half of 96)
