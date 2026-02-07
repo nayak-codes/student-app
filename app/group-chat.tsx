@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useNetInfo } from '@react-native-community/netinfo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -52,6 +53,7 @@ export default function GroupChatScreen() {
     const { colors, isDark } = useTheme();
     const params = useLocalSearchParams();
     const insets = useSafeAreaInsets();
+    const { isConnected } = useNetInfo();
     const [keyboardHeight, setKeyboardHeight] = useState(0);
 
     useEffect(() => {
@@ -382,7 +384,13 @@ export default function GroupChatScreen() {
                             /* STANDARD MESSAGE BUBBLE */
                             <View style={[
                                 styles.messageBubble,
-                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble
+                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+                                (item.messageType === 'image') && {
+                                    paddingHorizontal: 0,
+                                    paddingTop: 0,
+                                    paddingBottom: item.text ? 10 : 0,
+                                    overflow: 'hidden'
+                                }
                             ]}>
                                 {/* Image Attachment */}
                                 {item.messageType === 'image' && item.mediaUrl && (
@@ -414,7 +422,11 @@ export default function GroupChatScreen() {
 
                                 {/* Text Content (if any, or if strictly text message) */}
                                 {(item.text && item.messageType !== 'file') ? (
-                                    <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : { color: '#F8FAFC' }]}>
+                                    <Text style={[
+                                        styles.messageText,
+                                        isOwnMessage ? styles.ownMessageText : { color: '#F8FAFC' },
+                                        (item.messageType === 'image') && { marginHorizontal: 12, marginTop: 8 }
+                                    ]}>
                                         {item.text}
                                     </Text>
                                 ) : null}
@@ -598,6 +610,24 @@ export default function GroupChatScreen() {
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={24} color="#FFF" />
                     </TouchableOpacity>
+
+                    {/* Offline Indicator */}
+                    {isConnected === false && (
+                        <View style={{
+                            position: 'absolute',
+                            top: 60,
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#EF4444',
+                            paddingVertical: 4,
+                            zIndex: 100,
+                            alignItems: 'center'
+                        }}>
+                            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600' }}>
+                                Offline Mode
+                            </Text>
+                        </View>
+                    )}
 
                     <TouchableOpacity
                         style={styles.headerProfileContainer}
@@ -821,10 +851,11 @@ export default function GroupChatScreen() {
                             </View>
                         )}
                         {/* Input Area */}
-                        <View style={[styles.inputContainer, { paddingBottom: 12 }]}>
+                        <View style={[styles.inputContainer, { paddingBottom: 12, opacity: isConnected === false ? 0.5 : 1 }]}>
                             <TouchableOpacity
                                 style={[styles.plusButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}
                                 onPress={() => setShowAttachmentMenu(true)}
+                                disabled={isConnected === false}
                             >
                                 <Ionicons name="add" size={24} color={isDark ? '#FFF' : '#0F172A'} />
                             </TouchableOpacity>
@@ -832,12 +863,13 @@ export default function GroupChatScreen() {
                             <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#1F2937' : '#F1F5F9' }]}>
                                 <TextInput
                                     style={[styles.input, { color: isDark ? '#FFFFFF' : '#0F172A' }]}
-                                    placeholder="Message"
+                                    placeholder={isConnected === false ? "Offline" : "Message"}
                                     placeholderTextColor={isDark ? "#9CA3AF" : "#64748B"}
                                     value={inputText}
                                     onChangeText={setInputText}
                                     multiline
                                     cursorColor={isDark ? "#FFFFFF" : "#0F172A"}
+                                    editable={isConnected !== false}
                                 />
                             </View>
 
@@ -847,7 +879,7 @@ export default function GroupChatScreen() {
                                     { backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? '#4B5563' : '#CBD5E1') }
                                 ]}
                                 onPress={handleSend}
-                                disabled={!inputText.trim() || sending}
+                                disabled={!inputText.trim() || sending || isConnected === false}
                             >
                                 {sending ? (
                                     <ActivityIndicator size="small" color="#FFF" />
@@ -1108,10 +1140,10 @@ const styles = StyleSheet.create({
         shadowRadius: 3,
     },
     mediaImage: {
-        width: 240,
-        height: 180,
-        borderRadius: 8,
-        marginBottom: 4,
+        width: 260,
+        height: 346, // Standardized 3:4 Portrait Ratio
+        borderRadius: 18,
+        backgroundColor: '#1E293B',
     },
     fileContainer: {
         flexDirection: 'row',

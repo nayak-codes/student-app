@@ -176,7 +176,11 @@ export const getAllPosts = async (limitCount: number = 50): Promise<Post[]> => {
         });
 
         return posts;
-    } catch (error) {
+    } catch (error: any) {
+        if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
+            console.warn('⚠️ Fetch posts permission denied (likely auth race condition). Returning empty list.');
+            return [];
+        }
         console.error('Error getting posts:', error);
         throw error;
     }

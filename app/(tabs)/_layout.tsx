@@ -1,10 +1,12 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/contexts/ThemeContext';
 
 export default function TabLayout() {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -13,8 +15,8 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.textSecondary,
         headerShown: false,
         tabBarStyle: {
-          height: 60,
-          paddingBottom: 4,
+          height: 60 + Math.max(insets.bottom, 4), // Ensure at least 4px padding if no insets
+          paddingBottom: Math.max(insets.bottom, 4),
           backgroundColor: isDark ? colors.card : '#FFFFFF',
           borderTopColor: colors.border,
           borderTopWidth: 1,

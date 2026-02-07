@@ -30,7 +30,7 @@ const MENU_ITEMS: {
     id: AttachmentType;
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
-    gradient: string[];
+    gradient: readonly [string, string, ...string[]];
 }[] = [
         { id: 'camera', label: 'Camera', icon: 'camera', gradient: ['#EC4899', '#DB2777'] },
         { id: 'gallery', label: 'Gallery', icon: 'images', gradient: ['#3B82F6', '#2563EB'] },

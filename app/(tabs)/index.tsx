@@ -1,10 +1,10 @@
-// app/(tabs)/index.tsx
+import { useScrollToTop } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import { Animated, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import FeedList from '../../src/components/feed/FeedList';
+import FeedList, { FeedListRef } from '../../src/components/feed/FeedList';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { testFirebaseConnection } from '../../src/utils/testFirebase';
@@ -47,6 +47,10 @@ export default function HomeScreen() {
   // Load unread count
   const unreadCount = useUnreadCount();
 
+  // Scroll to Top Logic
+  const feedListRef = useRef<FeedListRef>(null);
+  useScrollToTop(feedListRef);
+
   // Collapsible Header Logic
   const scrollY = useRef(new Animated.Value(0)).current;
   const diffClamp = Animated.diffClamp(scrollY, 0, 110); // Header height approx 110 (Status Bar + Header)
@@ -78,9 +82,11 @@ export default function HomeScreen() {
           ]}
         >
           <SafeAreaView edges={['top']}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 2, paddingBottom: 6 }}>
               <View style={styles.brandContainer}>
-                <Text style={styles.brandText}>Vidhyardhi</Text>
+                <TouchableOpacity onPress={() => feedListRef.current?.scrollToTop()} activeOpacity={0.7}>
+                  <Text style={styles.brandText}>Vidhyardhi</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.headerActions}>
@@ -119,6 +125,7 @@ export default function HomeScreen() {
 
         {/* Main Feed Content */}
         <FeedList
+          ref={feedListRef}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: false }

@@ -11,6 +11,7 @@ import {
     orderBy,
     query,
     serverTimestamp,
+    setDoc,
     updateDoc,
     where
 } from 'firebase/firestore';
@@ -85,9 +86,9 @@ export async function registerForPushNotificationsAsync(userId?: string) {
 
             // Save token to user profile if userId is provided
             if (userId && token) {
-                await updateDoc(doc(db, 'users', userId), {
+                await setDoc(doc(db, 'users', userId), {
                     pushToken: token
-                });
+                }, { merge: true });
                 console.log("Push Token saved to Firestore for user:", userId);
             }
 

@@ -4,8 +4,10 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import GlobalVideoPlayer from '../src/components/GlobalVideoPlayer';
+import NetworkStatusToast from '../src/components/NetworkStatusToast';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider as AppThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 import { VideoPlayerProvider } from '../src/contexts/VideoPlayerContext';
@@ -102,12 +104,15 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <AuthProvider>
-      <AppThemeProvider>
-        <VideoPlayerProvider>
-          <RootLayoutNav />
-        </VideoPlayerProvider>
-      </AppThemeProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <NetworkStatusToast />
+      <AuthProvider>
+        <AppThemeProvider>
+          <VideoPlayerProvider>
+            <RootLayoutNav />
+          </VideoPlayerProvider>
+        </AppThemeProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

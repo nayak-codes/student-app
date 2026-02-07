@@ -1,10 +1,13 @@
 
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Dimensions,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -15,88 +18,68 @@ import {
     View,
 } from 'react-native';
 import { signUp } from '../src/services/authService';
+import { signInWithGoogleToken, useGoogleAuth } from '../src/services/googleAuthService';
 
-const EDUCATION_LEVELS = [
-    { id: '10th', label: 'Class 10' },
-    { id: 'Intermediate', label: 'Inter / +2' },
-    { id: 'Undergraduate', label: 'B.Tech / Degree' },
-    { id: 'Graduate', label: 'Masters / PG' },
-];
+const { width } = Dimensions.get('window');
 
-const COURSES = [
-    { id: 'MPC', label: 'MPC' },
-    { id: 'BiPC', label: 'BiPC' },
-    { id: 'MEC', label: 'MEC' },
-    { id: 'CEC', label: 'CEC' },
-    { id: 'CSE', label: 'CSE' },
-    { id: 'ECE', label: 'ECE' },
-    { id: 'EEE', label: 'EEE' },
-    { id: 'Mechanical', label: 'Mechanical' },
-    { id: 'Civil', label: 'Civil' },
-    { id: 'Other', label: 'Other' },
-];
-
-const EXAMS = [
-    { id: 'JEE', name: 'JEE Main/Advanced', icon: '🎓' },
-    { id: 'NEET', name: 'NEET', icon: '⚕️' },
-    { id: 'EAPCET', name: 'EAPCET', icon: '📚' },
-    { id: 'SRMJEE', name: 'SRMJEE', icon: '🏛️' },
-];
+// Vibrant Social Palette
+const COLORS = {
+    primary: '#4F46E5', // Indigo 600
+    primaryDark: '#7C3AED', // Violet 600
+    accent: '#DB2777', // Pink 600
+    background: '#F8FAFC',
+    surface: '#FFFFFF',
+    text: '#0F172A', // Slate 900
+    textSecondary: '#475569', // Slate 600
+    border: '#E2E8F0',
+    highlight: '#F5F3FF', // Violet 50
+};
 
 export default function SignupScreen() {
     const router = useRouter();
-    const [step, setStep] = useState(1); // 1: Basic Info, 2: Education
 
-    // Basic Info
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-    // Education Info
-    const [educationLevel, setEducationLevel] = useState<'10th' | 'Intermediate' | 'Undergraduate' | 'Graduate' | null>(null);
-    const [course, setCourse] = useState('');
-    const [selectedExam, setSelectedExam] = useState<'JEE' | 'NEET' | 'EAPCET' | 'SRMJEE'>('JEE');
-
+    const [focusedInput, setFocusedInput] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const handleNext = () => {
+    // Google Sign-In
+    const { request, response, promptAsync } = useGoogleAuth();
+
+    // Handle Google Sign-In response
+    useEffect(() => {
+        if (response?.type === 'success') {
+            const { authentication } = response;
+            if (authentication?.idToken) {
+                handleGoogleResponse(authentication.idToken);
+            }
+        }
+    }, [response]);
+
+    const handleSignup = async () => {
         if (!name || !email || !password || !confirmPassword) {
-            Alert.alert('Error', 'Please fill in all fields');
+            Alert.alert('Missing Fields', 'Please fill in all details.');
             return;
         }
 
         if (password !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
+            Alert.alert('Password Mismatch', 'Passwords do not match.');
             return;
         }
 
         if (password.length < 6) {
-            Alert.alert('Error', 'Password must be at least 6 characters');
-            return;
-        }
-
-        setStep(2);
-    };
-
-    const handleBack = () => {
-        setStep(1);
-    };
-
-    const handleSignup = async () => {
-        if (!educationLevel || !course) {
-            Alert.alert('Error', 'Please select your education details');
+            Alert.alert('Weak Password', 'Password must be at least 6 characters.');
             return;
         }
 
         setLoading(true);
         try {
-            await signUp(email, password, name, selectedExam, educationLevel, course);
-            Alert.alert('Success', 'Account created successfully!', [
-                { text: 'OK', onPress: () => router.replace('/(tabs)') }
-            ]);
+            await signUp(email, password, name, 'JEE'); // Default exam, can be changed in profile later
+            router.replace('/(tabs)');
         } catch (error: any) {
             Alert.alert('Signup Failed', error.message);
         } finally {
@@ -104,188 +87,150 @@ export default function SignupScreen() {
         }
     };
 
-    const renderStep1 = () => (
-        <>
-            {/* Name Input */}
-            <View style={styles.inputContainer}>
-                <Ionicons name="person-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
+    const handleGoogleResponse = async (idToken: string) => {
+        setLoading(true);
+        try {
+            await signInWithGoogleToken(idToken);
+            router.replace('/(tabs)');
+        } catch (error: any) {
+            Alert.alert('Google Sign-In Failed', error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        try {
+            await promptAsync();
+        } catch (error: any) {
+            console.error('Google Sign-In error:', error);
+            Alert.alert('Error', 'Failed to initiate Google Sign-In');
+        }
+    };
+
+    const renderInput = (
+        id: string,
+        label: string,
+        iconName: any,
+        value: string,
+        setValue: (val: string) => void,
+        placeholder: string,
+        keyboardType: 'default' | 'email-address' = 'default',
+        secureTextEntry: boolean = false,
+        toggleSecure?: () => void,
+        isSecureVisible?: boolean
+    ) => (
+        <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>{label}</Text>
+            <View style={[
+                styles.inputWrapper,
+                focusedInput === id && styles.inputWrapperFocused
+            ]}>
+                <Ionicons name={iconName} size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
                 <TextInput
                     style={styles.input}
-                    placeholder="Full Name"
-                    value={name}
-                    onChangeText={setName}
-                    autoComplete="name"
+                    placeholder={placeholder}
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={value}
+                    onChangeText={setValue}
+                    secureTextEntry={secureTextEntry}
+                    keyboardType={keyboardType}
+                    autoCapitalize={id === 'email' ? 'none' : 'words'}
+                    autoComplete={
+                        id === 'email' ? 'email' :
+                            id === 'name' ? 'name' :
+                                id === 'password' ? 'new-password' :
+                                    id === 'confirmPassword' ? 'new-password' : undefined
+                    }
+                    onFocus={() => setFocusedInput(id)}
+                    onBlur={() => setFocusedInput(null)}
                     editable={!loading}
+                    importantForAutofill="yes"
+                    textContentType={
+                        id === 'email' ? 'username' :
+                            id === 'password' ? 'newPassword' :
+                                id === 'confirmPassword' ? 'newPassword' :
+                                    id === 'name' ? 'name' : 'none'
+                    }
                 />
-            </View>
-
-            {/* Email Input */}
-            <View style={styles.inputContainer}>
-                <Ionicons name="mail-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    editable={!loading}
-                />
-            </View>
-
-            {/* Password Input */}
-            <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Password"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoComplete="password-new"
-                    editable={!loading}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                    <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#94a3b8" />
-                </TouchableOpacity>
-            </View>
-
-            {/* Confirm Password Input */}
-            <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={20} color="#6C63FF" style={styles.inputIcon} />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Confirm Password"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showConfirmPassword}
-                    editable={!loading}
-                />
-                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
-                    <Ionicons name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#94a3b8" />
-                </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity style={styles.signupButton} onPress={handleNext}>
-                <Text style={styles.signupButtonText}>Next</Text>
-                <Ionicons name="arrow-forward" size={20} color="#FFF" style={{ marginLeft: 8 }} />
-            </TouchableOpacity>
-        </>
-    );
-
-    const renderStep2 = () => (
-        <>
-            <Text style={styles.sectionTitle}>Education Level</Text>
-            <View style={styles.chipContainer}>
-                {EDUCATION_LEVELS.map((item) => (
-                    <TouchableOpacity
-                        key={item.id}
-                        style={[styles.chip, educationLevel === item.id && styles.chipSelected]}
-                        onPress={() => setEducationLevel(item.id as any)}
-                    >
-                        <Text style={[styles.chipText, educationLevel === item.id && styles.chipTextSelected]}>
-                            {item.label}
-                        </Text>
+                {toggleSecure && (
+                    <TouchableOpacity onPress={toggleSecure} style={styles.eyeIcon} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name={isSecureVisible ? 'eye-outline' : 'eye-off-outline'} size={20} color={COLORS.textSecondary} />
                     </TouchableOpacity>
-                ))}
+                )}
             </View>
-
-            <Text style={styles.sectionTitle}>Course / Stream</Text>
-            <View style={styles.chipContainer}>
-                {COURSES.map((item) => (
-                    <TouchableOpacity
-                        key={item.id}
-                        style={[styles.chip, course === item.id && styles.chipSelected]}
-                        onPress={() => setCourse(item.id)}
-                    >
-                        <Text style={[styles.chipText, course === item.id && styles.chipTextSelected]}>
-                            {item.label}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            {/* Exam Selection - Keep as part of the flow */}
-            <Text style={styles.sectionTitle}>Target Exam</Text>
-            <View style={styles.examGrid}>
-                {EXAMS.map((exam) => (
-                    <TouchableOpacity
-                        key={exam.id}
-                        style={[
-                            styles.examCard,
-                            selectedExam === exam.id && styles.examCardSelected,
-                        ]}
-                        onPress={() => setSelectedExam(exam.id as any)}
-                        disabled={loading}
-                    >
-                        <Text style={styles.examIcon}>{exam.icon}</Text>
-                        <Text style={[
-                            styles.examName,
-                            selectedExam === exam.id && styles.examNameSelected,
-                        ]}>
-                            {exam.name}
-                        </Text>
-                        {selectedExam === exam.id && (
-                            <Ionicons name="checkmark-circle" size={20} color="#6C63FF" style={styles.checkIcon} />
-                        )}
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            <View style={styles.buttonRow}>
-                <TouchableOpacity style={styles.backButton} onPress={handleBack} disabled={loading}>
-                    <Ionicons name="arrow-back" size={20} color="#64748b" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.signupButton, styles.flexButton, loading && styles.signupButtonDisabled]}
-                    onPress={handleSignup}
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.signupButtonText}>Create Account</Text>
-                    )}
-                </TouchableOpacity>
-            </View>
-        </>
+        </View>
     );
 
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <StatusBar style="dark" />
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.logo}>📚 StudentVerse</Text>
-                    <Text style={styles.title}>Create Account</Text>
-                    <Text style={styles.subtitle}>
-                        {step === 1 ? "Let's get your basics down" : "Tell us about your education"}
-                    </Text>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+                        <Ionicons name="close" size={24} color={COLORS.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.subtitle}>Join Vidhyardhi today ⚡</Text>
                 </View>
 
                 {/* Form */}
                 <View style={styles.form}>
-                    {step === 1 ? renderStep1() : renderStep2()}
+                    {renderInput('name', 'Full Name', 'person-outline', name, setName, 'full name')}
+                    {renderInput('email', 'Email', 'at', email, setEmail, 'email', 'email-address')}
+                    {renderInput('password', 'Password', 'key-outline', password, setPassword, 'password', 'default', !showPassword, () => setShowPassword(!showPassword), showPassword)}
+                    {renderInput('confirmPassword', 'Re-enter Password', 'key-outline', confirmPassword, setConfirmPassword, 'Re-enter password', 'default', !showConfirmPassword, () => setShowConfirmPassword(!showConfirmPassword), showConfirmPassword)}
 
-                    <View style={styles.stepIndicator}>
-                        <View style={[styles.stepDot, step >= 1 ? styles.stepDotActive : {}]} />
-                        <View style={[styles.stepDot, step >= 2 ? styles.stepDotActive : {}]} />
+                    {/* Signup Button */}
+                    <TouchableOpacity
+                        style={styles.signupButtonShadow}
+                        onPress={handleSignup}
+                        disabled={loading}
+                        activeOpacity={0.9}
+                    >
+                        <LinearGradient
+                            colors={[COLORS.primary, COLORS.primaryDark]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.signupButton}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <>
+                                    <Text style={styles.signupButtonText}>Create Account</Text>
+                                    <Ionicons name="rocket-outline" size={20} color="#FFF" style={{ marginLeft: 8 }} />
+                                </>
+                            )}
+                        </LinearGradient>
+                    </TouchableOpacity>
+
+                    {/* Google Sign-In - Temporarily disabled until OAuth is configured */}
+                    {/* <View style={styles.divider}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>or continue with</Text>
+                        <View style={styles.dividerLine} />
                     </View>
 
+                    <TouchableOpacity
+                        style={styles.googleButton}
+                        onPress={handleGoogleSignIn}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="logo-google" size={24} color="#DB4437" />
+                        <Text style={styles.googleButtonText}>Sign up with Google</Text>
+                    </TouchableOpacity> */}
+
                     {/* Login Link */}
-                    {step === 1 && (
-                        <View style={styles.loginContainer}>
-                            <Text style={styles.loginText}>Already have an account? </Text>
-                            <TouchableOpacity onPress={() => router.back()}>
-                                <Text style={styles.loginLink}>Sign In</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
+                    <View style={styles.loginContainer}>
+                        <Text style={styles.loginText}>Already have an account? </Text>
+                        <TouchableOpacity onPress={() => router.push('/login')}>
+                            <Text style={styles.loginLink}>Log In</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -295,190 +240,148 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: COLORS.background,
     },
     scrollContent: {
         flexGrow: 1,
-        justifyContent: 'center',
-        padding: 24,
+        paddingBottom: 40,
     },
     header: {
         alignItems: 'center',
-        marginBottom: 32,
+        paddingVertical: 40,
+        paddingTop: 60,
+        backgroundColor: COLORS.surface,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 5,
+        marginBottom: 24,
+    },
+    headerBack: {
+        position: 'absolute',
+        top: 50,
+        left: 20,
+        padding: 8,
+        zIndex: 10,
     },
     logo: {
-        fontSize: 48,
-        marginBottom: 16,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#1e293b',
+        fontSize: 32,
+        fontWeight: '900',
+        color: COLORS.primary,
         marginBottom: 8,
     },
     subtitle: {
-        fontSize: 16,
-        color: '#64748b',
-        textAlign: 'center',
+        fontSize: 14,
+        color: COLORS.textSecondary,
+        fontWeight: '500',
     },
     form: {
-        width: '100%',
+        paddingHorizontal: 24,
     },
-    inputContainer: {
+    inputGroup: {
+        marginBottom: 20,
+    },
+    inputLabel: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: COLORS.textSecondary,
+        marginBottom: 8,
+    },
+    inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: COLORS.surface,
         borderRadius: 12,
-        marginBottom: 16,
-        paddingHorizontal: 16,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
+        borderWidth: 1.5,
+        borderColor: COLORS.border,
+        paddingHorizontal: 14,
+        height: 54,
+    },
+    inputWrapperFocused: {
+        borderColor: COLORS.primary,
+        backgroundColor: COLORS.highlight,
     },
     inputIcon: {
-        marginRight: 12,
+        marginRight: 10,
     },
     input: {
         flex: 1,
-        paddingVertical: 16,
-        fontSize: 16,
-        color: '#1e293b',
-    },
-    eyeIcon: {
-        padding: 8,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1e293b',
-        marginBottom: 12,
-        marginTop: 8,
-    },
-    chipContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginBottom: 20,
-    },
-    chip: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: '#f1f5f9',
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-    },
-    chipSelected: {
-        backgroundColor: '#e0e7ff',
-        borderColor: '#6C63FF',
-    },
-    chipText: {
-        fontSize: 14,
-        color: '#64748b',
+        fontSize: 15,
+        color: COLORS.text,
         fontWeight: '500',
     },
-    chipTextSelected: {
-        color: '#6C63FF',
-        fontWeight: '600',
+    eyeIcon: {
+        padding: 4,
     },
-    examGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-        marginBottom: 24,
-    },
-    examCard: {
-        flex: 1,
-        minWidth: '45%',
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 16,
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#e2e8f0',
-    },
-    examCardSelected: {
-        borderColor: '#6C63FF',
-        backgroundColor: '#f0efff',
-    },
-    examIcon: {
-        fontSize: 32,
-        marginBottom: 8,
-    },
-    examName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#64748b',
-        textAlign: 'center',
-    },
-    examNameSelected: {
-        color: '#6C63FF',
-    },
-    checkIcon: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
+    signupButtonShadow: {
+        marginTop: 12,
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 8,
+        borderRadius: 14,
     },
     signupButton: {
-        backgroundColor: '#6C63FF',
-        borderRadius: 12,
-        paddingVertical: 16,
-        alignItems: 'center',
-        marginBottom: 24,
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'center',
-    },
-    flexButton: {
-        flex: 1,
-        marginBottom: 0,
-    },
-    signupButtonDisabled: {
-        opacity: 0.6,
+        paddingVertical: 16,
+        borderRadius: 14,
     },
     signupButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
+        color: '#FFF',
+        fontSize: 17,
+        fontWeight: '700',
     },
-    buttonRow: {
+    divider: {
         flexDirection: 'row',
-        gap: 16,
-        marginBottom: 24,
-    },
-    backButton: {
-        padding: 16,
-        borderRadius: 12,
-        backgroundColor: '#f1f5f9',
-        justifyContent: 'center',
         alignItems: 'center',
+        marginVertical: 24,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: COLORS.border,
+    },
+    dividerText: {
+        marginHorizontal: 16,
+        fontSize: 13,
+        color: COLORS.textSecondary,
+        fontWeight: '500',
+    },
+    googleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.surface,
+        borderRadius: 14,
+        paddingVertical: 14,
+        borderWidth: 1.5,
+        borderColor: COLORS.border,
+        gap: 12,
+    },
+    googleButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: COLORS.text,
     },
     loginContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: 24,
     },
     loginText: {
-        color: '#64748b',
-        fontSize: 14,
+        color: COLORS.textSecondary,
+        fontSize: 15,
     },
     loginLink: {
-        color: '#6C63FF',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    stepIndicator: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 8,
-        marginBottom: 20,
-    },
-    stepDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#e2e8f0',
-    },
-    stepDotActive: {
-        backgroundColor: '#6C63FF',
-        width: 24,
+        color: COLORS.primary,
+        fontSize: 15,
+        fontWeight: '700',
     },
 });

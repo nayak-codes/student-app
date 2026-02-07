@@ -1,5 +1,4 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // Firebase configuration
@@ -32,7 +31,16 @@ export const auth = initializeAuth(app, {
     persistence
 });
 
-export const db = getFirestore(app);
+import { initializeFirestore, persistentLocalCache } from 'firebase/firestore';
+// ... imports
+
+// ...
+
+// Initialize Firestore with persistent cache
+export const db = initializeFirestore(app, {
+    localCache: persistentLocalCache()
+});
+// export const db = getFirestore(app); // Replaced with persistent cache version
 export const storage = getStorage(app);
 
 export default app;

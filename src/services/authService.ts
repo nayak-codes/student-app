@@ -1,5 +1,6 @@
 import {
     createUserWithEmailAndPassword,
+    GoogleAuthProvider,
     onAuthStateChanged,
     sendPasswordResetEmail,
     signInWithEmailAndPassword,
@@ -44,6 +45,7 @@ export interface UserProfile {
     // LinkedIn-Style Professional Fields (all optional for backward compatibility)
     headline?: string; // e.g., "Computer Science Student | AI Enthusiast"
     about?: string; // Bio/summary section
+    bio?: string; // Short bio (shim for older code)
     location?: {
         city: string;
         state: string;
@@ -203,8 +205,6 @@ export const signUp = async (
             email: user.email || email,
             name,
             exam,
-            educationLevel,
-            course,
             progress: {
                 topicsCovered: 0,
                 mockTestsTaken: 0,
@@ -217,6 +217,9 @@ export const signUp = async (
             createdAt: new Date(),
             updatedAt: new Date(),
         };
+
+        if (educationLevel) userProfile.educationLevel = educationLevel;
+        if (course) userProfile.course = course;
 
         await setDoc(doc(db, 'users', user.uid), userProfile);
 
@@ -242,6 +245,67 @@ export const signIn = async (
     } catch (error: any) {
         console.error('❌ Sign in error:', error.message);
         throw new Error(error.message);
+    }
+};
+
+/**
+ * Sign in with Google (Expo-compatible)
+ */
+export const signInWithGoogle = async (
+    onboardingData?: {
+        educationLevel?: '10th' | 'Intermediate' | 'Undergraduate' | 'Graduate';
+        course?: string;
+        exam?: 'JEE' | 'NEET' | 'EAPCET' | 'SRMJEE';
+    }
+): Promise<{ user: User; isNewUser: boolean }> => {
+    try {
+        // For Expo - use Firebase's built-in Google Sign-In with redirect
+        // This doesn't require native modules
+        const provider = new GoogleAuthProvider();
+
+        // Note: This will work better in a standalone build
+        // For Expo Go, you may need to use expo-auth-session
+        throw new Error('Google Sign-In requires a standalone build. Please use email/password signup or build the app with EAS.');
+
+        // Placeholder for when app is built as standalone
+        // const result = await signInWithPopup(auth, provider);
+        // const user = result.user;
+
+        // Check if user profile exists
+        // const userDoc = await getDoc(doc(db, 'users', user.uid));
+        // const isNewUser = !userDoc.exists();
+
+        // if (isNewUser) {
+        //     const userProfile: Partial<UserProfile> = {
+        //         id: user.uid,
+        //         email: user.email || '',
+        //         name: user.displayName || 'User',
+        //         photoURL: user.photoURL || undefined,
+        //         educationLevel: onboardingData?.educationLevel,
+        //         course: onboardingData?.course,
+        //         exam: onboardingData?.exam || 'JEE',
+        //         progress: {
+        //             topicsCovered: 0,
+        //             mockTestsTaken: 0,
+        //             studyStreak: 0,
+        //         },
+        //         preferences: {
+        //             language: 'en',
+        //             notifications: true,
+        //         },
+        //         createdAt: new Date(),
+        //         updatedAt: new Date(),
+        //     };
+        //     await setDoc(doc(db, 'users', user.uid), userProfile);
+        //     console.log('✅ New Google user profile created:', user.uid);
+        // } else {
+        //     console.log('✅ Existing Google user signed in:', user.uid);
+        // }
+
+        // return { user, isNewUser };
+    } catch (error: any) {
+        console.error('❌ Google Sign-In error:', error);
+        throw error;
     }
 };
 

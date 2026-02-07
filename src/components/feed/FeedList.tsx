@@ -1,3 +1,4 @@
+import { useNetInfo } from '@react-native-community/netinfo';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
 import ShareModal from '../../components/ShareModal';
@@ -13,8 +14,14 @@ interface FeedListProps {
     contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
-const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) => {
+export interface FeedListRef {
+    scrollToTop: () => void;
+}
+
+const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, contentContainerStyle }, ref) => {
     const { colors } = useTheme();
+    const { isConnected } = useNetInfo();
+    const flatListRef = useRef<FlatList>(null);
     const [allPosts, setAllPosts] = useState<Post[]>([]);
     const [posts, setPosts] = useState<Post[]>([]); // Regular posts (not clips)
     const [clips, setClips] = useState<Post[]>([]); // Clips only
@@ -29,6 +36,11 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
     // Track which posts are currently visible in viewport
     const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
 
+    React.useImperativeHandle(ref, () => ({
+        scrollToTop: () => {
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }
+    }));
 
     const fetchPosts = async () => {
         try {
@@ -49,35 +61,55 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
                 return array;
             };
 
-            // NEW VIRAL LOGIC: Sort by Hype count
-            // Posts with hype > 0 or high reactions come first
-            const viralSort = (postsToSort: Post[]) => {
-                return postsToSort.sort((a, b) => {
-                    const hypeA = a.reactions?.hype || 0;
-                    const hypeB = b.reactions?.hype || 0;
+            // DYNAMIC FEED LOGIC:
+            // 1. "Viral" = Hype > 0 OR Likes > 5 (High engagement)
+            // 2. "Fresh" = Everything else (Real-time updates)
+            // Goal: Show fresh content FIRST (real-time feel), but inject Viral content frequently.
+            const dynamicMix = (postsToMix: Post[]) => {
+                const viral = postsToMix.filter(p => (p.reactions?.hype || 0) > 0 || p.likes > 5);
+                const fresh = postsToMix.filter(p => (p.reactions?.hype || 0) === 0 && p.likes <= 5);
 
-                    // Specific Viral Override: If hype > 2, it's very important
-                    if (hypeA > 2 && hypeB <= 2) return -1;
-                    if (hypeB > 2 && hypeA <= 2) return 1;
+                // 1. Shuffle Viral posts so they aren't static on refresh
+                const shuffledViral = shuffle([...viral]);
 
-                    // Secondary Sort: Total Reaction Count
-                    const reactionsA = Object.values(a.reactions || {}).reduce((sum, v) => sum + v, 0) + a.likes;
-                    const reactionsB = Object.values(b.reactions || {}).reduce((sum, v) => sum + v, 0) + b.likes;
+                // 2. Sort Fresh posts by Date
+                const sortedAllFresh = fresh.sort((a, b) =>
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
 
-                    if (hypeA !== hypeB) {
-                        return hypeB - hypeA; // Descending Hype
+                // VARIETY BOOSTER:
+                // User Feedback: "Not refreshing".
+                // Cause: With few posts, Top 2 Strict made the whole feed separate.
+                // Fix: Shuffle EVERYTHING. No strict top posts.
+                const strictFresh = sortedAllFresh.slice(0, 0); // Changed to 0
+                const shuffledRestFresh = shuffle(sortedAllFresh.slice(0)); // Shuffle all
+
+                const finalFresh = [...strictFresh, ...shuffledRestFresh];
+
+                // 3. Interleave
+                const mixedFeed: Post[] = [];
+                let vIndex = 0;
+                let fIndex = 0;
+
+                while (fIndex < finalFresh.length || vIndex < shuffledViral.length) {
+                    // Random stride between 2 and 4
+                    const stride = Math.floor(Math.random() * 3) + 2;
+
+                    for (let i = 0; i < stride && fIndex < finalFresh.length; i++) {
+                        mixedFeed.push(finalFresh[fIndex++]);
                     }
-                    if (reactionsA !== reactionsB) {
-                        return reactionsB - reactionsA; // Descending Interactions
-                    }
 
-                    // Fallback to Date (Newest First)
-                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-                });
+                    // Add 1 viral post if available
+                    if (vIndex < shuffledViral.length) {
+                        mixedFeed.push(shuffledViral[vIndex++]);
+                    }
+                }
+
+                return mixedFeed;
             };
 
             setClips(shuffle(clipPosts)); // Keep clips shuffled for variety
-            setPosts(viralSort(regularPosts)); // Viral sort for main feed
+            setPosts(dynamicMix(regularPosts)); // Dynamic interleaved feed
         } catch (error: any) {
             console.error('Error fetching posts:', error);
             if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
@@ -94,10 +126,20 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
         fetchPosts();
     }, []);
 
+    React.useImperativeHandle(ref, () => ({
+        scrollToTop: () => {
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }
+    }));
+
     const onRefresh = useCallback(() => {
+        if (isConnected === false) {
+            Alert.alert("Offline", "You are currently offline. Cannot refresh feed.");
+            return;
+        }
         setRefreshing(true);
         fetchPosts();
-    }, []);
+    }, [isConnected]);
 
     const handleLike = async (postId: string) => {
         if (!user) return;
@@ -282,7 +324,13 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
+            {isConnected === false && (
+                <View style={[styles.offlineBanner, { backgroundColor: '#EF4444' }]}>
+                    <Text style={styles.offlineText}>Offline Mode</Text>
+                </View>
+            )}
             <FlatList
+                ref={flatListRef}
                 data={posts}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item, index }) => (
@@ -357,7 +405,7 @@ const FeedList: React.FC<FeedListProps> = ({ onScroll, contentContainerStyle }) 
             />
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
@@ -386,6 +434,16 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         textAlign: 'center',
+    },
+    offlineBanner: {
+        paddingVertical: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    offlineText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#FFF',
     },
 });
 

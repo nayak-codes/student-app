@@ -4,7 +4,7 @@
     "slug": "balanju",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/vidhyardhi_final.jpg",
+    "icon": "./assets/icon.png",
     "scheme": "studentverse2",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -15,8 +15,8 @@
     "android": {
       "package": "com.vithyarthi.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/vidhyardhi_final.jpg",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1E3A5F"
       },
       "edgeToEdgeEnabled": true
     },
@@ -30,13 +30,14 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/vidhyardhi_final.jpg",
-          "imageWidth": 200,
+          "image": "./assets/icon.png",
+          "imageWidth": 250,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

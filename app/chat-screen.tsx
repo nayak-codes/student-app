@@ -627,7 +627,12 @@ const ChatScreen = () => {
                             <View style={[
                                 styles.messageBubble,
                                 isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
-                                (item.messageType === 'image') && { paddingHorizontal: 0, paddingVertical: 0, overflow: 'hidden' } // Full bleed for images
+                                (item.messageType === 'image') && {
+                                    paddingHorizontal: 0,
+                                    paddingTop: 0,
+                                    paddingBottom: item.text ? 10 : 0,
+                                    overflow: 'hidden'
+                                } // Full bleed for images
                             ]}>
                                 {/* Image Attachment */}
                                 {item.messageType === 'image' && item.mediaUrl && (
@@ -1062,11 +1067,12 @@ const styles = StyleSheet.create({
 
 
     // MEDIA & FILE STYLES
+    // MEDIA & FILE STYLES
     mediaImage: {
         width: 260,
-        height: 320, // Taller portrait look
-        borderRadius: 18, // Matches bubble radius
-        // marginBottom: 4, // Removed to let caption/time sit better
+        height: 346, // Standardized 3:4 Portrait Ratio (260 * 1.33)
+        borderRadius: 18,
+        backgroundColor: '#1E293B', // Placeholder before load
     },
     fileContainer: {
         flexDirection: 'row',

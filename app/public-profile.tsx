@@ -25,6 +25,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ActionToast from '../src/components/ActionToast';
 import AddEducationModal from '../src/components/AddEducationModal';
 import ClipsFeed from '../src/components/ClipsFeed';
 import DocumentViewer from '../src/components/DocumentViewer';
@@ -32,6 +33,8 @@ import EditProfileModal from '../src/components/EditProfileModal';
 import { EventCard } from '../src/components/EventCard';
 import FeedPost from '../src/components/feed/FeedPost';
 import BookCard from '../src/components/library/BookCard';
+import ProfileOptionsModal from '../src/components/ProfileOptionsModal';
+import ShareModal from '../src/components/ShareModal';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { Education } from '../src/services/authService';
@@ -508,43 +511,60 @@ const ProfileScreen = () => {
 
     // Handle connection actions
     const handleConnect = async () => {
-        if (!targetUserId || !authUser || loadingConnection) return;
-
+        if (!authUser || !targetUserId) return;
         try {
-            setLoadingConnection(true);
             await sendFriendRequest(targetUserId);
-            Alert.alert('Success', 'Friend request sent!');
-            await loadConnectionData();
-        } catch (error: any) {
+            // Alert.alert('Success', 'Friend request sent!'); // REPLACED
+            showToast('Network request sent');
+            loadConnectionData(); // Refresh status
+        } catch (error) {
             console.error('Error sending friend request:', error);
-            Alert.alert('Error', error.message || 'Failed to send request');
-        } finally {
-            setLoadingConnection(false);
+            Alert.alert('Error', 'Failed to send friend request');
         }
     };
 
     const handleFollow = async () => {
-        if (!targetUserId || !authUser || loadingConnection) return;
-
+        if (!authUser || !targetUserId) return;
+        setLoadingConnection(true);
         try {
-            setLoadingConnection(true);
             if (connectionStatus.isFollowing) {
                 await unfollowUser(targetUserId);
-                Alert.alert('Success', 'Unfollowed');
+                // Alert.alert('Success', 'Unfollowed user'); // REPLACED
+                showToast('Unsubscribed');
             } else {
                 await followUser(targetUserId);
-                Alert.alert('Success', 'Now following!');
+                // Alert.alert('Success', 'Now following!'); // REPLACED
+                showToast('Subscribed!');
             }
-            await loadConnectionData();
-        } catch (error: any) {
-            console.error('Error following/unfollowing:', error);
-            Alert.alert('Error', error.message || 'Failed to follow/unfollow');
+            loadConnectionData();
+        } catch (error) {
+            console.error('Error toggling follow:', error);
+            Alert.alert('Error', 'Failed to update follow status');
         } finally {
             setLoadingConnection(false);
         }
     };
 
 
+
+    // Modals State
+    const [showProfileOptions, setShowProfileOptions] = useState(false);
+    const [showShareSheet, setShowShareSheet] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '' });
+
+    const showToast = (message: string) => {
+        setToast({ visible: true, message });
+    };
+
+    const handleHideToast = () => {
+        setToast(prev => ({ ...prev, visible: false }));
+    };
+
+    // ... (rest of states)
+
+    const handleProfileOptions = () => {
+        setShowProfileOptions(true);
+    };
 
     useEffect(() => {
         loadData();
@@ -906,7 +926,7 @@ const ProfileScreen = () => {
                         <View style={styles.ytHandleRow}>
                             <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>@{username}</Text>
                             <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
-                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Followers</Text>
+                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Subscribers</Text>
                             <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
                             <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.posts} Posts</Text>
                         </View>
@@ -939,85 +959,54 @@ const ProfileScreen = () => {
                                 {/* 1. CREATOR ACCOUNT: Show Follow + Connect + Message */}
                                 {role === 'creator' ? (
                                     <>
-                                        {/* Follow Button (Primary for Creators) */}
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.ytPrimaryButton,
-                                                { flex: 1, backgroundColor: colors.primary, paddingHorizontal: 4 },
-                                                connectionStatus.isFollowing && { backgroundColor: isDark ? '#334155' : '#E2E8F0' }
-                                            ]}
-                                            onPress={handleFollow}
-                                            disabled={loadingConnection}
-                                        >
-                                            {loadingConnection ? (
-                                                <ActivityIndicator size="small" color={connectionStatus.isFollowing ? colors.text : "#FFF"} />
-                                            ) : (
-                                                <>
-                                                    <Ionicons
-                                                        name={connectionStatus.isFollowing ? "checkmark" : "add"}
-                                                        size={20}
-                                                        color={connectionStatus.isFollowing ? colors.text : "#FFF"}
-                                                    />
-                                                    <Text style={[
-                                                        styles.ytSecondaryButtonText,
-                                                        { color: connectionStatus.isFollowing ? colors.text : '#FFF', marginLeft: 4, fontSize: 13 }
-                                                    ]} numberOfLines={1}>
-                                                        {connectionStatus.isFollowing ? 'Following' : 'Follow'}
-                                                    </Text>
-                                                </>
-                                            )}
-                                        </TouchableOpacity>
-
-                                        {/* Connect / Message Button */}
-                                        {connectionStatus.isFriend ? (
-                                            <TouchableOpacity
-                                                style={[styles.ytSecondaryButton, { flex: 1, backgroundColor: isDark ? '#334155' : '#EFF6FF', borderColor: colors.border, paddingHorizontal: 4 }]}
-                                                onPress={async () => {
-                                                    if (!targetUserId || !authUser) return;
-                                                    try {
-                                                        const { getOrCreateConversation } = await import('../src/services/chatService');
-                                                        const conversationId = await getOrCreateConversation(
-                                                            authUser.uid,
-                                                            targetUserId,
-                                                            {
-                                                                name: displayName,
-                                                                photoURL: photoURL || '',
-                                                                email: (displayProfile as any)?.email || '',
-                                                            }
-                                                        );
-                                                        router.push({
-                                                            pathname: '/chat-screen',
-                                                            params: { conversationId, otherUserId: targetUserId, otherUserName: displayName, otherUserPhoto: photoURL || '' },
-                                                        });
-                                                    } catch (error) {
-                                                        console.error('Error starting conversation:', error);
-                                                        Alert.alert('Error', 'Failed to start conversation');
-                                                    }
-                                                }}
-                                            >
-                                                <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
-                                                <Text style={[styles.ytSecondaryButtonText, { color: colors.primary, marginLeft: 4, fontSize: 13 }]}>Message</Text>
-                                            </TouchableOpacity>
-                                        ) : (
+                                        {/* Main Action Button - Subscribe */}
+                                        {role === 'creator' && !isOwnProfile && (
                                             <TouchableOpacity
                                                 style={[
-                                                    styles.ytSecondaryButton,
-                                                    { flex: 1, backgroundColor: isDark ? '#334155' : '#FFF', borderColor: colors.border, paddingHorizontal: 4 },
-                                                    connectionStatus.friendshipStatus === 'pending' && { opacity: 0.7 }
+                                                    styles.actionButton,
+                                                    styles.primaryButton,
+                                                    connectionStatus.isFollowing && styles.followingButton
                                                 ]}
-                                                onPress={handleConnect}
-                                                disabled={connectionStatus.friendshipStatus === 'pending' || loadingConnection}
+                                                onPress={handleFollow}
+                                                activeOpacity={0.8}
                                             >
-                                                <Ionicons
-                                                    name={connectionStatus.friendshipStatus === 'pending' ? "time-outline" : "person-add-outline"}
-                                                    size={20}
-                                                    color={colors.text}
-                                                />
-                                                <Text style={[styles.ytSecondaryButtonText, { color: colors.text, marginLeft: 4, fontSize: 13 }]}>
-                                                    {connectionStatus.friendshipStatus === 'pending' ? "Requested" : "Connect"}
-                                                </Text>
+                                                {loadingConnection ? (
+                                                    <ActivityIndicator color="#FFF" size="small" />
+                                                ) : (
+                                                    <>
+                                                        <Ionicons
+                                                            name={connectionStatus.isFollowing ? "notifications" : "notifications-outline"}
+                                                            size={20}
+                                                            color={connectionStatus.isFollowing ? "#FFF" : "#FFF"}
+                                                            style={{ marginRight: 8 }}
+                                                        />
+                                                        <Text style={[
+                                                            styles.actionButtonText,
+                                                            styles.primaryButtonText,
+                                                            connectionStatus.isFollowing && styles.followingButtonText
+                                                        ]}>
+                                                            {connectionStatus.isFollowing ? 'Subscribed' : 'Subscribe'}
+                                                        </Text>
+                                                    </>
+                                                )}
                                             </TouchableOpacity>
                                         )}
+                                        {/* Three Dots Button for Connect/Options */}
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.ytSecondaryButton,
+                                                {
+                                                    flex: 0,
+                                                    width: 52, // Square button
+                                                    backgroundColor: isDark ? '#334155' : '#FFF',
+                                                    borderColor: colors.border,
+                                                    paddingHorizontal: 0
+                                                }
+                                            ]}
+                                            onPress={handleProfileOptions}
+                                        >
+                                            <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
+                                        </TouchableOpacity>
                                     </>
                                 ) : (
                                     /* 2. STUDENT ACCOUNT: Show Connect (Primary) + Message (if friend) - NO FOLLOW */
@@ -1087,99 +1076,99 @@ const ProfileScreen = () => {
                             </View>
                         </View>
                     </View>
-                </View>
 
-                {/* Tabs */}
-                <View style={[styles.ytTabsContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ytTabsContent}>
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'home' && styles.ytTabActive, { borderBottomColor: activeTab === 'home' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('home')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.text }]}>Home</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'posts' && styles.ytTabActive, { borderBottomColor: activeTab === 'posts' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('posts')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'posts' && { color: colors.text }]}>Posts</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive, { borderBottomColor: activeTab === 'videos' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('videos')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'videos' && { color: colors.text }]}>Videos</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'clips' && styles.ytTabActive, { borderBottomColor: activeTab === 'clips' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('clips')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'clips' && { color: colors.text }]}>Clips</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'events' && styles.ytTabActive, { borderBottomColor: activeTab === 'events' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('events')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'events' && { color: colors.text }]}>Events</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'docs' && styles.ytTabActive, { borderBottomColor: activeTab === 'docs' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('docs')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'docs' && { color: colors.text }]}>Docs</Text>
-                        </TouchableOpacity>
-
-
-                    </ScrollView>
-                </View>
-
-                {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}
-                {activeTab !== 'home' && (
-                    <View style={[styles.subFilterContainer, { backgroundColor: colors.background }]}>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            {['recent', 'old', 'popular'].map((type) => (
-                                <TouchableOpacity
-                                    key={type}
-                                    style={[
-                                        styles.subFilterChip,
-                                        { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: colors.border },
-                                        filterType === type && { backgroundColor: isDark ? '#334155' : '#E2E8F0', borderColor: colors.text }
-                                    ]}
-                                    onPress={() => setFilterType(type as any)}
-                                >
-                                    <Text style={[
-                                        styles.subFilterText,
-                                        { color: colors.textSecondary },
-                                        filterType === type && { color: colors.text }
-                                    ]}>
-                                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        {/* View Toggle (Grid/List) - Visible only for Posts */}
-                        {activeTab === 'posts' && (
+                    {/* Tabs */}
+                    <View style={[styles.ytTabsContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ytTabsContent}>
                             <TouchableOpacity
-                                style={{ marginLeft: 'auto', padding: 8 }}
-                                onPress={() => setViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
+                                style={[styles.ytTab, activeTab === 'home' && styles.ytTabActive, { borderBottomColor: activeTab === 'home' ? colors.text : 'transparent' }]}
+                                onPress={() => setActiveTab('home')}
                             >
-                                <Ionicons
-                                    name={viewMode === 'grid' ? "list" : "grid-outline"}
-                                    size={20}
-                                    color={colors.textSecondary}
-                                />
+                                <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.text }]}>Home</Text>
                             </TouchableOpacity>
-                        )}
-                    </View>
-                )}
 
-                {/* Content Grid */}
+                            <TouchableOpacity
+                                style={[styles.ytTab, activeTab === 'posts' && styles.ytTabActive, { borderBottomColor: activeTab === 'posts' ? colors.text : 'transparent' }]}
+                                onPress={() => setActiveTab('posts')}
+                            >
+                                <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'posts' && { color: colors.text }]}>Posts</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive, { borderBottomColor: activeTab === 'videos' ? colors.text : 'transparent' }]}
+                                onPress={() => setActiveTab('videos')}
+                            >
+                                <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'videos' && { color: colors.text }]}>Videos</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.ytTab, activeTab === 'clips' && styles.ytTabActive, { borderBottomColor: activeTab === 'clips' ? colors.text : 'transparent' }]}
+                                onPress={() => setActiveTab('clips')}
+                            >
+                                <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'clips' && { color: colors.text }]}>Clips</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.ytTab, activeTab === 'events' && styles.ytTabActive, { borderBottomColor: activeTab === 'events' ? colors.text : 'transparent' }]}
+                                onPress={() => setActiveTab('events')}
+                            >
+                                <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'events' && { color: colors.text }]}>Events</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.ytTab, activeTab === 'docs' && styles.ytTabActive, { borderBottomColor: activeTab === 'docs' ? colors.text : 'transparent' }]}
+                                onPress={() => setActiveTab('docs')}
+                            >
+                                <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'docs' && { color: colors.text }]}>Docs</Text>
+                            </TouchableOpacity>
+
+
+                        </ScrollView>
+                    </View>
+
+                    {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}
+                    {activeTab !== 'home' && (
+                        <View style={[styles.subFilterContainer, { backgroundColor: colors.background }]}>
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                {['recent', 'old', 'popular'].map((type) => (
+                                    <TouchableOpacity
+                                        key={type}
+                                        style={[
+                                            styles.subFilterChip,
+                                            { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: colors.border },
+                                            filterType === type && { backgroundColor: isDark ? '#334155' : '#E2E8F0', borderColor: colors.text }
+                                        ]}
+                                        onPress={() => setFilterType(type as any)}
+                                    >
+                                        <Text style={[
+                                            styles.subFilterText,
+                                            { color: colors.textSecondary },
+                                            filterType === type && { color: colors.text }
+                                        ]}>
+                                            {type.charAt(0).toUpperCase() + type.slice(1)}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            {/* View Toggle (Grid/List) - Visible only for Posts */}
+                            {activeTab === 'posts' && (
+                                <TouchableOpacity
+                                    style={{ marginLeft: 'auto', padding: 8 }}
+                                    onPress={() => setViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
+                                >
+                                    <Ionicons
+                                        name={viewMode === 'grid' ? "list" : "grid-outline"}
+                                        size={20}
+                                        color={colors.textSecondary}
+                                    />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
+
+                    {/* Content Grid */}
+                </View>
                 <View style={styles.contentSection}>
                     <View style={styles.postsGrid}>
                         {!hasContent ? (
@@ -1565,6 +1554,97 @@ const ProfileScreen = () => {
                 documentName={selectedDoc?.title || 'Document'}
                 documentType={selectedDoc?.type || 'pdf'}
             />
+
+            <ProfileOptionsModal
+                visible={showProfileOptions}
+                onClose={() => setShowProfileOptions(false)}
+                options={[
+                    ...(role === 'creator' ? [
+                        connectionStatus.isFriend ? {
+                            label: 'Message',
+                            subtitle: 'Start a conversation',
+                            icon: 'chatbubble-ellipses-outline' as const,
+                            onPress: async () => {
+                                // Close modal first
+                                setShowProfileOptions(false);
+
+                                if (!authUser || !targetUserId) return;
+                                try {
+                                    const { getOrCreateConversation } = await import('../src/services/chatService');
+                                    const conversationId = await getOrCreateConversation(
+                                        authUser.uid,
+                                        targetUserId,
+                                        {
+                                            name: displayName,
+                                            photoURL: photoURL,
+                                            email: ''
+                                        }
+                                    );
+                                    router.push({
+                                        pathname: '/chat-screen',
+                                        params: {
+                                            conversationId,
+                                            otherUserId: targetUserId,
+                                            otherUserName: displayName,
+                                            otherUserPhoto: photoURL || ''
+                                        }
+                                    });
+                                } catch (error) {
+                                    console.error('Error starting chat:', error);
+                                    Alert.alert('Error', 'Failed to start conversation');
+                                }
+                            }
+                        } : {
+                            label: connectionStatus.friendshipStatus === 'pending' ? 'Request Sent' : 'Network',
+                            subtitle: connectionStatus.friendshipStatus === 'pending' ? 'Waiting for approval' : 'Add to your network',
+                            icon: (connectionStatus.friendshipStatus === 'pending' ? 'time-outline' : 'people-outline') as any, // Changed icon for Network
+                            onPress: connectionStatus.friendshipStatus === 'pending' ? () => { } : handleConnect
+                        }
+                    ] : []), // Only add connect/message option if creator (since hidden from main view)
+                    {
+                        label: 'Share Profile',
+                        subtitle: 'Share with friends',
+                        icon: 'share-social-outline' as const,
+                        onPress: () => {
+                            // Share.share({ ... }) // REPLACED
+                            setShowShareSheet(true);
+                        }
+                    },
+                    {
+                        label: 'Report User',
+                        subtitle: 'I\'m concerned about this user',
+                        icon: 'flag-outline' as const,
+                        onPress: () => Alert.alert('Report', 'User reported. We will review this profile.'),
+                        isDestructive: true
+                    },
+                    {
+                        label: 'Block User',
+                        subtitle: 'They won\'t be able to contact you',
+                        icon: 'ban-outline' as const,
+                        onPress: () => Alert.alert('Block', `Are you sure you want to block ${displayName}?`, [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Block', style: 'destructive', onPress: () => Alert.alert('Blocked', 'User has been blocked.') }
+                        ]),
+                        isDestructive: true
+                    }
+                ]}
+            />
+
+            <ActionToast
+                visible={toast.visible}
+                message={toast.message}
+                onHide={handleHideToast}
+            />
+
+            <ShareModal
+                visible={showShareSheet}
+                onClose={() => setShowShareSheet(false)}
+                shareType="profile"
+                shareData={{
+                    id: targetUserId,
+                    content: displayName || 'User'
+                }}
+            />
         </SafeAreaView>
     );
 };
@@ -1676,7 +1756,7 @@ const styles = StyleSheet.create({
         marginTop: 0,
         // paddingHorizontal removed
         alignItems: 'flex-start', // Left align
-        marginBottom: 24,
+        marginBottom: 8, // Reduced from 24
     },
     ytBioText: {
         fontSize: 15, // Improved readability
@@ -1692,8 +1772,8 @@ const styles = StyleSheet.create({
     ytActionsRow: {
         flexDirection: 'row',
         gap: 12,
-        marginTop: 8,
-        marginBottom: 32,
+        marginTop: 4, // Reduced from 8
+        marginBottom: 24, // Reduced from 32
         paddingHorizontal: 0, // Removed extra padding
     },
     ytPrimaryButton: {
@@ -1922,6 +2002,45 @@ const styles = StyleSheet.create({
         borderRadius: 4,
         padding: 2,
     },
+    // Button Styles
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 24, // Pill shape
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+    },
+    primaryButton: {
+        backgroundColor: '#6366F1', // Indigo/Professional Blue
+        flex: 1,
+        marginRight: 10,
+    },
+    followingButton: {
+        backgroundColor: '#334155', // Slate 700 for 'Subscribed' state (dark mode friendly)
+        borderWidth: 1,
+        borderColor: '#475569',
+    },
+    actionButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        letterSpacing: 0.3,
+    },
+    primaryButtonText: {
+        color: '#FFFFFF',
+    },
+    followingButtonText: {
+        color: '#E2E8F0', // Lighter text for dark button
+    },
+
+
+
+    // Missing Modal Styles
     modalContainer: {
         flex: 1,
         backgroundColor: '#FFFFFF',
@@ -1943,242 +2062,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#0F172A',
     },
-    gridStatsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-        marginTop: 4,
-    },
-    gridStatText: {
-        fontSize: 10,
-        color: '#64748B',
-    },
 
-    // New Professional Styles
-    headerBackground: {
-        paddingTop: Platform.OS === 'android' ? 40 : 20,
-        paddingBottom: 80, // Increased for more overlap
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
-    },
-    emptyPostsState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 40,
-    },
-    emptyTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1E293B',
-        marginTop: 12,
-    },
-    iconButtonTransparent: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.2)',
-    },
-    profileHeaderContent: {
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    profileBody: {
-        marginTop: -40,
-        paddingHorizontal: 20,
-    },
-    centerInfo: {
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    metaRowCentered: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 16,
-        marginTop: 8,
-    },
-    bioContainer: {
-        backgroundColor: '#FFF',
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 20,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    moreLink: {
-        color: '#4F46E5',
-        fontWeight: '600',
-        marginTop: 4,
-        fontSize: 14,
-    },
-    statsCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        backgroundColor: '#FFF',
-        borderRadius: 20,
-        paddingVertical: 20,
-        paddingHorizontal: 12,
-        marginBottom: 24,
-        shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 4,
-        borderWidth: 1,
-        borderColor: '#EEF2FF',
-    },
-    primaryGradientButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        borderRadius: 12,
-        gap: 8,
-    },
-
-    progressBarContainer: {
-        height: 6,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    progressBarFill: {
-        height: '100%',
-        backgroundColor: '#10B981',
-        borderRadius: 3,
-    },
-    // Quick Actions Styles
-    actionsSection: {
-        padding: 20,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1E293B',
-        marginBottom: 16,
-    },
-    actionsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 16,
-    },
-    actionCard: {
-        width: '47%',
-        backgroundColor: '#FFF',
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        alignItems: 'center',
-        gap: 12,
-    },
-    actionIconBg: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    actionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1E293B',
-        textAlign: 'center',
-    },
-    completenessSection: {
-        marginHorizontal: 20,
-        marginBottom: 20,
-        padding: 16,
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    completenessHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    completenessText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1E293B',
-    },
-
-    // Highlights / Shortcuts Styles
-    highlightsContainer: {
-        marginVertical: 16,
-    },
-    highlightItem: {
-        alignItems: 'center',
-        gap: 8,
-    },
-    highlightIconCircle: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-    },
-    highlightLabel: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: '#475569',
-    },
-    notificationBadge: {
-        position: 'absolute',
-        top: -4,
-        right: -4,
-        backgroundColor: '#EF4444',
-        borderRadius: 10,
-        minWidth: 18,
-        height: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 4,
-    },
-    notificationBadgeText: {
-        color: '#FFF',
-        fontSize: 10,
-        fontWeight: '700',
-    },
-    // Sub Filter Styles
-    subFilterContainer: {
-        flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        gap: 12,
-        backgroundColor: '#FFF',
-    },
-    subFilterChip: {
-        paddingVertical: 6,
-        paddingHorizontal: 16,
-        borderRadius: 20,
-        backgroundColor: '#F1F5F9',
-        borderWidth: 1,
-        borderColor: 'transparent',
-    },
-    subFilterChipActive: {
-        backgroundColor: '#EEF2FF',
-        borderColor: '#4F46E5',
-    },
-    subFilterText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#64748B',
-    },
-    subFilterTextActive: {
-        color: '#4F46E5',
-    },
     // Video List Item Styles
     videoListItem: {
         flexDirection: 'row',
@@ -2227,38 +2111,8 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#64748B',
     },
-    // Home Tab Section Styles
-    homeSectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        marginTop: 24,
-        marginBottom: 12,
-    },
-    // Action Buttons Container
-    actionButtonsContainer: {
-        flexDirection: 'row',
-        marginTop: 16,
-        paddingHorizontal: 16,
-        gap: 12,
-        width: '100%',
-    },
-    homeSectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#0F172A',
-    },
-    seeAllText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#4F46E5',
-    },
-    horizontalList: {
-        paddingHorizontal: 16,
-        paddingBottom: 8,
-    },
-    // Clip Card Styles
+
+    // Clips Grid Styles
     clipsGridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -2343,6 +2197,85 @@ const styles = StyleSheet.create({
         fontSize: 9,
         fontWeight: '600',
         marginLeft: 3,
+    },
+
+    // Other Missing Styles
+    notificationBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+    },
+    notificationBadgeText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    actionButtonsContainer: {
+        flexDirection: 'row',
+        marginTop: 16,
+        paddingHorizontal: 16,
+        gap: 12,
+        width: '100%',
+    },
+    subFilterContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        gap: 12,
+        backgroundColor: '#FFF',
+    },
+    subFilterChip: {
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    subFilterText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#64748B',
+    },
+    emptyPostsState: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+    },
+    emptyTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1E293B',
+        marginTop: 12,
+    },
+    homeSectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        marginTop: 24,
+        marginBottom: 12,
+    },
+    homeSectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#0F172A',
+    },
+    seeAllText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#4F46E5',
+    },
+    horizontalList: {
+        paddingHorizontal: 16,
+        paddingBottom: 8,
     },
 });
 
