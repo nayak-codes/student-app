@@ -1,16 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
 import { Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View, ViewToken } from 'react-native';
 import CommentsSheet from '../../src/components/CommentsSheet';
 import ShareModal from '../../src/components/ShareModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
-import { useConditionalVideoPlayer } from '../../src/hooks/useConditionalVideoPlayer';
 import { checkFollowStatus, followUser, unfollowUser } from '../../src/services/connectionService';
-import { Post, addReaction, getAllPosts, incrementViewCount, likePost, removeReaction, unlikePost } from '../../src/services/postsService';
+import { addReaction, getAllPosts, incrementViewCount, likePost, Post, removeReaction, unlikePost } from '../../src/services/postsService';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -33,8 +32,7 @@ export default function ShortsPlayerScreen() {
     const [shareModalVisible, setShareModalVisible] = useState(false);
     const [shareData, setShareData] = useState<any>(null);
 
-    // One-handed mode state - default to right-handed
-    const [isRightHanded, setIsRightHanded] = useState(true);
+
 
     const flatListRef = React.useRef<FlatList>(null);
 
@@ -180,10 +178,7 @@ export default function ShortsPlayerScreen() {
         }
     };
 
-    // Toggle hand mode
-    const toggleHandMode = () => {
-        setIsRightHanded(prev => !prev);
-    };
+
 
     const renderShort = ({ item, index }: { item: Post; index: number }) => {
         const isActive = index === currentIndex;
@@ -204,8 +199,7 @@ export default function ShortsPlayerScreen() {
                     setShareData(short);
                     setShareModalVisible(true);
                 }}
-                isRightHanded={isRightHanded}
-                onToggleHand={toggleHandMode}
+
             />
         );
     };
@@ -293,8 +287,6 @@ interface ShortItemProps {
     onHype: () => void;
     onComments: () => void;
     onShare: (short: Post) => void;
-    isRightHanded: boolean;
-    onToggleHand: () => void;
 }
 
 function getTimeAgo(date: any) {
@@ -314,10 +306,24 @@ function getTimeAgo(date: any) {
     }
 }
 
-function ShortItem({ short, isActive, shouldLoad, onLike, onHype, onComments, onShare, isRightHanded, onToggleHand }: ShortItemProps) {
+function ShortItem({ short, isActive, shouldLoad, onLike, onHype, onComments, onShare }: ShortItemProps) {
     const { colors } = useTheme();
     const router = useRouter();
-    const player = useConditionalVideoPlayer(short.videoLink || null, shouldLoad);
+
+    // Debug logging
+    console.log(`🎬 [ShortItem ${short.id}] Video Link:`, short.videoLink);
+    console.log(`🎬 [ShortItem ${short.id}] Is Active:`, isActive);
+
+    // Use useVideoPlayer directly - Always load source to ensure readiness
+    const player = useVideoPlayer(short.videoLink || null, (player) => {
+        player.loop = true;
+        console.log(`✅ [ShortItem ${short.id}] Player initialized`);
+        if (isActive) {
+            console.log(`▶️ [ShortItem ${short.id}] Auto-playing (isActive on init)`);
+            player.play();
+        }
+    });
+
     const [isPlaying, setIsPlaying] = useState(false);
 
     // Auth
@@ -342,17 +348,25 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onHype, onComments, on
         }
     }, [short.userId, user]); // Only re-check if user changes
 
-    // Only play when active
+    // Play/Pause effect
     useEffect(() => {
-        if (isActive && player) {
-            player.play();
+        if (player) {
+            if (isActive) {
+                console.log(`▶️ [ShortItem ${short.id}] Playing (isActive changed to true)`);
+                player.play();
+            } else {
+                console.log(`⏸️ [ShortItem ${short.id}] Pausing (isActive changed to false)`);
+                player.pause();
+            }
+
             const subscription = player.addListener('playingChange', (event) => {
+                console.log(`🔄 [ShortItem ${short.id}] Playing state changed:`, event.isPlaying);
                 setIsPlaying(event.isPlaying);
             });
-            return () => subscription.remove();
-        } else if (player) {
-            player.pause();
-            setIsPlaying(false);
+
+            return () => {
+                subscription.remove();
+            };
         }
     }, [isActive, player]);
 
@@ -427,9 +441,9 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onHype, onComments, on
                 locations={[0, 0.6, 1]}
                 style={styles.overlay}
             >
-                <View style={[styles.bottomSection, !isRightHanded && styles.bottomSectionReversed]}>
-                    <View style={[styles.textContainer, isRightHanded ? styles.textContainerRight : styles.textContainerLeft]}>
-                        <View style={[styles.authorRow, !isRightHanded && styles.authorRowReversed]}>
+                <View style={styles.bottomSection}>
+                    <View style={styles.textContainer}>
+                        <View style={styles.authorRow}>
                             <TouchableOpacity
                                 style={styles.avatarPlaceholder}
                                 onPress={() => router.push(`/full-profile?userId=${short.userId}`)}
@@ -461,7 +475,7 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onHype, onComments, on
                         </Text>
                     </View>
 
-                    <View style={[styles.rightActions, !isRightHanded && styles.leftActions]}>
+                    <View style={styles.rightActions}>
                         <TouchableOpacity style={styles.actionBtn} onPress={onLike}>
                             <Ionicons
                                 name={isLiked ? "heart" : "heart-outline"}
@@ -497,18 +511,7 @@ function ShortItem({ short, isActive, shouldLoad, onLike, onHype, onComments, on
                 </View>
             </LinearGradient>
 
-            {/* Hand Toggle Button - appears on opposite side */}
-            <TouchableOpacity
-                style={[styles.handToggleBtn, isRightHanded ? styles.handToggleBtnLeft : styles.handToggleBtnRight]}
-                onPress={onToggleHand}
-                activeOpacity={0.7}
-            >
-                <Ionicons
-                    name={isRightHanded ? "hand-left-outline" : "hand-right-outline"}
-                    size={24}
-                    color="#FFF"
-                />
-            </TouchableOpacity>
+
         </View>
     );
 }

@@ -379,21 +379,8 @@ const EventsScreen = () => {
     const renderRecommendedCard = ({ item }: { item: EventItem }) => {
         const badgeColors = getBadgeColors(item.category);
         return (
-            <TouchableOpacity style={[styles.recCard, { backgroundColor: isDark ? '#1E293B' : '#1E293B' }]}>
-                {/* Keep Rec Card dark always or adjust? Usually Rec Cards are promoted, maybe keeping them dark is a design choice. 
-                   But let's stick to colors.card if standard, or specific dark style. 
-                   Original code had #1E293B (Slate 800) hardcoded. 
-                   Let's make it consistent with card color but maybe inverted if intended to stand out? 
-                   No, let's use colors.card but maybe slightly different? 
-                   Actually, recommended cards in the original design looked like "Dark" cards even in light mode (since text was White/Grey).
-                   Let's keep them Dark for pop, OR adapt. 
-                   For now, I'll keep them as "inverted" cards if in light mode, or standard cards in dark mode.
-                   Wait, original styles: recCard bg #1E293B, title #FFF. So it was ALWAYS dark.
-                   I will preserve that "Always Dark" look for Premium feel, or maybe adapt. 
-                   Let's adapt to colors.card for 'clean' look.
-                   Actually, if I make it colors.card in Light Mode (White), I need to change text colors too.
-                   Let's make it use colors.card (White/Black) and proper text colors.
-                */}
+            <TouchableOpacity style={[styles.recCard, { backgroundColor: '#1E293B' }]}>
+                {/* Reverted to Dark Slate for Premium Look as requested for "both" */}
                 <View style={styles.recContent}>
                     <View style={[styles.badge, { backgroundColor: badgeColors.bg, borderColor: badgeColors.border, borderWidth: 1, marginBottom: 8, alignSelf: 'flex-start' }]}>
                         <Text style={[styles.badgeText, { color: badgeColors.text }]}>{item.category}</Text>
@@ -412,37 +399,16 @@ const EventsScreen = () => {
     // So I will keep it hardcoded Dark for now, or use a specific "primaryCard" color.
     // I'll leave Rec Card as is (Hardcoded Dark) for high contrast features, but ensure it looks good in Dark Mode (it's already dark).
 
-    const renderHeader = () => (
-        <View>
-            {/* Sub Filters */}
-            {userPreferences.length > 0 ? (
-                <View style={[styles.subFilterContainer, { backgroundColor: colors.background }]}>
-                    <FlatList
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        data={['All', ...userPreferences].filter((v, i, a) => a.indexOf(v) === i)} // Unique
-                        keyExtractor={(item) => String(item)}
-                        contentContainerStyle={styles.subFilterList}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity
-                                style={[
-                                    styles.subFilterChip,
-                                    { backgroundColor: colors.card, borderColor: colors.border },
-                                    activeSubFilter === item && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
-                                ]}
-                                onPress={() => setActiveSubFilter(item as EventCategory | 'All')}
-                            >
-                                <Text style={[
-                                    styles.subFilterText,
-                                    { color: colors.textSecondary },
-                                    activeSubFilter === item && { color: colors.primary }
-                                ]}>{item}</Text>
-                            </TouchableOpacity>
-                        )}
-                    />
-                </View>
-            ) : null}
+    // Collapsible Header Logic
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const diffClamp = Animated.diffClamp(scrollY, 0, 140); // Estimated header height
+    const translateY = diffClamp.interpolate({
+        inputRange: [0, 140],
+        outputRange: [0, -140],
+    });
 
+    const renderListHeader = () => (
+        <View>
             {/* Recommendations Section */}
             {recommendedEvents.length > 0 && activeSubFilter === 'All' && showRecommendations && (
                 <View style={styles.sectionContainer}>
@@ -483,59 +449,123 @@ const EventsScreen = () => {
         </View>
     );
 
-    // Collapsible Header Logic
-    const scrollY = useRef(new Animated.Value(0)).current;
-    const diffClamp = Animated.diffClamp(scrollY, 0, 160);
-    const translateY = diffClamp.interpolate({
-        inputRange: [0, 160],
-        outputRange: [0, -160],
-    });
-
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-            {/* Collapsible Top Section (Tab + Search) */}
-            <Animated.View style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                zIndex: 1000,
-                backgroundColor: colors.background,
-                transform: [{ translateY }],
-                elevation: 4,
-            }}>
-                <SafeAreaView edges={['top']}>
-                    {/* Sticky Header with Tab */}
-                    <View style={[styles.stickyHeader, { backgroundColor: colors.background, borderBottomColor: isDark ? '#333' : colors.border }]}>
-                        <View style={styles.tabContainer}>
-                            <View style={[styles.activeTab, { borderBottomColor: colors.primary }]}>
-                                <Text style={[styles.tabText, { color: colors.primary }]}>For You</Text>
+            {/* COLLAPSIBLE HEADER SECTION (Library Style) */}
+            <Animated.View
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1005,
+                    backgroundColor: colors.background,
+                    transform: [{ translateY }],
+                    elevation: 4,
+                }}
+            >
+                <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }}>
+                    <View style={{ paddingBottom: 8 }}>
+                        {/* Search Bar - Pill Style */}
+                        <View style={[styles.searchContainer, { backgroundColor: colors.background, borderBottomWidth: 0 }]}>
+                            <View style={[
+                                styles.searchInputWrapper,
+                                {
+                                    backgroundColor: isDark ? '#1E293B' : '#FFF',
+                                    borderColor: isDark ? '#334155' : '#E2E8F0',
+                                    borderRadius: 25, // Pill Shape
+                                    height: 50,
+                                    shadowColor: isDark ? '#000' : '#64748B',
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: isDark ? 0 : 0.08,
+                                    shadowRadius: 8,
+                                    elevation: isDark ? 0 : 2,
+                                }
+                            ]}>
+                                <Ionicons name="search" size={20} color={isDark ? '#94A3B8' : '#64748B'} style={{ marginLeft: 8, marginRight: 8 }} />
+                                <TextInput
+                                    style={[styles.searchInput, { color: colors.text, fontSize: 16, fontWeight: '500' }]}
+                                    placeholder="Search events..."
+                                    placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                />
+                                {searchQuery.length > 0 && (
+                                    <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                                        <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                )}
                             </View>
-                        </View>
-                    </View>
 
-                    {/* Search Bar */}
-                    <View style={[styles.searchContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-                        <View style={[styles.searchInputWrapper, { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border }]}>
-                            <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={styles.searchIcon} />
-                            <TextInput
-                                style={[styles.searchInput, { color: colors.text }]}
-                                placeholder="Search events..."
-                                placeholderTextColor={colors.textSecondary}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
-                            {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                                    <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                                </TouchableOpacity>
-                            )}
+                            {/* Filter Button - Kept but styled comfortably next to search */}
+                            <TouchableOpacity
+                                onPress={() => setModalVisible(true)}
+                                style={[
+                                    styles.filterButton,
+                                    {
+                                        backgroundColor: isDark ? '#1E293B' : '#FFF',
+                                        borderColor: isDark ? '#334155' : '#E2E8F0',
+                                        borderRadius: 14, // Slightly rounded square
+                                        height: 50,
+                                        width: 50,
+                                        shadowColor: isDark ? '#000' : '#64748B',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: isDark ? 0 : 0.08,
+                                        shadowRadius: 8,
+                                        elevation: isDark ? 0 : 2,
+                                    }
+                                ]}
+                            >
+                                <Ionicons name="options-outline" size={22} color={colors.primary} />
+                            </TouchableOpacity>
                         </View>
-                        <TouchableOpacity onPress={() => setModalVisible(true)} style={[styles.filterButton, { backgroundColor: isDark ? colors.card : '#EEF2FF', borderColor: isDark ? colors.border : '#C7D2FE' }]}>
-                            <Ionicons name="options-outline" size={20} color={colors.primary} />
-                        </TouchableOpacity>
+
+                        {/* Categories - Fixed Horizontal List */}
+                        {userPreferences.length > 0 && (
+                            <View style={{ paddingBottom: 4 }}>
+                                <FlatList
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    data={['All', ...userPreferences].filter((v, i, a) => a.indexOf(v) === i)}
+                                    keyExtractor={(item) => String(item)}
+                                    contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
+                                    renderItem={({ item }) => {
+                                        const isActive = activeSubFilter === item;
+                                        return (
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.subFilterChip,
+                                                    {
+                                                        borderRadius: 20,
+                                                        paddingHorizontal: 16,
+                                                        paddingVertical: 8, // Taller comfortable touch target
+                                                        borderWidth: 1,
+                                                        backgroundColor: isActive
+                                                            ? colors.primary
+                                                            : (isDark ? '#1E293B' : '#F1F5F9'),
+                                                        borderColor: isActive
+                                                            ? colors.primary
+                                                            : (isDark ? '#334155' : '#E2E8F0'),
+                                                    }
+                                                ]}
+                                                onPress={() => setActiveSubFilter(item as EventCategory | 'All')}
+                                            >
+                                                <Text style={[
+                                                    styles.subFilterText,
+                                                    {
+                                                        color: isActive ? '#FFF' : colors.text,
+                                                        fontWeight: '600',
+                                                        fontSize: 13
+                                                    }
+                                                ]}>{item}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    }}
+                                />
+                            </View>
+                        )}
                     </View>
                 </SafeAreaView>
             </Animated.View>
@@ -560,12 +590,12 @@ const EventsScreen = () => {
                             })}
                         />)}
                     keyExtractor={(item) => item.id || `event-${Math.random()}`}
-                    contentContainerStyle={[styles.feed, { paddingTop: 160 }]}
+                    contentContainerStyle={[styles.feed, { paddingTop: 140 }]} // Add padding for collapsible header
                     onScroll={Animated.event(
                         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                         { useNativeDriver: false }
                     )}
-                    ListHeaderComponent={renderHeader}
+                    ListHeaderComponent={renderListHeader}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl
@@ -573,7 +603,6 @@ const EventsScreen = () => {
                             onRefresh={handleRefresh}
                             colors={[colors.primary]}
                             tintColor={colors.primary}
-                            progressViewOffset={120}
                         />
                     }
                     ListEmptyComponent={
@@ -762,7 +791,7 @@ const EventsScreen = () => {
                 <Ionicons name="add" size={32} color="#FFF" />
             </TouchableOpacity>
 
-            {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
+            {/* Static Top Black Card - Instagram Style (outside FeedList) */}
             <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />
         </View>
     );
@@ -1397,7 +1426,7 @@ const styles = StyleSheet.create({
         right: 0,
         height: 40,
         backgroundColor: '#000',
-        zIndex: 1001,
+        zIndex: 1006,
     },
     // Sketch Layout Styles (Proportions Adjusted)
     proCard: {

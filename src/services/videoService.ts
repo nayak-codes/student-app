@@ -1,8 +1,7 @@
 import { Alert, Platform } from 'react-native';
 
-// TODO: Replace these with your actual Cloudinary credentials
-// You can find these in your Cloudinary Dashboard
-const CLOUD_NAME = 'dcbi4hcjl';
+// Cloudinary configuration
+const CLOUD_NAME = 'dkyij8zrp'; // New active account
 const UPLOAD_PRESET = 'student_uploads'; // Make sure this is "Unsigned" in Cloudinary settings
 
 export const uploadVideoToCloudinary = async (

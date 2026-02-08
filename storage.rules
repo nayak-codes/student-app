@@ -93,6 +93,20 @@ service firebase.storage {
       allow read, write: if isAuthenticated();
     }
     
+    // Video Clips (for Shorts/Clips feature)
+    match /videos/{fileName} {
+      // Anyone can view/read videos
+      allow read: if true;
+      
+      // Authenticated users can upload videos (max 100MB)
+      allow write: if isAuthenticated() 
+                   && request.resource.contentType.matches('video/.*')
+                   && request.resource.size < 100 * 1024 * 1024; // 100MB limit
+      
+      // Authenticated users can delete their own videos
+      allow delete: if isAuthenticated();
+    }
+    
     // Default: deny all other access
     match /{document=**} {
       allow read, write: if false;

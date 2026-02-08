@@ -182,84 +182,97 @@ const LibraryScreen = () => {
   // Scroll Animation
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Header Animation (Fade out title?)
-  const headerTranslateY = scrollY.interpolate({
-    inputRange: [0, 50],
-    outputRange: [0, -50],
-    extrapolate: 'clamp'
+  // Header Animation (Collapsible)
+  const diffClamp = Animated.diffClamp(scrollY, 0, 140);
+  const translateY = diffClamp.interpolate({
+    inputRange: [0, 140],
+    outputRange: [0, -140],
   });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Header Area */}
-      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }}>
-        <View style={[styles.header, { backgroundColor: colors.background }]}>
-          {/* Search Bar - Professional Pill Style */}
-          <View style={[
-            styles.searchBar,
-            {
-              backgroundColor: isDark ? '#1E293B' : '#FFF',
-              borderColor: isDark ? '#334155' : '#E2E8F0',
-              borderWidth: 1,
-              // Shadow for light mode
-              shadowColor: isDark ? '#000' : '#64748B',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: isDark ? 0 : 0.08,
-              shadowRadius: 8,
-              elevation: isDark ? 0 : 2,
-              marginRight: 0, // Removed margin as profile button is gone
-            }
-          ]}>
-            <Ionicons name="search" size={20} color={isDark ? '#94A3B8' : '#64748B'} style={{ marginLeft: 16 }} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search Books, Notes..."
-              placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {/* Clear Button */}
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 8 }}>
-                <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* Search Suggestions */}
-        {searchQuery.length > 0 && (
-          <View style={[styles.suggestionsContainer, { backgroundColor: isDark ? '#1E293B' : '#FFF' }]}>
-            {resources
-              .filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
-              .slice(0, 5)
-              .map(r => (
-                <TouchableOpacity
-                  key={r.id}
-                  style={[styles.suggestionItem, { borderBottomColor: isDark ? '#334155' : '#F1F5F9' }]}
-                  onPress={() => handlePressInfo(r)}
-                >
-                  <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
-                  <Text style={[styles.suggestionText, { color: colors.text }]} numberOfLines={1}>{r.title}</Text>
+      {/* Header Area (Collapsible) */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1005,
+          backgroundColor: colors.background,
+          transform: [{ translateY }],
+          elevation: 4,
+        }}
+      >
+        <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }}>
+          <View style={[styles.header, { backgroundColor: colors.background }]}>
+            {/* Search Bar - Professional Pill Style */}
+            <View style={[
+              styles.searchBar,
+              {
+                backgroundColor: isDark ? '#1E293B' : '#FFF',
+                borderColor: isDark ? '#334155' : '#E2E8F0',
+                borderWidth: 1,
+                // Shadow for light mode
+                shadowColor: isDark ? '#000' : '#64748B',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: isDark ? 0 : 0.08,
+                shadowRadius: 8,
+                elevation: isDark ? 0 : 2,
+                marginRight: 0, // Removed margin as profile button is gone
+              }
+            ]}>
+              <Ionicons name="search" size={20} color={isDark ? '#94A3B8' : '#64748B'} style={{ marginLeft: 16 }} />
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder="Search Books, Notes..."
+                placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {/* Clear Button */}
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 8 }}>
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
-              ))
-            }
+              )}
+            </View>
           </View>
-        )}
 
-        {/* Category Pills */}
-        <CategoryPills
-          activeCategory={activeCategory}
-          onSelectCategory={setActiveCategory}
-        />
-      </SafeAreaView>
+          {/* Search Suggestions */}
+          {searchQuery.length > 0 && (
+            <View style={[styles.suggestionsContainer, { backgroundColor: isDark ? '#1E293B' : '#FFF' }]}>
+              {resources
+                .filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .slice(0, 5)
+                .map(r => (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[styles.suggestionItem, { borderBottomColor: isDark ? '#334155' : '#F1F5F9' }]}
+                    onPress={() => handlePressInfo(r)}
+                  >
+                    <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+                    <Text style={[styles.suggestionText, { color: colors.text }]} numberOfLines={1}>{r.title}</Text>
+                  </TouchableOpacity>
+                ))
+              }
+            </View>
+          )}
+
+          {/* Category Pills */}
+          <CategoryPills
+            activeCategory={activeCategory}
+            onSelectCategory={setActiveCategory}
+          />
+        </SafeAreaView>
+      </Animated.View>
 
       {/* Main Content */}
       <Animated.ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 100, paddingTop: 140 }}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={Animated.event(
@@ -319,6 +332,9 @@ const LibraryScreen = () => {
           documentType={selectedResource.type}
         />
       )}
+
+      {/* Static Top Black Card */}
+      <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />
     </View>
   );
 };
@@ -711,7 +727,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 40,
     backgroundColor: '#000',
-    zIndex: 1001,
+    zIndex: 1006,
   },
 });
 

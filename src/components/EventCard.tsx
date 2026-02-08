@@ -19,9 +19,9 @@ interface EventCardProps {
 export const EventCard: React.FC<EventCardProps> = ({ event, onPress, forceWhite = false, isSaved = false, onToggleSave, onOptionPress, style }) => {
     const themeContext = useTheme();
 
-    // Override theme values if forceWhite is true
-    const isDark = forceWhite ? false : themeContext.isDark;
-    const colors = forceWhite ? Colors.light : themeContext.colors;
+    // Override theme values if forceWhite is true (Interpreted as Premium Dark Mode)
+    const isDark = forceWhite ? true : themeContext.isDark;
+    const colors = forceWhite ? Colors.dark : themeContext.colors;
 
     // Helper for Badge Colors based on Category (Optional usage for specific pills)
     const getBadgeColors = (category: string) => {
@@ -145,9 +145,12 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress, forceWhite
         return event.duration || 'Full Time';
     };
 
+    // Explicitly use Dark Slate if forceWhite is active (Premium Dark Mode), otherwise use theme card color
+    const cardBackgroundColor = forceWhite ? '#1E293B' : colors.card;
+
     return (
         <TouchableOpacity
-            style={[styles.card, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#888' }, style]}
+            style={[styles.card, { backgroundColor: cardBackgroundColor, shadowColor: isDark ? '#000' : '#888' }, style]}
             onPress={() => onPress && onPress(event)}
             activeOpacity={0.96}
         >

@@ -33,7 +33,7 @@ const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.92;
 interface ShareModalProps {
     visible: boolean;
     onClose: () => void;
-    shareType: 'post' | 'pdf' | 'profile' | null;
+    shareType: 'post' | 'pdf' | 'profile' | 'event' | null;
     shareData: any;
 }
 
@@ -164,6 +164,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose, shareType, sh
         } else if (shareType === 'profile') {
             message = `Check out ${shareData?.content}'s profile on StudentVerse!`;
             url = `studentverse://profile/${shareData?.id}`;
+        } else if (shareType === 'event') {
+            message = `Check out this event: ${shareData?.title}`;
+            url = `https://studentverse.app/event/${shareData?.id}`;
         } else {
             message = `Check out this content`;
             url = `https://studentverse.app`;
@@ -244,15 +247,22 @@ const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose, shareType, sh
                 } else if (shareType === 'pdf') {
                     await sendSharedPDF(conversationId, shareData);
                 } else if (shareType === 'profile') {
-                    // Send profile as a text message with link for now, or implement sendSharedProfile in chatService later
+                    // Send profile as a text message with link for now
                     const profileLink = `studentverse://profile/${shareData.id}`;
                     const text = `Check out ${shareData.content}'s profile: ${profileLink}`;
 
-                    // We need to import sendMessage. It's not imported yet in the file view, only sendSharedPost/PDF.
-                    // Assuming I need to add the import or use what's available.
-                    // The view_file showed: import { Conversation, sendSharedPDF, sendSharedPost, subscribeToConversations } from '../services/chatService';
-                    // I need to update imports too.
-                    const { sendMessage } = require('../services/chatService'); // Dynamic import to avoid changing top imports blindly or I will add it to top ref.
+                    const { sendMessage } = require('../services/chatService');
+                    const currentUser = auth.currentUser;
+                    if (currentUser) {
+                        await sendMessage(conversationId, text, currentUser.uid, currentUser.displayName || 'User', 'text');
+                    }
+                } else if (shareType === 'event') {
+                    // Send event as a text message with link
+                    // Assuming shareData = { id, title, date, location, description }
+                    const eventLink = `studentverse://event/${shareData.id}`;
+                    const text = `Check out this event: ${shareData.title}\n📅 ${shareData.date}\n📍 ${shareData.location}\n\n${eventLink}`;
+
+                    const { sendMessage } = require('../services/chatService');
                     const currentUser = auth.currentUser;
                     if (currentUser) {
                         await sendMessage(conversationId, text, currentUser.uid, currentUser.displayName || 'User', 'text');

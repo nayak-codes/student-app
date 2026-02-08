@@ -19,7 +19,6 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { createPost } from '../../src/services/postsService';
 import { uploadVideoToCloudinary } from '../../src/services/videoService';
-
 export default function PublishClipScreen() {
     const router = useRouter();
     const { user, userProfile } = useAuth();

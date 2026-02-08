@@ -139,17 +139,17 @@ export default function SignupScreen() {
                     autoComplete={
                         id === 'email' ? 'email' :
                             id === 'name' ? 'name' :
-                                id === 'password' ? 'new-password' :
-                                    id === 'confirmPassword' ? 'new-password' : undefined
+                                id === 'password' ? 'password' :
+                                    id === 'confirmPassword' ? 'password' : undefined
                     }
                     onFocus={() => setFocusedInput(id)}
                     onBlur={() => setFocusedInput(null)}
                     editable={!loading}
                     importantForAutofill="yes"
                     textContentType={
-                        id === 'email' ? 'username' :
-                            id === 'password' ? 'newPassword' :
-                                id === 'confirmPassword' ? 'newPassword' :
+                        id === 'email' ? 'emailAddress' :
+                            id === 'password' ? 'password' :
+                                id === 'confirmPassword' ? 'password' :
                                     id === 'name' ? 'name' : 'none'
                     }
                 />

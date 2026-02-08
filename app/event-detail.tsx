@@ -5,11 +5,11 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Dimensions,
     Image,
     Linking,
     Platform,
     ScrollView,
-    Share,
     StatusBar,
     StyleSheet,
     Text,
@@ -18,8 +18,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import ShareModal from '../src/components/ShareModal';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { EventItem } from '../src/services/eventService';
+
+const { width } = Dimensions.get('window');
 
 export default function EventDetailScreen() {
     const router = useRouter();
@@ -28,6 +31,7 @@ export default function EventDetailScreen() {
     const [event, setEvent] = useState<EventItem | null>(null);
     const [loading, setLoading] = useState(true);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+    const [shareModalVisible, setShareModalVisible] = useState(false);
 
     useEffect(() => {
         if (params.event) {
@@ -59,14 +63,7 @@ export default function EventDetailScreen() {
 
     const handleShare = async () => {
         if (!event) return;
-        try {
-            await Share.share({
-                message: `Check out this event: ${event.title}\n${event.description}\n\nOrganized by: ${event.organization}`,
-                title: event.title,
-            });
-        } catch (error) {
-            console.error('Error sharing:', error);
-        }
+        setShareModalVisible(true);
     };
 
     const handleOpenLink = () => {
@@ -99,59 +96,114 @@ export default function EventDetailScreen() {
 
     if (loading) {
         return (
-            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-                <ActivityIndicator size="large" color={colors.primary} />
+            <View style={[styles.loadingContainer, { backgroundColor: '#09090B' }]}>
+                <ActivityIndicator size="large" color="#6366F1" />
             </View>
         );
     }
 
     if (!event) {
         return (
-            <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
-                <Text style={[styles.errorText, { color: colors.textSecondary }]}>Event not found</Text>
-                <TouchableOpacity style={[styles.backButton, { backgroundColor: colors.primary }]} onPress={() => router.back()}>
+            <View style={[styles.errorContainer, { backgroundColor: '#09090B' }]}>
+                <Text style={[styles.errorText, { color: '#A1A1AA' }]}>Event not found</Text>
+                <TouchableOpacity style={[styles.backButton, { backgroundColor: '#6366F1' }]} onPress={() => router.back()}>
                     <Text style={styles.backButtonText}>Go Back</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
-    const InfoCard = ({ icon, label, value }: { icon: any; label: string; value: string }) => (
-        <View style={[
-            styles.infoCard,
-            {
-                backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFF',
-                borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0',
-                borderWidth: 1
-            }
-        ]}>
-            <View style={[styles.iconCircle, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : '#EEF2FF' }]}>
-                <Ionicons name={icon} size={18} color={colors.primary} />
+    const InfoCard = ({ icon, label, value, highlight = false }: { icon: any; label: string; value: string; highlight?: boolean }) => {
+        // Special styling for Prize Pool value (Gold)
+        const isPrizePool = label === "Prize Pool";
+        const displayValue = value;
+        const valueColor = isPrizePool ? '#FFD700' : '#FFF'; // Gold for Prize Pool, White for others
+
+        return (
+            <View style={[
+                styles.infoCard,
+                {
+                    backgroundColor: '#1E293B',
+                    borderRadius: 16, // Matching gridItem radius roughly
+                    padding: 12, // Compact padding
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 4,
+                    elevation: 2,
+                    borderWidth: 0,
+                    flexDirection: 'row', // Horizontal Layout
+                    alignItems: 'center',
+                    gap: 12,
+                }
+            ]}>
+                {/* Left: Icon Circle */}
+                <View style={[styles.iconCircle, {
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    width: 36, height: 36, borderRadius: 18
+                }]}>
+                    <Ionicons name={icon} size={20} color={highlight ? '#818CF8' : '#cbd5e1'} />
+                </View>
+
+                {/* Right: Text Column */}
+                <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[styles.infoLabel, { color: '#94a3b8', fontSize: 10, letterSpacing: 0.5, marginBottom: 0 }]}>{label}</Text>
+                    <Text style={[styles.infoValue, { color: valueColor, fontSize: 14 }]} numberOfLines={1}>{displayValue}</Text>
+                </View>
             </View>
-            <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{label}</Text>
-                <Text style={[styles.infoValue, { color: colors.text }]} numberOfLines={2}>{value}</Text>
-            </View>
-        </View>
-    );
+        );
+    };
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <View style={[styles.container, { backgroundColor: '#09090B' }]}>
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            {/* Header Actions Overlay */}
-            <SafeAreaView style={styles.headerOverlay} edges={['top']}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.excludeHeaderButton}>
-                    <Ionicons name="arrow-back" size={24} color="#FFF" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleShare} style={styles.excludeHeaderButton}>
-                    <Ionicons name="share-outline" size={24} color="#FFF" />
-                </TouchableOpacity>
+            {/* Share Modal */}
+            <ShareModal
+                visible={shareModalVisible}
+                onClose={() => setShareModalVisible(false)}
+                shareType="event"
+                shareData={{
+                    id: event.id,
+                    title: event.title,
+                    date: event.date,
+                    location: event.location,
+                    description: event.description,
+                    content: event.title // Fallback
+                }}
+            />
+
+            {/* 1. SEPARATE HEADER SPACE (No Overlap) */}
+            <SafeAreaView style={{ backgroundColor: '#000', zIndex: 50 }} edges={['top']}>
+                <View style={styles.headerButtonsRow}>
+                    <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+                        {/* No blur needed on black bg, just clean icon */}
+                        <View style={styles.simpleNavButton}>
+                            <Ionicons name="arrow-back" size={24} color="#FFF" />
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* CENTER: Category Text (No Box) */}
+                    <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' }}>{event.category}</Text>
+                    </View>
+
+                    <TouchableOpacity onPress={handleShare} activeOpacity={0.8}>
+                        <View style={styles.simpleNavButton}>
+                            <Ionicons name="share-outline" size={22} color="#FFF" />
+                        </View>
+                    </TouchableOpacity>
+                </View>
             </SafeAreaView>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} bounces={false}>
-                {/* Media Header */}
-                <View style={styles.mediaHeader}>
+            <ScrollView
+                style={styles.content}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                contentContainerStyle={{ paddingBottom: 140 }}
+            >
+                {/* 1. IMMERSIVE HERO SECTION */}
+                <View style={styles.heroSection}>
                     {event.videoLink ? (
                         event.videoLink.includes('youtube') || event.videoLink.includes('youtu.be') ? (
                             <View style={styles.videoContainer}>
@@ -188,211 +240,185 @@ export default function EventDetailScreen() {
                         )
                     ) : (
                         <View style={styles.imageContainer}>
-                            {/* Blurred Background for Ambiance */}
+                            {/* Blurred Background for ambiance (YouTube Style) */}
                             <Image
                                 source={{ uri: event.image || 'https://via.placeholder.com/800x450' }}
-                                style={styles.backgroundImage}
-                                blurRadius={30}
-                                resizeMode="cover"
+                                style={styles.heroImageBlur}
+                                blurRadius={50}
                             />
-
-                            {/* Main Image - Fully Visible */}
+                            {/* Main Image - Contained (Like YouTube Thumbnail) */}
                             <Image
                                 source={{ uri: event.image || 'https://via.placeholder.com/800x450' }}
-                                style={styles.headerImage}
+                                style={styles.heroImage}
                                 resizeMode="contain"
                             />
-
-                            {/* Gradient for seamless transition */}
+                            {/* Cinematic Gradient Overlay */}
                             <LinearGradient
-                                colors={['transparent', 'rgba(0,0,0,0.9)', '#000']}
-                                style={styles.imageOverlay}
+                                colors={['transparent', 'rgba(9,9,11,0.6)', '#09090B']}
+                                style={styles.heroGradient}
+                                locations={[0, 0.7, 1]}
                             />
                         </View>
                     )}
                 </View>
 
-                {/* Main Content Card */}
-                <View style={[styles.mainContent, { backgroundColor: colors.background, paddingBottom: 150 }]}>
-
-                    {/* 1. TITLE & LOCATION SECTION */}
-                    <View style={styles.headerSection}>
-                        <Text style={[styles.title, { color: colors.text }]}>{event.title}</Text>
-
-                        <TouchableOpacity
-                            style={styles.locationRow}
-                            onPress={() => {
-                                const query = encodeURIComponent(event.location);
-                                Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
-                            }}
-                        >
-                            <View style={[styles.locationIconBox, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF' }]}>
-                                <Ionicons name="location" size={18} color="#6366F1" />
-                            </View>
-                            <Text style={[styles.locationText, { color: colors.textSecondary }]}>
-                                {event.location}
-                            </Text>
-                            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={{ opacity: 0.5 }} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* 2. TAGS: Category | Org | Days Left */}
-                    <View style={styles.metaTagsRow}>
-                        <View style={[styles.categoryChip, { backgroundColor: colors.primary }]}>
-                            <Text style={styles.categoryText}>{event.category}</Text>
-                        </View>
-                        <View style={[styles.orgChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9' }]}>
-                            <Ionicons name="business" size={14} color={colors.textSecondary} />
-                            <Text style={[styles.orgText, { color: colors.text }]}>{event.organization}</Text>
-                        </View>
-                        {/* Days Left Chip */}
+                {/* 2. MAIN CONTENT LAYER */}
+                <View style={styles.mainContent}>
+                    {/* Title & Status */}
+                    <View style={styles.titleRow}>
+                        {/* Category removed from here */}
                         {daysLeft && daysLeft !== 'Ended' && (
-                            <View style={[styles.orgChip, { borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-                                <Ionicons name="hourglass-outline" size={14} color="#F59E0B" />
-                                <Text style={[styles.orgText, { color: '#F59E0B' }]}>{daysLeft} Left</Text>
+                            <View style={[styles.statusPill, { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: '#F59E0B' }]}>
+                                <Ionicons name="time-outline" size={12} color="#F59E0B" />
+                                <Text style={[styles.statusText, { color: '#F59E0B' }]}>{daysLeft}</Text>
                             </View>
                         )}
                     </View>
+
+                    <Text style={styles.eventTitle}>{event.title}</Text>
+
+                    {/* Organization Row */}
+                    <View style={styles.orgRow}>
+                        <View style={styles.orgIconBg}>
+                            <Ionicons name="business" size={16} color="#A1A1AA" />
+                        </View>
+                        <Text style={styles.orgName}>{event.organization}</Text>
+                        <View style={styles.verifiedBadge}>
+                            <Ionicons name="checkmark-circle" size={14} color="#6366F1" />
+                        </View>
+                    </View>
+
+                    {/* Location Link */}
+                    <TouchableOpacity
+                        style={styles.locationButton}
+                        onPress={() => {
+                            const query = encodeURIComponent(event.location);
+                            Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+                        }}
+                    >
+                        <Ionicons name="location" size={18} color="#A1A1AA" />
+                        <Text style={styles.locationText} numberOfLines={1}>{event.location}</Text>
+                        <Ionicons name="chevron-forward" size={16} color="#52525B" />
+                    </TouchableOpacity>
 
                     {/* Divider */}
-                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                    <View style={styles.divider} />
 
-                    {/* 3. IMPORTANT INFO GRID */}
-                    <Text style={[styles.sectionHeaderLabel, { color: colors.textSecondary }]}>EVENT DETAILS</Text>
+                    {/* 3. INFO GRID */}
+                    <Text style={styles.sectionTitle}>Event Highlights</Text>
                     <View style={styles.gridContainer}>
-                        <InfoCard icon="calendar-outline" label="Date" value={event.date} />
-
-                        {event.dynamicFields?.teamSize && (
-                            <InfoCard icon="people-outline" label="Team Size" value={event.dynamicFields.teamSize} />
-                        )}
-                        {event.dynamicFields?.prizePool ? (
-                            <InfoCard icon="trophy-outline" label="Prize Pool" value={event.dynamicFields.prizePool} />
-                        ) : (
-                            <InfoCard icon="gift-outline" label="Prize" value="Goodies" />
-                        )}
-                        {event.dynamicFields?.entryFee ? (
-                            <InfoCard icon="cash-outline" label="Entry Fee" value={event.dynamicFields.entryFee} />
-                        ) : (
-                            <InfoCard icon="wallet-outline" label="Entry Fee" value="Free" />
-                        )}
-                        {event.dynamicFields?.deadline && (
-                            <InfoCard icon="timer-outline" label="Deadline" value={event.dynamicFields.deadline} />
-                        )}
-                        <InfoCard icon={event.isOnline ? "globe-outline" : "business-outline"} label="Mode" value={event.isOnline ? 'Online' : 'Offline'} />
-                        {/* Extra fields if available */}
-                        {event.dynamicFields?.eligibility && (
-                            <InfoCard icon="school-outline" label="Eligibility" value={String(event.dynamicFields.eligibility)} />
-                        )}
-                        {event.dynamicFields?.type && (
-                            <InfoCard icon="layers-outline" label="Type" value={event.dynamicFields.type} />
-                        )}
+                        <InfoCard icon="calendar-outline" label="Date" value={event.date} highlight />
+                        <InfoCard icon="people-outline" label="Team Size" value={event.dynamicFields?.teamSize || 'Individual'} />
+                        <InfoCard
+                            icon="trophy-outline"
+                            label="Prize Pool"
+                            value={event.dynamicFields?.prizePool ? event.dynamicFields.prizePool : 'Goodies'}
+                            highlight
+                        />
+                        <InfoCard
+                            icon={event.dynamicFields?.entryFee ? "card-outline" : "ticket-outline"}
+                            label="Entry Fee"
+                            value={event.dynamicFields?.entryFee ? event.dynamicFields.entryFee : 'Free'}
+                        />
                     </View>
 
-                    {/* 4. ABOUT SECTION */}
-                    <View style={styles.section}>
-                        <Text style={[styles.sectionHeader, { color: colors.text }]}>About Event</Text>
-                        <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={isDescriptionExpanded ? undefined : 6}>
-                            {event.description}
-                        </Text>
-                        {event.description.length > 200 && (
-                            <TouchableOpacity onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}>
-                                <Text style={[styles.readMore, { color: colors.primary }]}>
-                                    {isDescriptionExpanded ? 'Show Less' : 'Read More'}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
+                    {/* 4. DESCRIPTION */}
+                    <Text style={styles.sectionTitle}>About</Text>
+                    <Text style={styles.descriptionText} numberOfLines={isDescriptionExpanded ? undefined : 4}>
+                        {event.description}
+                    </Text>
+                    {event.description.length > 150 && (
+                        <TouchableOpacity onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}>
+                            <Text style={[styles.readMoreText, { color: colors.primary }]}>
+                                {isDescriptionExpanded ? 'Read Less' : 'Read More'}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
 
-                    {/* Other Details List */}
+                    {/* 5. ADDITIONAL DETAILS */}
                     {event.dynamicFields && Object.keys(event.dynamicFields).length > 0 && (() => {
-                        const shownFields = ['teamSize', 'prizePool', 'deadline', 'entryFee', 'eligibility', 'type'];
+                        const shownFields = ['teamSize', 'prizePool', 'entryFee'];
                         const otherFields = Object.entries(event.dynamicFields).filter(([key]) => !shownFields.includes(key));
                         if (otherFields.length === 0) return null;
 
                         return (
-                            <View style={[styles.section, { paddingBottom: 20 }]}>
-                                <Text style={[styles.sectionHeader, { color: colors.text }]}>Additional Info</Text>
-                                <View style={[styles.detailsBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', padding: 16, borderRadius: 16 }]}>
-                                    {otherFields.map(([key, value]) => {
-                                        if (typeof value === 'boolean') {
-                                            return (
-                                                <View key={key} style={[styles.detailRow, { borderBottomColor: isDark ? '#334155' : '#E2E8F0', borderBottomWidth: 1 }]}>
-                                                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                                                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                                                    </Text>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                        <Ionicons name={value ? "checkmark-circle" : "close-circle"} size={18} color={value ? "#10B981" : "#EF4444"} />
-                                                        <Text style={{ color: colors.text, fontWeight: '600' }}>{value ? 'Yes' : 'No'}</Text>
-                                                    </View>
-                                                </View>
-                                            );
-                                        }
-                                        return (
-                                            <View key={key} style={[styles.detailRow, { borderBottomColor: isDark ? '#334155' : '#E2E8F0', borderBottomWidth: 1 }]}>
-                                                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                                                    {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                                                </Text>
-                                                <Text style={[styles.detailValue, { color: colors.text }]}>{String(value)}</Text>
-                                            </View>
-                                        );
-                                    })}
+                            <View style={styles.extraDetailsContainer}>
+                                <Text style={styles.sectionTitle}>More Info</Text>
+                                <View style={styles.detailsBox}>
+                                    {otherFields.map(([key, value], index) => (
+                                        <View key={key} style={[
+                                            styles.detailRow,
+                                            index === otherFields.length - 1 && { borderBottomWidth: 0 }
+                                        ]}>
+                                            <Text style={styles.detailLabel}>
+                                                {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                                            </Text>
+                                            <Text style={styles.detailValue}>{String(value)}</Text>
+                                        </View>
+                                    ))}
                                 </View>
                             </View>
                         );
                     })()}
+
                 </View>
             </ScrollView>
 
-            {/* Bottom Floating Action Bar */}
-            <View style={[styles.bottomBar, { backgroundColor: colors.card, borderTopColor: colors.border, display: event.link ? 'flex' : 'none' }]}>
-                {event.link && (
+            {/* STICKY FOOTER */}
+            <View style={[styles.stickyFooter, { backgroundColor: '#09090B' }]}>
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.8)', '#09090B']}
+                    style={styles.footerGradient}
+                    pointerEvents="none"
+                />
+                <View style={styles.footerContent}>
+                    <View style={styles.priceContainer}>
+                        <Text style={styles.priceLabel}>Entry via Link</Text>
+                        <Text style={styles.priceValue}>
+                            {event.dynamicFields?.entryFee ? event.dynamicFields.entryFee : 'Free Registration'}
+                        </Text>
+                    </View>
                     <TouchableOpacity
-                        style={[styles.registerButton, { backgroundColor: colors.primary }]}
+                        style={[styles.registerButton, { backgroundColor: event.link ? colors.primary : '#3f3f46' }]}
                         onPress={handleOpenLink}
+                        activeOpacity={0.9}
+                        disabled={!event.link}
                     >
-                        <Text style={styles.registerButtonText}>Register Now</Text>
-                        <View style={styles.btnIconBg}>
-                            <Ionicons name="arrow-forward" size={20} color={colors.primary} />
-                        </View>
+                        <Text style={styles.registerBtnText}>{event.link ? 'Register Now' : 'No Link'}</Text>
+                        {event.link && <Ionicons name="arrow-forward" size={20} color="#FFF" />}
                     </TouchableOpacity>
-                )}
+                </View>
             </View>
         </View>
     );
 }
 
-// STYLES: Black Theme & Professional Layout
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000000', // Deepest Black
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#000',
     },
     errorContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#000',
+        padding: 24,
     },
     errorText: {
-        fontSize: 18,
-        marginBottom: 20,
-        color: '#FFF',
+        fontSize: 16,
+        marginBottom: 16,
     },
     backButton: {
-        paddingHorizontal: 24,
-        paddingVertical: 12,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
         borderRadius: 8,
     },
     backButtonText: {
         color: '#FFF',
-        fontSize: 16,
         fontWeight: '600',
     },
     headerOverlay: {
@@ -400,48 +426,48 @@ const styles = StyleSheet.create({
         top: 0,
         left: 0,
         right: 0,
+        zIndex: 50,
+        pointerEvents: 'box-none',
+    },
+    headerButtonsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingTop: 10,
-        zIndex: 50,
+        paddingTop: 0, // Minimal space
+        alignItems: 'center', // Ensure vertical centering
+        height: 50, // Fixed height for consistency
     },
-    excludeHeaderButton: {
+    simpleNavButton: {
         width: 40,
         height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(0,0,0,0.5)', // Darker overlay for better contrast
         justifyContent: 'center',
         alignItems: 'center',
-        backdropFilter: 'blur(10px)',
+    },
+    glassButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.3)', // Fallback opacity
     },
     content: {
         flex: 1,
     },
-    mediaHeader: {
+    heroSection: {
+        height: width * 9 / 16, // YouTube Standard Aspect Ratio (16:9)
         width: '100%',
-        height: 380,
-        backgroundColor: '#000',
-        position: 'relative',
-        justifyContent: 'center',
-    },
-    headerImage: {
-        width: '100%',
-        height: '100%',
-        zIndex: 2,
-    },
-    backgroundImage: {
-        ...StyleSheet.absoluteFillObject,
-        opacity: 0.6,
+        backgroundColor: '#000', // Matches app theme
     },
     videoContainer: {
         width: '100%',
         height: '100%',
         backgroundColor: '#000',
-        justifyContent: 'center',
     },
     webview: {
         flex: 1,
+        opacity: 0.99,
         backgroundColor: '#000',
     },
     iframe: {
@@ -455,126 +481,134 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         position: 'relative',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#18181B', // Zinc-900 fallback
+        backgroundColor: '#000',
     },
-    imageOverlay: {
+    heroImage: {
+        width: '100%',
+        height: '100%',
+        zIndex: 2,
+        backgroundColor: '#000',
+    },
+    heroImageBlur: {
+        ...StyleSheet.absoluteFillObject,
+        opacity: 0.3,
+    },
+    heroGradient: {
         position: 'absolute',
-        bottom: 0,
         left: 0,
         right: 0,
-        height: 150,
-        zIndex: 3,
+        bottom: 0,
+        height: 80, // Reduced gradient height for shorter banner
     },
     mainContent: {
-        flex: 1,
-        marginTop: -32,
+        marginTop: -24, // Pull up to overlap slightly ("move that card up")
+        paddingHorizontal: 24,
+        paddingTop: 24,
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
-        paddingHorizontal: 24,
-        paddingTop: 32,
-        paddingBottom: 120,
-        minHeight: 600,
-        backgroundColor: '#000000', // Ensure pure black
+        backgroundColor: '#09090B', // Ensure it covers the image
     },
-    // HEADER SECTION
-    headerSection: {
-        marginBottom: 20,
-    },
-    title: {
-        fontSize: 30, // Impactful title
-        fontWeight: '800',
-        lineHeight: 38,
-        marginBottom: 8,
-        letterSpacing: -0.5,
-        color: '#FFFFFF',
-    },
-    locationRow: {
+    titleRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-    },
-    locationIconBox: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(99, 102, 241, 0.2)', // Indigo tint
-    },
-    locationText: {
-        fontSize: 15,
-        fontWeight: '500',
-        flex: 1,
-        lineHeight: 22,
-        color: '#A1A1AA', // Zinc-400
-    },
-    metaTagsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexWrap: 'wrap',
         gap: 10,
-        marginBottom: 24,
+        marginBottom: 12,
     },
-    categoryChip: {
+    categoryPill: {
         paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
+        paddingVertical: 4,
+        borderRadius: 100,
     },
     categoryText: {
         color: '#FFF',
-        fontSize: 11,
-        fontWeight: '800',
+        fontSize: 12,
+        fontWeight: '700',
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
     },
-    orgChip: {
+    statusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 100,
+        borderWidth: 1,
+    },
+    statusText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    eventTitle: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: '#FFF',
+        marginBottom: 12,
+        lineHeight: 40,
+        letterSpacing: -0.5,
+    },
+    orgRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    orgIconBg: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    orgName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#E4E4E7', // Zinc-200
+        marginRight: 6,
+    },
+    verifiedBadge: {
+        opacity: 0.8,
+    },
+    locationButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        borderWidth: 1,
         backgroundColor: 'rgba(255,255,255,0.05)',
-        borderColor: 'rgba(255,255,255,0.1)',
+        padding: 12,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        paddingRight: 16,
+        marginBottom: 24,
     },
-    orgText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#E4E4E7',
+    locationText: {
+        color: '#D4D4D8',
+        fontSize: 14,
+        fontWeight: '500',
+        maxWidth: width - 120,
     },
     divider: {
         height: 1,
-        width: '100%',
+        backgroundColor: 'rgba(255,255,255,0.1)',
         marginBottom: 24,
-        opacity: 0.1,
     },
-    sectionHeaderLabel: {
-        fontSize: 12,
+    sectionTitle: {
+        fontSize: 18,
         fontWeight: '700',
+        color: '#F4F4F5',
         marginBottom: 16,
-        opacity: 0.6,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        color: '#71717A', // Zinc-500
+        letterSpacing: -0.2,
     },
     gridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 12,
-        marginBottom: 36,
+        marginBottom: 32,
     },
     infoCard: {
         width: '48%',
         padding: 16,
-        borderRadius: 24, // Softer corners
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
+        borderRadius: 20,
         gap: 12,
-        minHeight: 110,
     },
     iconCircle: {
         width: 36,
@@ -582,101 +616,104 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(79, 70, 229, 0.15)', // Subtle accent bg
-        marginBottom: 2,
-    },
-    infoContent: {
-        width: '100%',
     },
     infoLabel: {
-        fontSize: 11,
-        marginBottom: 3,
-        opacity: 0.6,
+        fontSize: 12,
+        fontWeight: '600',
+        marginBottom: 4,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
-        fontWeight: '700',
-        color: '#A1A1AA',
     },
     infoValue: {
         fontSize: 15,
         fontWeight: '700',
-        color: '#FFF',
     },
-    section: {
-        marginBottom: 36,
-    },
-    sectionHeader: {
-        fontSize: 20,
-        fontWeight: '700',
-        marginBottom: 12,
-        letterSpacing: -0.3,
-        color: '#FFF',
-    },
-    description: {
-        fontSize: 16,
-        lineHeight: 26,
-        fontWeight: '400',
-        opacity: 0.9,
-    },
-    readMore: {
-        marginTop: 8,
+    descriptionText: {
         fontSize: 15,
+        color: '#D4D4D8',
+        lineHeight: 24,
+    },
+    readMoreText: {
+        marginTop: 8,
+        fontSize: 14,
         fontWeight: '600',
     },
+    extraDetailsContainer: {
+        marginTop: 32,
+    },
     detailsBox: {
-        marginTop: 12,
-        padding: 8,
+        backgroundColor: '#1E293B', // Darker, consistent background
+        borderRadius: 16,
+        padding: 16, // Increased padding
     },
     detailRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingVertical: 14,
-        alignItems: 'center',
-        paddingHorizontal: 8,
-        borderBottomWidth: StyleSheet.hairlineWidth,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.08)',
     },
     detailLabel: {
-        fontSize: 15,
+        color: '#94a3b8',
+        fontSize: 14,
         fontWeight: '500',
     },
     detailValue: {
-        fontSize: 15,
+        color: '#F4F4F5',
+        fontSize: 14,
         fontWeight: '600',
+        maxWidth: '60%',
         textAlign: 'right',
-        maxWidth: '65%',
     },
-    bottomBar: {
+    stickyFooter: {
         position: 'absolute',
-        bottom: 24,
-        left: 20,
-        right: 20,
-        backgroundColor: 'transparent',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.08)',
+    },
+    footerGradient: {
+        position: 'absolute',
+        top: -40,
+        left: 0,
+        right: 0,
+        height: 40,
+    },
+    footerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+    },
+    priceContainer: {
+        flex: 1,
+    },
+    priceLabel: {
+        color: '#A1A1AA',
+        fontSize: 12,
+        fontWeight: '500',
+        marginBottom: 2,
+    },
+    priceValue: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '700',
     },
     registerButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 16,
+        paddingVertical: 14,
         paddingHorizontal: 24,
-        borderRadius: 30, // Pill shape
-        gap: 12,
-        shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 8,
+        borderRadius: 100,
+        gap: 8,
     },
-    registerButtonText: {
+    registerBtnText: {
         color: '#FFF',
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '700',
-    },
-    btnIconBg: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
     },
 });

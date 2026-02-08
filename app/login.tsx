@@ -147,7 +147,7 @@ export default function LoginScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoComplete="email"
-                    textContentType="username"
+                    textContentType="emailAddress"
                     importantForAutofill="yes"
                     onFocus={() => setFocusedInput('email')}
                     onBlur={() => setFocusedInput(null)}

@@ -38,15 +38,22 @@ export interface NotificationItem {
 const NOTIFICATIONS_COLLECTION = 'notifications';
 
 // Expo Push Notification setup
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-    }),
-});
+// Safe wrapper for setNotificationHandler
+try {
+    if (Constants.appOwnership !== 'expo' && Constants.executionEnvironment !== 'storeClient') {
+        Notifications.setNotificationHandler({
+            handleNotification: async () => ({
+                shouldShowAlert: true,
+                shouldPlaySound: true,
+                shouldSetBadge: false,
+                shouldShowBanner: true,
+                shouldShowList: true,
+            }),
+        });
+    }
+} catch (e) {
+    console.log("Skipped Notification Handler setup (likely Expo Go)");
+}
 
 /**
  * Registers the device for Push Notifications and saves the token to Firestore.
@@ -54,30 +61,42 @@ Notifications.setNotificationHandler({
 export async function registerForPushNotificationsAsync(userId?: string) {
     let token;
 
+    // 1. TIMING & ENV CHECK: Block immediately if in Expo Go to prevent "removed in SDK 53" error
+    // Constants.appOwnership === 'expo' OR Constants.executionEnvironment === 'storeClient' usually detects Expo Go
+    const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+
+    if (isExpoGo) {
+        console.log("Push Notifications: Skipped in Expo Go (Functionality removed in SDK 53). strict mode: off");
+        return null;
+    }
+
     if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF231F7C',
-        });
+        try {
+            await Notifications.setNotificationChannelAsync('default', {
+                name: 'default',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#FF231F7C',
+            });
+        } catch (e) {
+            console.log("Error setting notification channel (ignored):", e);
+        }
     }
 
     if (Device.isDevice) {
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-            const { status } = await Notifications.requestPermissionsAsync();
-            finalStatus = status;
-        }
-        if (finalStatus !== 'granted') {
-            console.log('Failed to get push token for push notification!');
-            return;
-        }
-
-        // Get the token
         try {
-            // For Expo Go or Development Builds
+            const { status: existingStatus } = await Notifications.getPermissionsAsync();
+            let finalStatus = existingStatus;
+            if (existingStatus !== 'granted') {
+                const { status } = await Notifications.requestPermissionsAsync();
+                finalStatus = status;
+            }
+            if (finalStatus !== 'granted') {
+                console.log('Failed to get push token for push notification!');
+                return;
+            }
+
+            // Get the token
             const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
             token = (await Notifications.getExpoPushTokenAsync({
                 projectId,
@@ -92,8 +111,13 @@ export async function registerForPushNotificationsAsync(userId?: string) {
                 console.log("Push Token saved to Firestore for user:", userId);
             }
 
-        } catch (e) {
-            console.error("Error getting push token:", e);
+        } catch (e: any) {
+            // Enhanced error handling for Expo Go SDK 53+
+            if (e?.message?.includes('removed from Expo Go') || e?.message?.includes('Development Build')) {
+                console.log("Push Notifications: Skipped in Expo Go (Functionality removed in SDK 53)");
+            } else {
+                console.error("Error getting push token:", e);
+            }
         }
     } else {
         console.log('Must use physical device for Push Notifications');
