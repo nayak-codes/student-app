@@ -1,27 +1,18 @@
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
-  BackHandler,
   Dimensions,
-  FlatList,
-  Image,
   ImageSourcePropType,
   Linking,
-  RefreshControl,
   Share,
-  StatusBar,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import ClipsFeed from '../../src/components/ClipsFeed';
-import CreatePostModal from '../../src/components/CreatePostModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useVideoPlayerContext } from '../../src/contexts/VideoPlayerContext';
@@ -99,14 +90,24 @@ const ExploreScreen: React.FC = () => {
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
   const unreadCount = useUnreadCount();
-  const [activeTab, setActiveTab] = useState<ContentType>('video');
+
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
   const [feedData, setFeedData] = useState<FeedItem[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // New state for Clips Feed
+  // Create ref for tab press detection
+  const scrollRef = React.useRef(null);
+
+  // Detect tab press when already on Chitki tab
+  useScrollToTop(
+    React.useRef({
+      scrollToTop: () => handleRefresh()
+    })
+  );
+
+  // Will auto-show Clips Feed after data loads
   const [showClipsFeed, setShowClipsFeed] = useState(false);
   const [initialClipIndex, setInitialClipIndex] = useState(0);
 
@@ -151,26 +152,30 @@ const ExploreScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    loadPosts();
+    loadPosts().then(() => {
+      // Auto-show clips player after data loads
+      setShowClipsFeed(true);
+    });
   }, []);
 
-  // Handle hardware back button for Clips Feed
-  useEffect(() => {
-    const onBackPress = () => {
-      if (showClipsFeed) {
-        setShowClipsFeed(false);
-        return true; // Prevent default behavior (exit app/go back)
+  // Stop clips when leaving Chitki tab (switching to other tabs)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Tab is focused - auto-show clips if data is loaded
+      // Only set if not already showing to avoid re-renders or resets
+      if (feedData.length > 0 && !showClipsFeed) {
+        setShowClipsFeed(true);
       }
-      return false;
-    };
 
-    const backHandler = BackHandler.addEventListener(
-      'hardwareBackPress',
-      onBackPress
-    );
+      return () => {
+        // Tab is unfocused - DO NOT stop clips. 
+        // This keeps the component mounted so state (activeIndex) is preserved.
+        // The ClipsFeed component itself handles pausing video via useIsFocused.
+        // setShowClipsFeed(false); 
+      };
+    }, [feedData, showClipsFeed])
+  );
 
-    return () => backHandler.remove();
-  }, [showClipsFeed]);
 
   const toggleSave = (id: string) => {
     setSavedItems(prev => {
@@ -215,7 +220,7 @@ const ExploreScreen: React.FC = () => {
   const handleShare = async (item: FeedItem) => {
     try {
       await Share.share({
-        message: `Check out this on Chitki!\n\n${item.title}\n\nBy: ${item.author}`,
+        message: `Check out this on Chitki!\n\n${item.title} \n\nBy: ${item.author} `,
         title: 'Share Post',
       });
     } catch (error) { }
@@ -235,7 +240,7 @@ const ExploreScreen: React.FC = () => {
     // History tracking
     addToHistory({
       id: item.id,
-      type: activeTab,
+      type: 'clip',
       title: item.title,
       subtitle: item.author,
       image: item.imageUrl || undefined,
@@ -301,535 +306,43 @@ const ExploreScreen: React.FC = () => {
     }
   };
 
-  const filteredData = feedData.filter(item => {
-    if (activeTab === 'video') return item.type === 'video';
-    return item.type === 'clip';
-  });
+  // Show only clips
+  const filteredData = feedData.filter(item => item.type === 'clip');
 
-  const renderVideoItem = ({ item }: { item: FeedItem }) => {
-    let thumbnailUrl = item.thumbnailUrl || item.imageUrl;
-    if (!thumbnailUrl && item.videoLink) {
-      const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-      if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`;
-    }
 
-    const hasLiked = user && item.likedBy?.includes(user.uid);
 
-    return (
-      <View style={[styles.videoCard, { backgroundColor: colors.card, shadowColor: colors.text }]}>
-        <TouchableOpacity style={styles.thumbnailContainer} onPress={() => playVideo(item)}>
-          {thumbnailUrl ? (
-            <Image source={{ uri: thumbnailUrl }} style={styles.videoThumbnail} resizeMode="cover" />
-          ) : (
-            <View style={[styles.videoThumbnail, { backgroundColor: isDark ? '#1E293B' : '#000', justifyContent: 'center', alignItems: 'center' }]}>
-              {/* No thumbnail available, show placeholder icon only here */}
-              <Ionicons name="play-circle" size={48} color="#FFF" />
-            </View>
-          )}
-          <View style={styles.durationBadge}>
-            <Text style={styles.durationText}>{item.duration || '0:00'}</Text>
-          </View>
-        </TouchableOpacity>
 
-        <View style={styles.videoMetaContainer}>
-          <TouchableOpacity
-            style={styles.avatarPlaceholder}
-            onPress={() => item.userId && router.push({
-              pathname: '/public-profile',
-              params: { userId: item.userId }
-            })}
-          >
-            <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
-          </TouchableOpacity>
-          <View style={styles.videoTextContent}>
-            <Text style={[styles.videoTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
-            <Text style={styles.videoSubtitle}>{item.author} • {item.timeAgo} • {item.viewCount || 0} views</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
 
-  const renderClipItem = ({ item }: { item: FeedItem }) => {
-    let thumbnailUrl = item.thumbnailUrl || item.imageUrl;
-    if (!thumbnailUrl && item.videoLink) {
-      const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-      if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/0.jpg`;
-    }
 
-    return (
-      <TouchableOpacity
-        style={[styles.clipCard, { backgroundColor: colors.card, borderColor: isDark ? '#334155' : '#E2E8F0' }]}
-        onPress={() => playVideo(item)}
-        activeOpacity={0.9}
-      >
-        {thumbnailUrl ? (
-          <Image source={{ uri: thumbnailUrl }} style={styles.clipThumbnail} resizeMode="cover" />
-        ) : (
-          <View style={[styles.clipThumbnail, { justifyContent: 'center', alignItems: 'center' }]}>
-            <Ionicons name="play-circle" size={40} color="rgba(255,255,255,0.4)" />
-          </View>
-        )}
-
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
-          locations={[0, 0.4, 0.7, 1]}
-          style={styles.clipGradient}
-        >
-          <View style={styles.clipContent}>
-            <Text style={styles.clipTitle} numberOfLines={2}>{item.title}</Text>
-
-            <View style={styles.clipMetaRow}>
-              <View style={styles.clipAuthor}>
-                <View style={styles.miniAvatar}>
-                  <Text style={styles.miniAvatarText}>{item.author.charAt(0)}</Text>
-                </View>
-                <Text style={styles.clipAuthorName} numberOfLines={1}>{item.author}</Text>
-              </View>
-
-              <View style={styles.clipStats}>
-                <Ionicons name="play" size={10} color="#FFF" />
-                <Text style={styles.clipViewsText}>{item.viewCount || 0}</Text>
-              </View>
-            </View>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    );
-  };
 
   return (
-    <View style={[styles.safeArea, { backgroundColor: colors.background }]} >
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-
-      {!showClipsFeed && (
-        <Animated.View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            elevation: 4,
-            backgroundColor: colors.background,
-            transform: [{ translateY }],
-          }}
-        >
-          <View
-            style={
-              [
-                styles.header,
-                {
-                  backgroundColor: colors.background,
-                  borderBottomColor: isDark ? '#333' : colors.border,
-                  borderBottomWidth: 0, // Remove border from main header as it's now wrapped
-                }
-              ]}
-          >
-            <SafeAreaView edges={['top']}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 16, paddingBottom: 6 }}>
-                <View style={styles.brandContainer}>
-                  <Text style={styles.brandText}>Vidhyardi</Text>
-                </View>
-
-                <View style={styles.headerActions}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => router.push({ pathname: '/screens/universal-search', params: { category: 'posts' } })}
-                  >
-                    <Ionicons name="search-outline" size={26} color={colors.text} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => router.push('/notifications')}
-                  >
-                    <Ionicons name="notifications-outline" size={26} color={colors.text} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => router.push('/conversations')}
-                  >
-                    <Ionicons name="chatbubble-outline" size={26} color={colors.text} />
-                    {unreadCount > 0 && (
-                      <View style={{
-                        position: 'absolute',
-                        top: 2,
-                        right: 2,
-                        backgroundColor: '#EF4444',
-                        borderRadius: 10,
-                        minWidth: 18,
-                        height: 18,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        paddingHorizontal: 4,
-                        borderWidth: 2,
-                        borderColor: isDark ? colors.background : '#FFF',
-                      }}>
-                        <Text style={{
-                          fontSize: 10,
-                          fontWeight: '700',
-                          color: '#FFF',
-                        }}>
-                          {unreadCount > 9 ? '9+' : unreadCount}
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </SafeAreaView>
-          </View >
-
-          {/* Tabs inside Animated Header */}
-          <View style={[styles.tabContainer, { backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: isDark ? '#333' : colors.border }]}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, activeTab === 'video' && styles.segmentBtnActive, { backgroundColor: activeTab === 'video' ? colors.primary : colors.card }]}
-              onPress={() => setActiveTab('video')}
-            >
-              <Text style={[styles.segmentText, { color: activeTab === 'video' ? '#FFF' : colors.textSecondary }]}>Videos</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentBtn, activeTab === 'clip' && styles.segmentBtnActive, { backgroundColor: activeTab === 'clip' ? colors.primary : colors.card }]}
-              onPress={() => setActiveTab('clip')}
-            >
-              <Text style={[styles.segmentText, { color: activeTab === 'clip' ? '#FFF' : colors.textSecondary }]}>Clips</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+    <View style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      {/* Loading Indicator */}
+      {isLoading && !isRefreshing && !showClipsFeed && (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       )}
 
-      <FlatList
-        key={activeTab}
-        data={filteredData}
-        renderItem={activeTab === 'clip' ? renderClipItem : renderVideoItem}
-        keyExtractor={item => item.id}
-        numColumns={activeTab === 'clip' ? 2 : 1}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: 160 }, // Padding for header height
-          activeTab === 'clip' ? { paddingHorizontal: 16, paddingBottom: 100 } : { paddingHorizontal: 0, paddingBottom: 100 }
-        ]}
-
-        columnWrapperStyle={activeTab === 'clip' ? { justifyContent: 'space-between', marginBottom: 16 } : undefined}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.primary}
-            progressViewOffset={120}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="film-outline" size={48} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No {activeTab}s found</Text>
-          </View>
-        }
-      />
-
-      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]} onPress={() => setShowCreateModal(true)}>
-        <Ionicons name="add" size={28} color="#FFF" />
-      </TouchableOpacity>
-
-      <CreatePostModal
-        visible={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onPostCreated={loadPosts}
-      />
-
-      {/* Immersive Clips Feed Overlay (Inline for Tab Visibility) */}
+      {/* Immersive Clips Feed Overlay */}
       {showClipsFeed && (
         <View style={StyleSheet.absoluteFillObject}>
           <ClipsFeed
             data={feedData.filter(d => d.type === 'clip' || (d.videoLink && (d.videoLink.includes('/shorts/') || d.videoLink.includes('#shorts'))))}
             initialIndex={initialClipIndex}
-            onClose={() => setShowClipsFeed(false)}
+            onClose={() => router.push('/(tabs)')}
+            onRefresh={handleRefresh}
           />
         </View>
       )}
-
-      {/* Static Top Black Card - Instagram Style (outside scrolling content) */}
-      <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />
-    </View >
+    </View>
   );
+
 };
+
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 0,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-  },
-  brandContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  brandText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#4F46E5',
-    letterSpacing: -0.5,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  actionButton: {
-    padding: 4,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  segmentBtn: {
-    marginRight: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentBtnActive: {
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  listContent: {
-    paddingBottom: 80,
-  },
-  videoCard: {
-    marginBottom: 0, // Remove gap between videos
-    backgroundColor: 'transparent',
-  },
-  thumbnailContainer: {
-    width: '100%',
-    height: 230,
-    position: 'relative',
-  },
-  videoThumbnail: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  durationBadge: {
-    position: 'absolute',
-    top: 12, // Changed from bottom to top
-    right: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  durationText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  videoMetaContainer: {
-    flexDirection: 'row',
-    padding: 12,
-    paddingTop: 14,
-    paddingBottom: 8,
-    alignItems: 'center', // Changed from flex-start to center
-  },
-  avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#334155',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarLetter: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F8FAFC',
-  },
-  videoTextContent: {
-    flex: 1,
-    marginRight: 8,
-  },
-  videoTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  videoSubtitle: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  cardActions: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    paddingTop: 4,
-    alignItems: 'center',
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 24,
-  },
-  saveAction: {
-    marginLeft: 'auto',
-    marginRight: 0,
-  },
-  actionText: {
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  clipCard: {
-    width: COLUMN_WIDTH,
-    height: 320, // Taller for premium feel (approx 9:16 ratio)
-    borderRadius: 20,
-    overflow: 'hidden',
-    position: 'relative',
-    borderWidth: 1,
-  },
-  clipThumbnail: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#1E293B', // Dark Slate
-  },
-  clipGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 180, // Taller gradient for better text readability
-    justifyContent: 'flex-end',
-    padding: 12,
-  },
-  clipContent: {
-    width: '100%',
-  },
-  clipTitle: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 20,
-    marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  clipMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  clipAuthor: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 8,
-  },
-  clipAuthorName: {
-    color: '#E2E8F0',
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  miniAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  miniAvatarText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  clipStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  clipViewsText: {
-    color: '#F8FAFC',
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    marginTop: 100,
-  },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
-    zIndex: 10,
-    padding: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 25,
-  },
-  topBlackCard: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-    backgroundColor: '#000',
-    zIndex: 1001,
-  },
 });
 
 export default ExploreScreen;

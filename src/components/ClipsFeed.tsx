@@ -1,17 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { VideoView } from 'expo-video';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
+    Animated,
     Dimensions,
     FlatList,
+    GestureResponderEvent,
     Image,
+    PanResponder,
     StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
     ViewToken
 } from 'react-native';
@@ -24,6 +29,71 @@ import CommentsSheet from './CommentsSheet';
 import ShareModal from './ShareModal';
 
 const { width, height } = Dimensions.get('window');
+
+// Swipeable Wrapper: Handles the animation for individual clips
+const SwipeableClipWrapper = ({ children, onSwipeLeft, containerHeight }: { children: React.ReactNode, onSwipeLeft: () => void, containerHeight: number }) => {
+    const isFocused = useIsFocused();
+    const translateX = useRef(new Animated.Value(0)).current;
+
+    // Reset animation when focused
+    useEffect(() => {
+        if (isFocused) {
+            translateX.setValue(0);
+        }
+    }, [isFocused]); // Dependency array ensures reset when coming back
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                // Only enable horizontal swipe if predominantly horizontal
+                return gestureState.dx < -10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+            },
+            onPanResponderMove: (_, gestureState) => {
+                // Only allow pulling left (negative dx)
+                if (gestureState.dx < 0) {
+                    translateX.setValue(gestureState.dx);
+                }
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx < -80) {
+                    // Confirmed swipe
+                    Animated.timing(translateX, {
+                        toValue: -width,
+                        duration: 200,
+                        useNativeDriver: true
+                    }).start(() => {
+                        onSwipeLeft();
+                    });
+                } else {
+                    // Cancel swipe
+                    Animated.spring(translateX, {
+                        toValue: 0,
+                        useNativeDriver: true
+                    }).start();
+                }
+            },
+            onPanResponderTerminate: () => {
+                Animated.spring(translateX, {
+                    toValue: 0,
+                    useNativeDriver: true
+                }).start();
+            }
+        })
+    ).current;
+
+    return (
+        <Animated.View
+            style={[
+                styles.container,
+                { height: containerHeight, transform: [{ translateX }] }
+            ]}
+            {...panResponder.panHandlers}
+        >
+            {children}
+        </Animated.View>
+    );
+};
 
 interface FeedItem {
     id: string;
@@ -39,12 +109,17 @@ interface FeedItem {
     videoLink?: string;
     likedBy?: string[];
     userId?: string;
+    authorAvatar?: string;
+    hasHyped?: boolean;
+    hypes?: number;
+    hasDisliked?: boolean;
 }
 
 interface ClipsFeedProps {
     initialIndex: number;
     data: FeedItem[];
     onClose: () => void;
+    onRefresh?: () => Promise<void>;
 }
 
 interface ClipsFeedItemProps {
@@ -54,6 +129,8 @@ interface ClipsFeedItemProps {
     isFollowing: boolean;
     showFollow: boolean;
     onLike: () => void;
+    onDislike: () => void;
+    onHype: () => void;
     onShare: () => void;
     onFollow: () => void;
     onProfile: () => void;
@@ -61,14 +138,13 @@ interface ClipsFeedItemProps {
     onClose: () => void;
     shouldLoad: boolean;
     containerHeight: number;
-    isRightHanded: boolean;
-    onToggleHand: () => void;
+    panResponderHandlers?: any; // Add props for parent gestures
 }
 
 const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
     item, isActive, hasLiked, isFollowing, showFollow,
-    onLike, onShare, onFollow, onProfile, onComments, onClose, shouldLoad, containerHeight,
-    isRightHanded, onToggleHand
+    onLike, onDislike, onHype, onShare, onFollow, onProfile, onComments, onClose, shouldLoad, containerHeight,
+    panResponderHandlers // Destructure
 }) => {
     // Use conditional player that only loads when within buffer window
     const player = useConditionalVideoPlayer(item.videoLink || null, shouldLoad);
@@ -102,6 +178,82 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
         }
     }, [isActive, player]);
 
+    // Playback Speed Control Logic
+    const [isFastForwarding, setIsFastForwarding] = useState(false);
+    const [isRewinding, setIsRewinding] = useState(false);
+    const rewindInterval = useRef<any>(null);
+
+    const handleFastForward = async () => {
+        if (!player) return;
+        setIsFastForwarding(true);
+        player.playbackRate = 2.0;
+    };
+
+    const handleStopFastForward = async () => {
+        if (!player) return;
+        setIsFastForwarding(false);
+        player.playbackRate = 1.0;
+    };
+
+    const handleRewind = () => {
+        if (!player) return;
+        setIsRewinding(true);
+        // Manual rewind loop since negative rate isn't reliably supported
+        rewindInterval.current = setInterval(() => {
+            const current = player.currentTime;
+            // Seek back 0.2s every 50ms = 4s/sec = 4x speed (adjust for feel)
+            // User requested 2x, so 0.1s every 50ms = 2x speed
+            player.currentTime = Math.max(0, current - 0.1);
+        }, 50);
+    };
+
+    const handleStopRewind = () => {
+        if (rewindInterval.current) {
+            clearInterval(rewindInterval.current);
+            rewindInterval.current = null;
+        }
+        setIsRewinding(false);
+    };
+
+    // Advanced Gestures: Double Tap Like, Single Tap Pause
+    const lastTap = useRef<number>(0);
+    const [isMuted, setIsMuted] = useState(false);
+
+    const handlePress = (e?: any, zone?: 'top' | 'bottom') => {
+        const now = Date.now();
+        const DOUBLE_PRESS_DELAY = 300;
+
+        if (now - lastTap.current < DOUBLE_PRESS_DELAY) {
+            // Double Tap -> Like
+            onLike();
+            // Reset lastTap to prevent triple tap triggering another single tap action
+            lastTap.current = 0;
+        } else {
+            // Single Tap -> Wait to see if it's double
+            lastTap.current = now;
+            setTimeout(() => {
+                if (lastTap.current === now) {
+                    // Still the same tap, no second tap happened
+                    if (player) {
+                        if (isPlaying) {
+                            player.pause();
+                            setIsPlaying(false);
+                        } else {
+                            player.play();
+                            setIsPlaying(true);
+                        }
+                    }
+                }
+            }, DOUBLE_PRESS_DELAY);
+        }
+    };
+
+    const toggleMute = () => {
+        if (!player) return;
+        player.muted = !isMuted;
+        setIsMuted(!isMuted);
+    };
+
     return (
         <View style={[styles.container, { height: containerHeight }]}>
             <View style={styles.videoContainer}>
@@ -115,6 +267,69 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
                 ) : (
                     <View style={styles.videoPlaceholder} />
                 )}
+
+                {/* Gesture Zones - Invisible Overlay */}
+                {/* Gesture Zones - Invisible Overlay */}
+                {/* Gesture Zones - Invisible Overlay */}
+                {/* Gesture Zones & Handlers */}
+                <View
+                    style={[StyleSheet.absoluteFill, { zIndex: 5, flexDirection: 'column' }]}
+                    {...panResponderHandlers}
+                >
+                    {/* Top Half: Fast Forward */}
+                    <TouchableWithoutFeedback
+                        onLongPress={handleFastForward}
+                        onPressOut={handleStopFastForward}
+                        onPress={(e: GestureResponderEvent) => handlePress(e, 'top')}
+                        delayLongPress={200}
+                    >
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                            {isFastForwarding && (
+                                <View style={styles.speedIndicator}>
+                                    <Text style={styles.speedText}>2x {'>>'}</Text>
+                                </View>
+                            )}
+                        </View>
+                    </TouchableWithoutFeedback>
+
+                    {/* Bottom Half: Rewind */}
+                    <TouchableWithoutFeedback
+                        onLongPress={handleRewind}
+                        onPressOut={handleStopRewind}
+                        onPress={(e: GestureResponderEvent) => handlePress(e, 'bottom')}
+                        delayLongPress={200}
+                    >
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                            {isRewinding && (
+                                <View style={styles.speedIndicator}>
+                                    <Text style={styles.speedText}>{'<<'} 2x</Text>
+                                </View>
+                            )}
+                        </View>
+                    </TouchableWithoutFeedback>
+                </View>
+
+                {/* Centered Pause Indicator - Outside Gesture Zones for perfect centering */}
+                {!isPlaying && !isFastForwarding && !isRewinding && (
+                    <View style={[StyleSheet.absoluteFill, { zIndex: 4, justifyContent: 'center', alignItems: 'center' }]} pointerEvents="none">
+                        <View style={styles.pauseIndicator}>
+                            <Ionicons name="play" size={60} color="rgba(255,255,255,0.7)" />
+                        </View>
+                    </View>
+                )}
+
+                {/* Mute Button - Top Right Corner */}
+                <TouchableOpacity
+                    style={styles.muteBtn}
+                    onPress={toggleMute}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons
+                        name={isMuted ? "volume-mute" : "volume-high"}
+                        size={20}
+                        color="#FFF"
+                    />
+                </TouchableOpacity>
 
                 {/* Thumbnail Overlay - Bridging: Keep visible until actually playing */}
                 {(!isPlaying || !player) && (item.thumbnailUrl || item.imageUrl) && (
@@ -132,14 +347,22 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
                 locations={[0, 0.6, 1]}
                 style={styles.overlay}
             >
-                <View style={[styles.bottomSection, !isRightHanded && styles.bottomSectionReversed]}>
-                    <View style={[styles.textContainer, isRightHanded ? styles.textContainerRight : styles.textContainerLeft]}>
-                        <View style={[styles.authorRow, !isRightHanded && styles.authorRowReversed]}>
+                <View style={styles.bottomSection}>
+                    <View style={styles.textContainer}>
+                        <View style={styles.authorRow}>
                             <TouchableOpacity
                                 style={styles.avatarPlaceholder}
                                 onPress={onProfile}
                             >
-                                <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
+                                {item.authorAvatar ? (
+                                    <Image
+                                        source={{ uri: item.authorAvatar }}
+                                        style={{ width: '100%', height: '100%', borderRadius: 22 }}
+                                        resizeMode="cover"
+                                    />
+                                ) : (
+                                    <Text style={styles.avatarLetter}>{item.author.charAt(0)}</Text>
+                                )}
                             </TouchableOpacity>
 
                             <TouchableOpacity onPress={onProfile}>
@@ -162,10 +385,20 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
                         </Text>
                     </View>
 
-                    <View style={[styles.rightActions, !isRightHanded && styles.leftActions]}>
+                    <View style={styles.rightActions}>
                         <TouchableOpacity style={styles.actionBtn} onPress={onLike}>
-                            <Ionicons name={hasLiked ? "heart" : "heart-outline"} size={32} color={hasLiked ? "#FF3B30" : "#FFF"} />
+                            <Ionicons name={hasLiked ? "thumbs-up" : "thumbs-up-outline"} size={32} color={hasLiked ? "#007AFF" : "#FFF"} />
                             <Text style={styles.actionText}>{item.likes}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionBtn} onPress={onDislike}>
+                            <Ionicons name={item.hasDisliked ? "thumbs-down" : "thumbs-down-outline"} size={32} color={item.hasDisliked ? "#FF3B30" : "#FFF"} />
+                            <Text style={styles.actionText}>Dislike</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionBtn} onPress={onHype}>
+                            <Ionicons name={item.hasHyped ? "flame" : "flame-outline"} size={32} color={item.hasHyped ? "#FF9500" : "#FFF"} />
+                            <Text style={styles.actionText}>{item.hypes || 0}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.actionBtn} onPress={onComments}>
@@ -185,17 +418,7 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
                 </View>
             </LinearGradient>
 
-            {/* Hand Toggle Button - appears on opposite side */}
-            <TouchableOpacity
-                style={[styles.handToggleBtn, isRightHanded ? styles.handToggleBtnLeft : styles.handToggleBtnRight]}
-                onPress={onToggleHand}
-            >
-                <Ionicons
-                    name={isRightHanded ? "hand-left-outline" : "hand-right-outline"}
-                    size={24}
-                    color="#FFF"
-                />
-            </TouchableOpacity>
+
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
                 <Ionicons name="arrow-back" size={28} color="#FFF" />
@@ -206,7 +429,7 @@ const ClipsFeedItem: React.FC<ClipsFeedItemProps> = ({
 
 const MemoizedClipsFeedItem = React.memo(ClipsFeedItem);
 
-const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) => {
+const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose, onRefresh }) => {
     const { user } = useAuth();
     const router = useRouter();
     const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -218,6 +441,7 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
 
     // Dynamic height calculation for fitting within tab view
     const [containerHeight, setContainerHeight] = useState(height);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Share Modal State
     const [isShareModalVisible, setIsShareModalVisible] = useState(false);
@@ -228,14 +452,193 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
     const [selectedClipCommentCount, setSelectedClipCommentCount] = useState(0);
 
-    // One-handed mode state - default to right-handed
-    const [isRightHanded, setIsRightHanded] = useState(true);
 
-    // Toggle hand mode
-    const toggleHandMode = () => {
-        setIsRightHanded(prev => !prev);
+
+    // Focus State for pausing video and resetting animation
+    const isFocused = useIsFocused();
+
+
+
+    const handleProfileNavigation = (authorId?: string) => {
+        if (!authorId) return;
+        // Don't close the feed, just push the profile screen on top
+        router.push({
+            pathname: '/public-profile',
+            params: { userId: authorId }
+        });
     };
 
+    const handleLike = async (item: FeedItem, index: number) => {
+        if (!user) {
+            Alert.alert("Login Required", "Please login to like this clip.");
+            return;
+        }
+
+        // Use functional update to ensure fresh state and prevent race conditions/negative counts
+        let isLikingAction = false;
+
+        setItems(prevItems => {
+            const currentItem = prevItems[index];
+            if (!currentItem) return prevItems; // Safety check
+
+            const isLiking = !(currentItem.likedBy?.includes(user.uid) || false);
+            isLikingAction = isLiking; // Capture for side effect
+
+            const updatedItems = [...prevItems];
+            updatedItems[index] = {
+                ...currentItem,
+                // Toggle Like
+                likes: isLiking ? (currentItem.likes + 1) : Math.max(0, currentItem.likes - 1),
+                likedBy: isLiking
+                    ? [...(currentItem.likedBy || []), user.uid]
+                    : currentItem.likedBy?.filter(id => id !== user.uid),
+
+                // Logic:
+                // If Liking: Disable Dislike.
+                // If Unliking: Disable Hype (since Hype implies Like).
+                hasHyped: isLiking ? currentItem.hasHyped : false,
+                hypes: (!isLiking && currentItem.hasHyped) ? Math.max(0, (currentItem.hypes || 0) - 1) : (currentItem.hypes || 0),
+
+                // Dislike is mutually exclusive
+                hasDisliked: isLiking ? false : currentItem.hasDisliked
+            };
+            return updatedItems;
+        });
+
+        try {
+            if (!isLikingAction) {
+                await unlikePost(item.id, user.uid);
+            } else {
+                await likePost(item.id, user.uid);
+            }
+        } catch (error) {
+            console.error("Like failed", error);
+            // Ideally revert state here if failure happens
+        }
+    };
+
+    const handleDislike = async (item: FeedItem, index: number) => {
+        if (!user) {
+            Alert.alert("Sign in required", "Please sign in to dislike!");
+            return;
+        }
+
+        setItems(prevItems => {
+            const currentItem = prevItems[index];
+            if (!currentItem) return prevItems;
+
+            const isDisliking = !currentItem.hasDisliked;
+            const wasLiked = currentItem.likedBy?.includes(user.uid);
+            const wasHyped = currentItem.hasHyped;
+
+            const updatedItems = [...prevItems];
+            updatedItems[index] = {
+                ...currentItem,
+                hasDisliked: isDisliking,
+                // If Disliking, remove Like and Hype
+                hasHyped: isDisliking ? false : currentItem.hasHyped,
+                hypes: (isDisliking && wasHyped) ? Math.max(0, (currentItem.hypes || 0) - 1) : (currentItem.hypes || 0),
+
+                likes: (isDisliking && wasLiked) ? Math.max(0, currentItem.likes - 1) : currentItem.likes,
+                likedBy: (isDisliking && wasLiked)
+                    ? currentItem.likedBy?.filter(id => id !== user.uid)
+                    : currentItem.likedBy
+            };
+            return updatedItems;
+        });
+
+        // TODO: Backend integration for dislike
+    };
+
+    const handleHype = async (item: FeedItem, index: number) => {
+        if (!user) {
+            Alert.alert("Sign in required", "Please sign in to hype!");
+            return;
+        }
+
+        setItems(prevItems => {
+            const currentItem = prevItems[index];
+            if (!currentItem) return prevItems;
+
+            const isHyping = !currentItem.hasHyped;
+            const wasLiked = currentItem.likedBy?.includes(user.uid);
+
+            const updatedItems = [...prevItems];
+            updatedItems[index] = {
+                ...currentItem,
+                hasHyped: isHyping,
+                hypes: isHyping ? (currentItem.hypes || 0) + 1 : Math.max(0, (currentItem.hypes || 0) - 1),
+
+                // Emphasize Like if Hyping
+                hasDisliked: isHyping ? false : currentItem.hasDisliked,
+
+                // If Hyping, ensure Liked. 
+                likes: (isHyping && !wasLiked) ? currentItem.likes + 1 : currentItem.likes,
+                likedBy: (isHyping && !wasLiked)
+                    ? [...(currentItem.likedBy || []), user.uid]
+                    : currentItem.likedBy
+            };
+            return updatedItems;
+        });
+
+        // TODO: Implement backend hype service
+    };
+
+    const handleShare = async (item: FeedItem) => {
+        // Transform FeedItem to match ShareModal's expected format
+        const shareData = {
+            id: item.id,
+            content: item.title, // Map title to content
+            userId: item.userId,
+            userName: item.author,
+            videoLink: item.videoLink,
+            thumbnailUrl: item.thumbnailUrl,
+            imageUrl: item.imageUrl,
+            type: item.type,
+            likes: item.likes,
+            comments: item.comments,
+            likedBy: item.likedBy,
+        };
+
+        setSelectedClipForShare(shareData as any);
+        setIsShareModalVisible(true);
+    };
+
+    // Render Logic
+    const renderItem = useCallback(({ item, index }: { item: FeedItem, index: number }) => {
+        const isActive = index === activeIndex;
+
+        // Memoized item
+        const hasLiked = user ? (item.likedBy?.includes(user?.uid || '') || false) : false;
+        const isFollowing = item.userId ? followedUsers.has(item.userId) : false;
+        const showFollow = user ? (item.userId !== user?.uid) : false;
+        const shouldLoad = isActive && isFocused;
+
+        return (
+            <SwipeableClipWrapper
+                onSwipeLeft={() => handleProfileNavigation(item.userId)}
+                containerHeight={containerHeight}
+            >
+                <MemoizedClipsFeedItem
+                    item={item}
+                    isActive={isActive}
+                    hasLiked={hasLiked}
+                    isFollowing={isFollowing}
+                    showFollow={showFollow}
+                    onLike={() => handleLike(item, index)}
+                    onDislike={() => handleDislike(item, index)}
+                    onHype={() => handleHype(item, index)}
+                    onShare={() => handleShare(item)}
+                    onFollow={() => handleFollow(item.userId)}
+                    onProfile={() => handleProfileNavigation(item.userId)}
+                    onComments={() => handleComments(item)}
+                    onClose={onClose}
+                    shouldLoad={shouldLoad}
+                    containerHeight={containerHeight}
+                />
+            </SwipeableClipWrapper>
+        );
+    }, [activeIndex, items, followedUsers, user, containerHeight, isFocused]);
     // Optimized follow status check: Only check active item and neighbors
     useEffect(() => {
         const checkActiveFollow = async () => {
@@ -278,64 +681,7 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
         itemVisiblePercentThreshold: 50,
     }).current;
 
-    const handleProfileNavigation = (authorId?: string) => {
-        if (!authorId) return;
-        onClose();
-        setTimeout(() => {
-            router.push({
-                pathname: '/public-profile',
-                params: { userId: authorId }
-            });
-        }, 100);
-    };
 
-    const handleLike = async (item: FeedItem, index: number) => {
-        if (!user) {
-            Alert.alert("Login Required", "Please login to like this clip.");
-            return;
-        }
-
-        const hasLiked = item.likedBy?.includes(user.uid);
-        const updatedItems = [...items];
-        updatedItems[index] = {
-            ...item,
-            likes: hasLiked ? item.likes - 1 : item.likes + 1,
-            likedBy: hasLiked
-                ? item.likedBy?.filter(id => id !== user.uid)
-                : [...(item.likedBy || []), user.uid]
-        };
-        setItems(updatedItems);
-
-        try {
-            if (hasLiked) {
-                await unlikePost(item.id, user.uid);
-            } else {
-                await likePost(item.id, user.uid);
-            }
-        } catch (error) {
-            console.error("Like failed", error);
-        }
-    };
-
-    const handleShare = async (item: FeedItem) => {
-        // Transform FeedItem to match ShareModal's expected format
-        const shareData = {
-            id: item.id,
-            content: item.title, // Map title to content
-            userId: item.userId,
-            userName: item.author,
-            videoLink: item.videoLink,
-            thumbnailUrl: item.thumbnailUrl,
-            imageUrl: item.imageUrl,
-            type: item.type,
-            likes: item.likes,
-            comments: item.comments,
-            likedBy: item.likedBy,
-        };
-
-        setSelectedClipForShare(shareData as any);
-        setIsShareModalVisible(true);
-    };
 
     const handleFollow = async (userId?: string) => {
         if (!user) {
@@ -387,13 +733,7 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
     // Memoize keyExtractor
     const keyExtractor = useRef((item: FeedItem) => item.id).current;
 
-    // Memoize renderItem to prevent re-creations
-    const renderItem = useRef(({ item, index }: { item: FeedItem; index: number }) => {
-        // Safe access to activeIndex (it's a ref or state, but inside render it needs latest value.
-        // Actually, since renderItem is memoized, we need to be careful.
-        // Better: Define renderItem as a useCallback that depends on activeIndex, or keep it inline but optimizable.
-        // Retaining inline for simplicity but ensuring the component is performant.
-    }).current;
+
 
     // Actually, inline renderItem is fine if wrapped in useCallback, but for now we'll optimize the gradient colors first.
 
@@ -401,6 +741,17 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
         const h = e.nativeEvent.layout.height;
         if (Math.abs(h - containerHeight) > 1) {
             setContainerHeight(h);
+        }
+    };
+
+    const handleRefresh = async () => {
+        if (!onRefresh) return;
+        setIsRefreshing(true);
+        await onRefresh();
+        setIsRefreshing(false);
+        // Reset to first clip after refresh
+        if (flatListRef.current) {
+            flatListRef.current.scrollToIndex({ index: 0, animated: true });
         }
     };
 
@@ -425,37 +776,13 @@ const ClipsFeed: React.FC<ClipsFeedProps> = ({ initialIndex, data, onClose }) =>
                 getItemLayout={(data, index) => (
                     { length: containerHeight, offset: containerHeight * index, index }
                 )}
-                renderItem={({ item, index }) => {
-                    const isActive = index === activeIndex;
-                    const hasLiked = user ? (item.likedBy?.includes(user?.uid || '') || false) : false;
-                    const isFollowing = item.userId ? followedUsers.has(item.userId) : false;
-                    const showFollow = user ? (item.userId !== user?.uid) : false;
-                    const shouldLoad = isActive;
-
-                    return (
-                        <MemoizedClipsFeedItem
-                            item={item}
-                            isActive={isActive}
-                            hasLiked={hasLiked}
-                            isFollowing={isFollowing}
-                            showFollow={showFollow}
-                            onLike={() => handleLike(item, index)}
-                            onShare={() => handleShare(item)}
-                            onFollow={() => handleFollow(item.userId)}
-                            onProfile={() => handleProfileNavigation(item.userId)}
-                            onComments={() => handleComments(item)}
-                            onClose={onClose}
-                            shouldLoad={shouldLoad}
-                            containerHeight={containerHeight}
-                            isRightHanded={isRightHanded}
-                            onToggleHand={toggleHandMode}
-                        />
-                    );
-                }}
+                renderItem={renderItem}
                 initialNumToRender={1}
                 maxToRenderPerBatch={1}
                 windowSize={3}
                 removeClippedSubviews={true}
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
             />
 
             <ShareModal
@@ -521,6 +848,7 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         paddingBottom: 20, // Bottom padding for safe area
         paddingHorizontal: 12,
+        zIndex: 20,
     },
     bottomSection: {
         flexDirection: 'row',
@@ -532,14 +860,8 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'flex-end',
         paddingBottom: 4,
-    },
-    textContainerRight: {
         marginRight: 60,
         marginLeft: 12,
-    },
-    textContainerLeft: {
-        marginLeft: 60,
-        marginRight: 12,
     },
     title: {
         color: '#FFF',
@@ -557,25 +879,52 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     avatarPlaceholder: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: '#333',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 8,
+        marginRight: 10,
         borderWidth: 1.5,
         borderColor: '#FFF',
+        overflow: 'hidden',
     },
     avatarLetter: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#FFF',
     },
+    speedIndicator: {
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 20,
+    },
+    speedText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    muteBtn: {
+        position: 'absolute',
+        top: 60, // Below header
+        right: 20,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 8,
+        borderRadius: 20,
+        zIndex: 20,
+    },
+    pauseIndicator: {
+        // Position handled by parent absolute fill
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        padding: 20,
+        borderRadius: 50,
+    },
     authorName: {
         color: '#FFF',
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: 'bold',
         marginRight: 10,
         textShadowColor: 'rgba(0,0,0,0.5)',
         textShadowOffset: { width: 0, height: 1 },
@@ -634,45 +983,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 3,
         elevation: 5,
-    },
-    // One-handed mode styles
-    bottomSectionReversed: {
-        flexDirection: 'row-reverse',
-    },
-    authorRowReversed: {
-        flexDirection: 'row-reverse',
-    },
-    leftActions: {
-        position: 'absolute',
-        left: 0,
-        right: 'auto',
-        bottom: 12,
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-    },
-    handToggleBtn: {
-        position: 'absolute',
-        bottom: 90,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        borderRadius: 24,
-        width: 48,
-        height: 48,
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 15,
-        borderWidth: 1.5,
-        borderColor: 'rgba(255,255,255,0.4)',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.4,
-        shadowRadius: 4,
-        elevation: 6,
-    },
-    handToggleBtnLeft: {
-        left: 20,
-    },
-    handToggleBtnRight: {
-        right: 20,
     },
 });
 

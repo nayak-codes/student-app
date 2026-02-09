@@ -49,7 +49,7 @@ import { deleteResource, getUserResources, LibraryResource } from '../src/servic
 import { deletePost, getAllPosts, incrementViewCount, Post, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type ProfileTabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
+type ProfileTabType = 'home' | 'posts' | 'docs' | 'clips' | 'events';
 
 // Edit Post Modal
 const EditPostModal: React.FC<{
@@ -933,13 +933,7 @@ const ProfileScreen = () => {
             case 'posts':
                 content = posts.filter(p => p.type === 'image' || p.type === 'note' || p.type === 'news');
                 break;
-            case 'videos':
-                // Show long-form videos (Exclude things that look like shorts)
-                content = posts.filter(p =>
-                    p.type === 'video' &&
-                    !p.videoLink?.includes('shorts')
-                );
-                break;
+
             case 'clips':
                 // Handled in render directly for specific logic, but keeping this safe
                 // STRICTER FILTER: Only type='clip' OR link has 'shorts'
@@ -1002,29 +996,28 @@ const ProfileScreen = () => {
             >
                 {/* Banner & Header */}
                 <View style={[styles.headerContainer, { backgroundColor: colors.background }]}>
-                    <View style={[styles.channelBanner, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
+                    <View style={[styles.channelBanner, { backgroundColor: colors.background }]}>
                         {coverPhoto ? (
                             <Image source={{ uri: coverPhoto }} style={styles.bannerImage} resizeMode="cover" />
                         ) : (
-                            <LinearGradient
-                                colors={isDark ? ['#4c1d95', '#5b21b6', '#7c3aed'] : ['#6366f1', '#8b5cf6', '#d946ef']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.bannerPlaceholder}
-                            />
+                            // Removed blue gradient cover as requested
+                            <View style={{ flex: 1, backgroundColor: colors.background }} />
                         )}
                         <View style={styles.topBarOverlay}>
-                            <TouchableOpacity onPress={() => router.back()} style={styles.iconButtonBlur}>
-                                <Ionicons name="arrow-back" size={20} color="#FFF" />
+                            <TouchableOpacity
+                                onPress={() => router.back()}
+                                style={[styles.iconButtonBlur, !coverPhoto && { backgroundColor: 'transparent' }]}
+                            >
+                                <Ionicons name="arrow-back" size={28} color={coverPhoto ? "#FFF" : colors.text} />
                             </TouchableOpacity>
                             <View style={{ flex: 1 }} />
 
                             {/* Notification Bell with Badge */}
                             <TouchableOpacity
-                                style={[styles.iconButtonBlur, { marginLeft: 8 }]}
+                                style={[styles.iconButtonBlur, !coverPhoto && { backgroundColor: 'transparent' }, { marginLeft: 8 }]}
                                 onPress={() => setShowNotifications(true)}
                             >
-                                <Ionicons name="notifications-outline" size={20} color="#FFF" />
+                                <Ionicons name="notifications-outline" size={24} color={coverPhoto ? "#FFF" : colors.text} />
                                 {pendingRequests.length > 0 && (
                                     <View style={styles.notificationBadge}>
                                         <Text style={styles.notificationBadgeText}>
@@ -1035,8 +1028,8 @@ const ProfileScreen = () => {
                             </TouchableOpacity>
 
                             {isOwnProfile && (
-                                <TouchableOpacity style={[styles.iconButtonBlur, { marginLeft: 8 }]}>
-                                    <Ionicons name="settings-outline" size={20} color="#FFF" />
+                                <TouchableOpacity style={[styles.iconButtonBlur, !coverPhoto && { backgroundColor: 'transparent' }, { marginLeft: 8 }]}>
+                                    <Ionicons name="settings-outline" size={24} color={coverPhoto ? "#FFF" : colors.text} />
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -1208,12 +1201,7 @@ const ProfileScreen = () => {
                             <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'posts' && { color: colors.text }]}>Posts</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive, { borderBottomColor: activeTab === 'videos' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('videos')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'videos' && { color: colors.text }]}>Videos</Text>
-                        </TouchableOpacity>
+
 
                         <TouchableOpacity
                             style={[styles.ytTab, activeTab === 'clips' && styles.ytTabActive, { borderBottomColor: activeTab === 'clips' ? colors.text : 'transparent' }]}
@@ -1320,21 +1308,7 @@ const ProfileScreen = () => {
                                             )}
                                         </ScrollView>
 
-                                        {/* Videos Section */}
-                                        <View style={styles.homeSectionHeader}>
-                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Videos</Text>
-                                            <TouchableOpacity onPress={() => setActiveTab('videos')}>
-                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                        <View>
-                                            {posts.filter(p => p.type === 'video' || !!p.videoLink).slice(0, 3).map((item) => (
-                                                <VideoListItem key={item.id} post={item} onPress={(p) => openVideo(p.videoLink || '', p)} />
-                                            ))}
-                                            {posts.filter(p => p.type === 'video' || !!p.videoLink).length === 0 && (
-                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic', marginBottom: 16 }}>No videos yet</Text>
-                                            )}
-                                        </View>
+
 
                                         {/* Docs Section */}
                                         <View style={styles.homeSectionHeader}>
@@ -1383,15 +1357,7 @@ const ProfileScreen = () => {
                                             />
                                         ))}
                                     </View>
-                                ) : activeTab === 'videos' ? (
-                                    getFilteredAndSortedContent().map((item: any) => (
-                                        <VideoListItem
-                                            key={item.id}
-                                            post={item}
-                                            onPress={(p) => openVideo(p.videoLink || '', p)}
-                                            onOptionPress={isOwnProfile ? (p) => handleOptionsPress('video', p) : undefined}
-                                        />
-                                    ))
+
                                 ) : activeTab === 'clips' ? (
                                     <View style={styles.clipsGridContainer}>
                                         {/* Filter specifically for SHORTS/CLIPS structure based on URL or Type */}
@@ -1399,8 +1365,16 @@ const ProfileScreen = () => {
                                             // Determine thumbnail
                                             let thumbnailUrl = item.thumbnailUrl || item.imageUrl;
                                             if (!thumbnailUrl && item.videoLink) {
-                                                const match = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-                                                if (match) thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/0.jpg`;
+                                                // YouTube Fallback
+                                                const ytMatch = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+                                                if (ytMatch) {
+                                                    thumbnailUrl = `https://img.youtube.com/vi/${ytMatch[1]}/0.jpg`;
+                                                }
+                                                // Cloudinary Fallback
+                                                else if (item.videoLink.includes('cloudinary')) {
+                                                    // Replace extension with .jpg
+                                                    thumbnailUrl = item.videoLink.replace(/\.[^/.]+$/, ".jpg");
+                                                }
                                             }
 
                                             return (
@@ -1808,9 +1782,9 @@ const styles = StyleSheet.create({
         paddingTop: Platform.OS === 'android' ? 40 : 12,
     },
     iconButtonBlur: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         backgroundColor: 'rgba(0,0,0,0.3)',
         justifyContent: 'center',
         alignItems: 'center',

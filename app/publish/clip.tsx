@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
@@ -32,6 +33,11 @@ export default function PublishClipScreen() {
 
     const availableTags = ['Motivation', 'Tips', 'Hack', 'Question', 'Funny', 'Review'];
 
+    const player = useVideoPlayer(selectedMedia, player => {
+        player.loop = true;
+        if (selectedMedia) player.play();
+    });
+
     const pickClip = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') return;
@@ -60,6 +66,9 @@ export default function PublishClipScreen() {
             const mediaUrl = await uploadVideoToCloudinary(selectedMedia, setUploadProgress);
             if (!mediaUrl) throw new Error("Upload failed");
 
+            // Generate thumbnail from Cloudinary URL (replace extension with .jpg)
+            const thumbnailUrl = mediaUrl.replace(/\.[^/.]+$/, ".jpg");
+
             await createPost({
                 userId: user!.uid,
                 userName: userProfile?.name || 'Anonymous',
@@ -69,6 +78,7 @@ export default function PublishClipScreen() {
                 content: caption.trim(),
                 type: 'clip',
                 videoLink: mediaUrl,
+                thumbnailUrl, // Add generated thumbnail
                 tags: selectedTags,
                 duration: "0:30", // Placeholder or extract real duration
             });
@@ -115,11 +125,18 @@ export default function PublishClipScreen() {
                 <View style={styles.content}>
 
                     {/* Media Preview (Main focus) */}
-                    <TouchableOpacity style={styles.mediaContainer} onPress={pickClip}>
+                    <TouchableOpacity style={styles.mediaContainer} onPress={pickClip} activeOpacity={1}>
                         {selectedMedia ? (
-                            <View style={styles.previewWrapper}>
-                                <Ionicons name="videocam" size={64} color="#FFF" />
-                                <Text style={styles.changeText}>Tap to change</Text>
+                            <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
+                                <VideoView
+                                    style={StyleSheet.absoluteFill}
+                                    player={player}
+                                    contentFit="cover"
+                                    nativeControls={false}
+                                />
+                                <View style={{ position: 'absolute', backgroundColor: 'rgba(0,0,0,0.4)', padding: 8, borderRadius: 8 }}>
+                                    <Text style={styles.changeText}>Tap to change</Text>
+                                </View>
                             </View>
                         ) : (
                             <View style={styles.addMediaPlaceholder}>
