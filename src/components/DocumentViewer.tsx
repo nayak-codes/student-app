@@ -213,8 +213,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        paddingTop: 48,
+        paddingVertical: 10,
+        paddingTop: 0, // Removed extra padding
         backgroundColor: 'rgba(0, 0, 0, 0.9)',
     },
     closeButton: {

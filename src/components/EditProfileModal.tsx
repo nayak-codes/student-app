@@ -15,6 +15,7 @@ import {
     View
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { updateProfileBasic, updateProfileCompleteness } from '../services/profileService';
 import { uploadProfilePhoto } from '../services/storageService';
 
@@ -26,6 +27,7 @@ interface EditProfileModalProps {
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, onSaved }) => {
     const { user, userProfile } = useAuth();
+    const { colors, isDark } = useTheme();
 
     // Form state
     const [name, setName] = useState(userProfile?.name || '');
@@ -35,6 +37,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
     const [state, setState] = useState(userProfile?.location?.state || '');
     const [country, setCountry] = useState(userProfile?.location?.country || 'India');
     const [role, setRole] = useState<'student' | 'teacher' | 'creator'>(userProfile?.role || 'student');
+    const [studentStatus, setStudentStatus] = useState<string>(userProfile?.studentStatus || '');
 
     // Skills state
     const [technicalSkills, setTechnicalSkills] = useState(userProfile?.skills?.technical?.join(', ') || '');
@@ -87,6 +90,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                 headline: headline.trim() || '',
                 about: about.trim() || '',
                 role,
+                studentStatus: studentStatus || '',
             };
 
             // Upload profile photo if changed
@@ -153,23 +157,24 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
             onRequestClose={onClose}
         >
             <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
+                <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
                     {/* Header */}
-                    <View style={styles.header}>
+                    <View style={[styles.header, { borderBottomColor: isDark ? '#334155' : '#E2E8F0' }]}>
                         <TouchableOpacity onPress={onClose}>
-                            <Ionicons name="close" size={24} color="#64748B" />
+                            <Ionicons name="close" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Edit Profile</Text>
+                        <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Profile</Text>
                         <TouchableOpacity
                             onPress={handleSave}
                             disabled={isSubmitting || !name.trim()}
                         >
                             {isSubmitting ? (
-                                <ActivityIndicator size="small" color="#4F46E5" />
+                                <ActivityIndicator size="small" color={colors.primary} />
                             ) : (
                                 <Text
                                     style={[
                                         styles.saveButton,
+                                        { color: colors.primary },
                                         (!name.trim() || isSubmitting) && styles.saveButtonDisabled,
                                     ]}
                                 >
@@ -185,23 +190,23 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                             {photoUri ? (
                                 <Image source={{ uri: photoUri }} style={styles.photoImage} />
                             ) : (
-                                <View style={styles.photoPlaceholder}>
+                                <View style={[styles.photoPlaceholder, { backgroundColor: colors.primary }]}>
                                     <Text style={styles.photoPlaceholderText}>
                                         {name.charAt(0).toUpperCase() || 'S'}
                                     </Text>
                                 </View>
                             )}
                             <TouchableOpacity
-                                style={styles.changePhotoButton}
+                                style={[styles.changePhotoButton, { backgroundColor: isDark ? '#4c1d95' : '#EEF2FF' }]}
                                 onPress={pickImage}
                                 disabled={isUploadingPhoto}
                             >
                                 {isUploadingPhoto ? (
-                                    <ActivityIndicator size="small" color="#4F46E5" />
+                                    <ActivityIndicator size="small" color={colors.primary} />
                                 ) : (
                                     <>
-                                        <Ionicons name="camera" size={16} color="#4F46E5" />
-                                        <Text style={styles.changePhotoText}>Change Photo</Text>
+                                        <Ionicons name="camera" size={16} color={colors.primary} />
+                                        <Text style={[styles.changePhotoText, { color: colors.primary }]}>Change Photo</Text>
                                     </>
                                 )}
                             </TouchableOpacity>
@@ -209,11 +214,11 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
 
                         {/* Name */}
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Name *</Text>
+                            <Text style={[styles.label, { color: colors.text }]}>Name *</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="Your full name"
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={name}
                                 onChangeText={setName}
                                 maxLength={50}
@@ -252,33 +257,90 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                             </View>
                         </View>
 
+                        {/* Student Status - Only show for students */}
+                        {role === 'student' && (
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.label, { color: colors.text }]}>
+                                    Student Status
+                                    <Text style={styles.optional}> (optional)</Text>
+                                </Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        {[
+                                            'JEE Preparation',
+                                            'NEET Preparation',
+                                            'Inter (MPC)',
+                                            'Inter (BiPC)',
+                                            'Inter (CEC)',
+                                            'B.Tech Student',
+                                            'M.Tech Student',
+                                            'Degree Student',
+                                            'Working Professional'
+                                        ].map((status) => (
+                                            <TouchableOpacity
+                                                key={status}
+                                                onPress={() => setStudentStatus(status === studentStatus ? '' : status)}
+                                                style={{
+                                                    paddingVertical: 8,
+                                                    paddingHorizontal: 16,
+                                                    borderRadius: 20,
+                                                    backgroundColor: studentStatus === status
+                                                        ? (isDark ? '#4c1d95' : '#EEF2FF')
+                                                        : (isDark ? '#1E293B' : '#F8FAFC'),
+                                                    borderWidth: 1,
+                                                    borderColor: studentStatus === status
+                                                        ? colors.primary
+                                                        : (isDark ? '#334155' : '#E2E8F0'),
+                                                }}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontSize: 13,
+                                                        fontWeight: '600',
+                                                        color: studentStatus === status
+                                                            ? colors.primary
+                                                            : colors.textSecondary,
+                                                    }}
+                                                >
+                                                    {status}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </ScrollView>
+                                <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+                                    Helps show you relevant content from similar students
+                                </Text>
+                            </View>
+                        )}
+
                         {/* Headline */}
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>
+                            <Text style={[styles.label, { color: colors.text }]}>
                                 Professional Headline
                                 <Text style={styles.optional}> (optional)</Text>
                             </Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="e.g. Computer Science Student | AI Enthusiast"
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={headline}
                                 onChangeText={setHeadline}
                                 maxLength={100}
                             />
-                            <Text style={styles.charCount}>{headline.length}/100</Text>
+                            <Text style={[styles.charCount, { color: colors.textSecondary }]}>{headline.length}/100</Text>
                         </View>
 
                         {/* About */}
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>
+                            <Text style={[styles.label, { color: colors.text }]}>
                                 About
                                 <Text style={styles.optional}> (optional)</Text>
                             </Text>
                             <TextInput
-                                style={[styles.input, styles.textArea]}
+                                style={[styles.input, styles.textArea, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="Tell us about yourself, your interests, and goals..."
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={about}
                                 onChangeText={setAbout}
                                 multiline
@@ -286,38 +348,38 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                                 maxLength={500}
                                 textAlignVertical="top"
                             />
-                            <Text style={styles.charCount}>{about.length}/500</Text>
+                            <Text style={[styles.charCount, { color: colors.textSecondary }]}>{about.length}/500</Text>
                         </View>
 
                         {/* Skills Section */}
-                        <Text style={styles.sectionTitle}>Skills</Text>
-                        <Text style={styles.sectionSubtitle}>Add skills separated by commas</Text>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Skills</Text>
+                        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>Add skills separated by commas</Text>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>
+                            <Text style={[styles.label, { color: colors.text }]}>
                                 Technical Skills
                                 <Text style={styles.optional}> (optional)</Text>
                             </Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="e.g. React, Python, Machine Learning"
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={technicalSkills}
                                 onChangeText={setTechnicalSkills}
                                 maxLength={200}
                             />
-                            <Text style={styles.helperText}>Separate skills with commas</Text>
+                            <Text style={[styles.helperText, { color: colors.textSecondary }]}>Separate skills with commas</Text>
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>
+                            <Text style={[styles.label, { color: colors.text }]}>
                                 Soft Skills
                                 <Text style={styles.optional}> (optional)</Text>
                             </Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="e.g. Leadership, Communication, Problem Solving"
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={softSkills}
                                 onChangeText={setSoftSkills}
                                 maxLength={200}
@@ -325,14 +387,14 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>
+                            <Text style={[styles.label, { color: colors.text }]}>
                                 Languages
                                 <Text style={styles.optional}> (optional)</Text>
                             </Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="e.g. English, Telugu, Hindi"
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={languages}
                                 onChangeText={setLanguages}
                                 maxLength={200}
@@ -340,14 +402,14 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                         </View>
 
                         {/* Location */}
-                        <Text style={styles.sectionTitle}>Location</Text>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Location</Text>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>City</Text>
+                            <Text style={[styles.label, { color: colors.text }]}>City</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="e.g. Hyderabad"
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={city}
                                 onChangeText={setCity}
                                 maxLength={50}
@@ -355,11 +417,11 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>State/Region</Text>
+                            <Text style={[styles.label, { color: colors.text }]}>State/Region</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="e.g. Telangana"
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={state}
                                 onChangeText={setState}
                                 maxLength={50}
@@ -367,11 +429,11 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Country</Text>
+                            <Text style={[styles.label, { color: colors.text }]}>Country</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text }]}
                                 placeholder="e.g. India"
-                                placeholderTextColor="#94A3B8"
+                                placeholderTextColor={colors.textSecondary}
                                 value={country}
                                 onChangeText={setCountry}
                                 maxLength={50}
@@ -379,9 +441,9 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
                         </View>
 
                         {/* Info Text */}
-                        <View style={styles.infoBox}>
-                            <Ionicons name="information-circle" size={20} color="#4F46E5" />
-                            <Text style={styles.infoText}>
+                        <View style={[styles.infoBox, { backgroundColor: isDark ? '#1E293B' : '#EEF2FF' }]}>
+                            <Ionicons name="information-circle" size={20} color={colors.primary} />
+                            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
                                 Complete your profile to increase visibility. A complete profile helps recruiters and peers connect with you.
                             </Text>
                         </View>

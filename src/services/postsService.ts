@@ -64,7 +64,15 @@ export interface Post {
     savedBy: string[];
     viewCount?: number;
 
+    // Smart Hype Algorithm Fields
+    authorStudentStatus?: string; // Student status of post author
+    audienceTier?: number; // Current visibility tier (0-3)
+    hypesByCategory?: { [category: string]: number }; // Hype count by student category
+    totalHypes?: number; // Total hype count across all categories
+    tierExpandedAt?: Date; // When tier was last expanded
+
     createdAt: Date;
+    updatedAt?: Date;
 }
 
 export interface Comment {
@@ -104,7 +112,15 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt' | 'like
             comments: 0,
             likedBy: [],
             savedBy: [],
+
+            // Smart Hype Algorithm - Initialize
+            authorStudentStatus: postData.authorStudentStatus || null,
+            audienceTier: 0, // Start at Tier 0 (same category only)
+            hypesByCategory: {},
+            totalHypes: 0,
+
             createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
         };
 
         // If we want to strictly remove undefined/null keys to save space:
@@ -171,7 +187,16 @@ export const getAllPosts = async (limitCount: number = 50): Promise<Post[]> => {
                 comments: data.comments || 0,
                 savedBy: data.savedBy || [],
                 viewCount: data.viewCount || 0,
+
+                // Hype Algorithm Fields
+                authorStudentStatus: data.authorStudentStatus,
+                audienceTier: data.audienceTier || 0,
+                hypesByCategory: data.hypesByCategory || {},
+                totalHypes: data.totalHypes || 0,
+                tierExpandedAt: data.tierExpandedAt?.toDate(),
+
                 createdAt: data.createdAt?.toDate() || new Date(),
+                updatedAt: data.updatedAt?.toDate(),
             });
         });
 

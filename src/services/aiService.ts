@@ -14,7 +14,8 @@ export interface UserContext {
 
 // CORRECTED: Use the right Gemini model and endpoint
 const GEMINI_API_KEY = 'AIzaSyCxWVdOzBQBQtpfKT8JvBRYR45T7v9iOWE';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_FLASH_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${GEMINI_API_KEY}`;
 
 /**
  * Send message to Gemini AI and get real response
@@ -117,5 +118,73 @@ export const testAIConnection = async (): Promise<boolean> => {
     } catch (error) {
         console.error('AI Connection Test Failed:', error);
         return false;
+    }
+};
+
+/**
+ * Moderate content (text + image) using Gemini 1.5 Flash
+ */
+export const moderateContent = async (text: string, imagesBase64?: string[]): Promise<{ allowed: boolean; reason?: string }> => {
+    try {
+        const parts: any[] = [
+            {
+                text: `You are a strict content moderation AI for a student community app. 
+Analyze the following content (which may include a caption and up to 5 video frames).
+Check for: Nudity, Sexual Content, Violence, Hate Speech, Harassment, Self-Harm, Dangerous Activities, Bullying.
+Also check for VISUAL COPYRIGHT infringement (e.g. recording a movie screen, TV show, or concert).
+If safe, return JSON: { "allowed": true }.
+If unsafe, return JSON: { "allowed": false, "reason": "Brief reason (e.g. contains violence)" }.
+Output ONLY JSON. Do not use markdown.` },
+            { text: `Caption: ${text}` }
+        ];
+
+        if (imagesBase64 && imagesBase64.length > 0) {
+            imagesBase64.forEach((base64, index) => {
+                parts.push({ text: `Frame ${index + 1}:` });
+                parts.push({
+                    inline_data: {
+                        mime_type: 'image/jpeg',
+                        data: base64
+                    }
+                });
+            });
+        }
+
+        console.log('Sending to Gemini Flash for Moderation...');
+
+        const response = await fetch(GEMINI_FLASH_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts }]
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Gemini Moderation API Error:', data);
+            // Fail Check: Explicitly block on API error so user sees there's an issue
+            return { allowed: false, reason: `AI Service Error: ${data.error?.message || response.statusText}` };
+        }
+
+        const aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!aiResponseText) {
+            return { allowed: false, reason: "AI Service returned empty response." };
+        }
+
+        // Parse JSON
+        const cleanJson = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const result = JSON.parse(cleanJson);
+
+        return {
+            allowed: result.allowed,
+            reason: result.reason
+        };
+
+    } catch (error) {
+        console.error('Moderation Error:', error);
+        // Fail Check: Block on exception.
+        return { allowed: false, reason: `Moderation Check Failed: ${error instanceof Error ? error.message : "Unknown Error"}` };
     }
 };

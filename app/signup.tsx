@@ -181,7 +181,7 @@ export default function SignupScreen() {
                 <View style={styles.form}>
                     {renderInput('name', 'Full Name', 'person-outline', name, setName, 'full name')}
                     {renderInput('email', 'Email', 'at', email, setEmail, 'email', 'email-address')}
-                    {renderInput('password', 'Password', 'key-outline', password, setPassword, 'password', 'default', !showPassword, () => setShowPassword(!showPassword), showPassword)}
+                    {renderInput('password', 'Password', 'key-outline', password, setPassword, 'creat-password', 'default', !showPassword, () => setShowPassword(!showPassword), showPassword)}
                     {renderInput('confirmPassword', 'Re-enter Password', 'key-outline', confirmPassword, setConfirmPassword, 'Re-enter password', 'default', !showConfirmPassword, () => setShowConfirmPassword(!showConfirmPassword), showConfirmPassword)}
 
                     {/* Signup Button */}

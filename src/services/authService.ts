@@ -23,6 +23,7 @@ export interface UserProfile {
     percentile?: number;
     isVerified?: boolean;
     role?: 'student' | 'teacher' | 'creator';
+    studentStatus?: string; // JEE Preparation, B.Tech Student, etc.
 
     // Education Details
     educationLevel?: '10th' | 'Intermediate' | 'Undergraduate' | 'Graduate';

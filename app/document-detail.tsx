@@ -28,6 +28,7 @@ import {
     getConnectionStatus,
     unfollowUser
 } from '../src/services/connectionService';
+import { deleteDownload, downloadDocument, getDownloadedDocument } from '../src/services/downloadService';
 import {
     addReview,
     getResourceById,
@@ -89,33 +90,80 @@ const DocumentDetailScreen = () => {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [resData, reviewsData, savedStatus] = await Promise.all([
-                getResourceById(id!),
-                getResourceReviews(id!),
-                checkIsSaved(id!)
-            ]);
 
-            setResource(resData);
-            setReviews(reviewsData);
-            setIsDownloaded(savedStatus);
+            // 1. Check Local Storage First (Offline Support)
+            const localDoc = await getDownloadedDocument(id!);
 
-            if (resData && user) {
-                setLiked(resData.likedBy.includes(user.uid));
-                if (!resData.isPremium || resData.uploadedBy === user.uid) {
-                    setIsUnlocked(true);
-                } else {
-                    setIsUnlocked(false);
-                }
-
-                // Check follow status
-                if (resData.uploadedBy !== user.uid) {
-                    const status = await getConnectionStatus(user.uid, resData.uploadedBy);
-                    setIsFollowing(status.isFollowing);
-                }
+            if (localDoc) {
+                // Populate with offline data initially
+                setResource({
+                    id: localDoc.id,
+                    title: localDoc.title,
+                    description: '', // Offline doesn't allow description yet
+                    type: localDoc.type as any,
+                    exam: (localDoc.exam as any) || 'ALL',
+                    subject: (localDoc.subject as any) || 'General',
+                    topic: '',
+                    fileUrl: localDoc.remoteUrl,
+                    fileName: localDoc.filename,
+                    fileSize: localDoc.size || 0,
+                    customCoverUrl: localDoc.coverUrl,
+                    uploadedBy: 'offline',
+                    uploaderName: localDoc.uploaderName || 'Unknown',
+                    uploaderExam: '',
+                    views: 0,
+                    downloads: 0,
+                    likes: 0,
+                    likedBy: [],
+                    tags: [], // Default
+                    approved: true,
+                    createdAt: new Date(localDoc.downloadedAt),
+                    updatedAt: new Date(localDoc.downloadedAt),
+                });
+                setIsDownloaded(true);
+                // Don't unset loading yet if we want to try fetching fresh data
+                // But for perceived performance, we can let user see it.
+                // However, let's keep loading true until we attempt network to avoid flicker or mixed states?
+                // Actually, robust offline means show data immediately.
+                setLoading(false);
             }
+
+            // 2. Try Fetching Online Data
+            try {
+                const [resData, reviewsData, savedStatus] = await Promise.all([
+                    getResourceById(id!),
+                    getResourceReviews(id!),
+                    checkIsSaved(id!)
+                ]);
+
+                if (resData) {
+                    setResource(resData);
+                    if (user) {
+                        setLiked(resData.likedBy.includes(user.uid));
+                        setIsUnlocked(!resData.isPremium || resData.uploadedBy === user.uid);
+
+                        if (resData.uploadedBy !== user.uid) {
+                            const status = await getConnectionStatus(user.uid, resData.uploadedBy);
+                            setIsFollowing(status.isFollowing);
+                        }
+                    }
+                }
+                setReviews(reviewsData);
+                setIsDownloaded(savedStatus); // use online status if available (mostly same)
+            } catch (networkError) {
+                console.log('Network fetch failed, using offline data if available:', networkError);
+                if (!localDoc) {
+                    Alert.alert('Offline', 'You are offline and this file is not downloaded.');
+                    router.back();
+                }
+                // If localDoc exists, we just stay on that data.
+            }
+
         } catch (error) {
             console.error('Error loading document details:', error);
-            Alert.alert('Error', 'Failed to load document details');
+            if (!isDownloaded) {
+                Alert.alert('Error', 'Failed to load document details');
+            }
         } finally {
             setLoading(false);
         }
@@ -140,17 +188,38 @@ const DocumentDetailScreen = () => {
         if (!resource) return;
         try {
             if (isDownloaded) {
+                // Remove from local storage AND saved collection
+                await deleteDownload(resource.id);
                 await removeSavedResource(resource.id);
                 setIsDownloaded(false);
                 Alert.alert("Removed", "Removed from downloads.");
             } else {
+                // 1. Save to Firestore (Bookmark)
                 await saveResource(resource);
                 await incrementDownloads(resource.id);
+
+                // 2. Download Locally
+                // Show a simple alert or toast here, usually better to show progress but alert is fine for now
+                Alert.alert("Downloading...", "Saving for offline access.");
+
+                await downloadDocument({
+                    id: resource.id,
+                    title: resource.title,
+                    fileUrl: resource.fileUrl,
+                    fileName: resource.fileName,
+                    subject: resource.subject,
+                    exam: resource.exam,
+                    customCoverUrl: resource.customCoverUrl,
+                    type: resource.type,
+                    uploaderName: resource.uploaderName
+                });
+
                 setIsDownloaded(true);
                 Alert.alert("Downloaded", "Saved to your downloads profile section.");
             }
         } catch (error) {
             console.error("Download error:", error);
+            Alert.alert("Error", "Failed to download resource.");
         }
     };
 
@@ -234,12 +303,26 @@ const DocumentDetailScreen = () => {
         }
         try {
             await incrementViews(resource.id);
-            if (resource.type === 'pdf' || resource.type === 'notes') {
-                setViewerVisible(true);
+
+            const isPdf = resource.type === 'pdf' || resource.type === 'notes' || resource.type === 'book' || resource.fileUrl.toLowerCase().endsWith('.pdf');
+
+            if (isPdf) {
+                // Navigate to enhanced PDF Viewer which supports offline
+                router.push({
+                    pathname: '/screens/pdf-viewer' as any,
+                    params: {
+                        resourceId: resource.id,
+                        title: resource.title,
+                        url: resource.fileUrl,
+                        isOffline: isDownloaded ? 'true' : 'false'
+                    }
+                });
             } else {
-                Alert.alert('Opening Resource', `Opening ${resource.title}...`);
+                // Fallback for images/other using inline viewer
+                setViewerVisible(true);
             }
         } catch (err) {
+            console.error('Error opening resource:', err);
             Alert.alert('Error', 'Failed to open resource.');
         }
     };

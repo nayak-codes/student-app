@@ -88,6 +88,15 @@ export default function ProfileDetailsScreen() {
                         <Text style={styles.heroHeadline}>{profile.headline}</Text>
                     )}
 
+                    {profile.studentStatus && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
+                            <Ionicons name="school" size={14} color="#8B5CF6" />
+                            <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>
+                                {profile.studentStatus}
+                            </Text>
+                        </View>
+                    )}
+
                     <View style={styles.heroDivider} />
 
                     <View style={{ gap: 8 }}>

@@ -42,11 +42,15 @@ export default function PublishVideoScreen() {
     const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+
+
     const availableTags = [
         'Physics', 'Chemistry', 'Maths', 'Biology',
         'JEE', 'NEET', 'EAPCET',
         'Study Tips', 'Motivation', 'Lecture',
     ];
+
+
 
     const toggleTag = (tag: string) => {
         if (selectedTags.includes(tag)) {
@@ -139,6 +143,8 @@ export default function PublishVideoScreen() {
             return;
         }
 
+
+
         setIsSubmitting(true);
         try {
             let mediaUrl = '';
@@ -170,6 +176,7 @@ export default function PublishVideoScreen() {
                 thumbnailUrl: finalThumbnailUrl,
                 duration: videoDuration || undefined,
                 tags: selectedTags,
+                authorStudentStatus: userProfile?.studentStatus, // For smart hype algorithm
             });
 
             Alert.alert('Success', 'Video published successfully!');
@@ -253,6 +260,8 @@ export default function PublishVideoScreen() {
                             </TouchableOpacity>
                         </View>
                     )}
+
+
                 </View>
 
                 {/* 2. Details Section */}

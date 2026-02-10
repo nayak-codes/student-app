@@ -1678,8 +1678,8 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         flexDirection: 'row',
-        padding: 12,
-        paddingTop: Platform.OS === 'android' ? 40 : 12,
+        padding: 16,
+        paddingTop: Platform.OS === 'android' ? 8 : 8,
     },
     iconButtonBlur: {
         width: 32,

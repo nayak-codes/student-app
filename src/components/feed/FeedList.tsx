@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, FlatList, NativeScrollEvent, NativeSyntheticE
 import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { shouldShowPost } from '../../services/hypeService';
 import { addReaction, deletePost, getAllPosts, likePost, Post, ReactionType, removeReaction, savePost, unlikePost, unsavePost } from '../../services/postsService';
 import CommentsBottomSheet from '../CommentsBottomSheet';
 import FeedPost from './FeedPost';
@@ -47,10 +48,20 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
             const fetchedPosts = await getAllPosts();
             setAllPosts(fetchedPosts);
 
-            // Separate clips from regular posts
-            const clipPosts = fetchedPosts.filter(p => p.type === 'clip');
+            // Get current user's profile to access studentStatus
+            const userProfile = user ? await import('../../services/authService').then(m => m.getUserProfile(user.uid)) : null;
+            const userStudentStatus = userProfile?.studentStatus;
+            const userRole = userProfile?.role || 'student';
+
+            // SMART HYPE ALGORITHM: Filter posts based on tier visibility
+            const visiblePosts = fetchedPosts.filter(post =>
+                shouldShowPost(post, userStudentStatus, userRole)
+            );
+
+            // Separate clips from regular posts (from visible posts only)
+            const clipPosts = visiblePosts.filter(p => p.type === 'clip');
             // Filter out 'clip' AND 'video' from main feed (LinkedIn style text/image focus)
-            const regularPosts = fetchedPosts.filter(p => p.type !== 'clip' && p.type !== 'video');
+            const regularPosts = visiblePosts.filter(p => p.type !== 'clip' && p.type !== 'video');
 
             // Shuffle helper
             const shuffle = (array: any[]) => {

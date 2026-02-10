@@ -1000,8 +1000,13 @@ const ProfileScreen = () => {
                         {coverPhoto ? (
                             <Image source={{ uri: coverPhoto }} style={styles.bannerImage} resizeMode="cover" />
                         ) : (
-                            // Removed blue gradient cover as requested
-                            <View style={{ flex: 1, backgroundColor: colors.background }} />
+                            // Blue gradient for all profiles when no cover photo
+                            <LinearGradient
+                                colors={isDark ? ['#4c1d95', '#5b21b6', '#7c3aed'] : ['#6366f1', '#8b5cf6', '#d946ef']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={{ flex: 1 }}
+                            />
                         )}
                         <View style={styles.topBarOverlay}>
                             <TouchableOpacity
@@ -1279,7 +1284,7 @@ const ProfileScreen = () => {
                         ) : (
                             <View style={[
                                 styles.gridContainer,
-                                (activeTab === 'videos' || activeTab === 'posts') && viewMode === 'list' && { flexDirection: 'column', flexWrap: 'nowrap', paddingHorizontal: 16 }
+                                (activeTab === 'posts') && viewMode === 'list' && { flexDirection: 'column', flexWrap: 'nowrap', paddingHorizontal: 16 }
                             ]}>
                                 {activeTab === 'home' ? (
                                     <View>
@@ -1778,8 +1783,8 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         flexDirection: 'row',
-        padding: 12,
-        paddingTop: Platform.OS === 'android' ? 40 : 12,
+        padding: 16,
+        paddingTop: Platform.OS === 'android' ? 8 : 8,
     },
     iconButtonBlur: {
         width: 40,

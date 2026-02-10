@@ -8,8 +8,20 @@ export const getPdfHtml = (url: string) => `
     <style>
         body { margin: 0; padding: 0; background-color: #333; height: 100vh; display: flex; flex-direction: column; }
         #the-canvas { width: 100%; height: 100%; object-fit: contain; }
-        #container { flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; background: #333; }
-        .page { margin-bottom: 10px; box-shadow: 0px 0px 5px rgba(0,0,0,0.5); }
+        #container { 
+            flex: 1; 
+            overflow-y: auto; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            background: #333; 
+            padding: 20px 0;
+        }
+        .page { 
+            margin-bottom: 20px; 
+            box-shadow: 0px 4px 8px rgba(0,0,0,0.5); 
+            background-color: white;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -26,21 +38,23 @@ export const getPdfHtml = (url: string) => `
         loadingTask.promise.then(function(pdf) {
             // Render all pages
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                // Create canvas immediately to preserve order
+                const canvas = document.createElement('canvas');
+                canvas.className = 'page';
+                container.appendChild(canvas);
+
                 pdf.getPage(pageNum).then(function(page) {
                     const scale = 1.5;
                     const viewport = page.getViewport({scale: scale});
                     
-                    const canvas = document.createElement('canvas');
-                    canvas.className = 'page';
                     const context = canvas.getContext('2d');
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
                     
                     // Adjust canvas style width for responsiveness
                     canvas.style.width = '100%';
+                    canvas.style.maxWidth = '100%';
                     canvas.style.height = 'auto'; // Maintain aspect ratio
-
-                    container.appendChild(canvas);
 
                     const renderContext = {
                         canvasContext: context,

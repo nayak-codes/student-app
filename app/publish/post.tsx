@@ -93,6 +93,7 @@ export default function PublishPostScreen() {
                 imageUrl: uploadedUrls[0], // Backwards compatibility: use first image as main
                 imageUrls: uploadedUrls,    // Save all images
                 tags: selectedTags,
+                authorStudentStatus: userProfile?.studentStatus, // For smart hype algorithm
             });
 
             Alert.alert('Success', 'Post shared!');

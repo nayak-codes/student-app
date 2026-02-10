@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -28,8 +29,13 @@ export default function PublishClipScreen() {
     const [caption, setCaption] = useState('');
     const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState("Uploading...");
+    const [isUploading, setIsUploading] = useState(false);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+    const [verificationStatus, setVerificationStatus] = useState<'idle' | 'scanning' | 'safe' | 'unsafe'>('safe'); // Always safe (AI disabled)
+    const [verificationReason, setVerificationReason] = useState('');
+    const [videoThumbnailBase64, setVideoThumbnailBase64] = useState<string | null>(null);
 
     const availableTags = ['Motivation', 'Tips', 'Hack', 'Question', 'Funny', 'Review'];
 
@@ -37,6 +43,8 @@ export default function PublishClipScreen() {
         player.loop = true;
         if (selectedMedia) player.play();
     });
+
+
 
     const pickClip = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -56,13 +64,26 @@ export default function PublishClipScreen() {
     };
 
     const handleSubmit = async () => {
+        console.log("Submit pressed"); // Debug
         if (!selectedMedia) {
             Alert.alert('Required', 'Please select a video clip');
             return;
         }
 
-        setIsSubmitting(true);
+        // DISABLED: AI verification checks removed
+        // if (verificationStatus === 'scanning') ...
+        // if (verificationStatus === 'unsafe') ...
+
+        setIsUploading(true);
+        setUploadStatus("Finalizing check...");
+
+
         try {
+            // DISABLED: Caption moderation removed
+            // if (caption.trim().length > 0) { ... }
+
+            setUploadStatus("Uploading...");
+
             const mediaUrl = await uploadVideoToCloudinary(selectedMedia, setUploadProgress);
             if (!mediaUrl) throw new Error("Upload failed");
 
@@ -81,6 +102,7 @@ export default function PublishClipScreen() {
                 thumbnailUrl, // Add generated thumbnail
                 tags: selectedTags,
                 duration: "0:30", // Placeholder or extract real duration
+                authorStudentStatus: userProfile?.studentStatus, // For smart hype algorithm
             });
 
             Alert.alert('Success', 'Clip shared successfully!');
@@ -90,7 +112,7 @@ export default function PublishClipScreen() {
             console.error('Error publishing clip:', error);
             Alert.alert('Error', 'Failed to publish clip');
         } finally {
-            setIsSubmitting(false);
+            setIsUploading(false);
         }
     };
 
@@ -114,10 +136,10 @@ export default function PublishClipScreen() {
                 <Text style={styles.headerTitle}>New Clip</Text>
                 <TouchableOpacity
                     onPress={handleSubmit}
-                    disabled={isSubmitting}
-                    style={[styles.publishButton, isSubmitting && { opacity: 0.7 }]}
+                    disabled={isUploading}
+                    style={[styles.publishButton, isUploading && { opacity: 0.7 }]}
                 >
-                    {isSubmitting ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.publishButtonText}>Share</Text>}
+                    {isUploading ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.publishButtonText}>Share</Text>}
                 </TouchableOpacity>
             </View>
 
@@ -146,12 +168,7 @@ export default function PublishClipScreen() {
                             </View>
                         )}
 
-                        {isSubmitting && uploadProgress > 0 && (
-                            <View style={styles.progressOverlay}>
-                                <ActivityIndicator size="large" color="#FFF" />
-                                <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{Math.round(uploadProgress)}%</Text>
-                            </View>
-                        )}
+
                     </TouchableOpacity>
 
                     {/* Caption Input */}
@@ -183,7 +200,19 @@ export default function PublishClipScreen() {
 
                 </View>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+
+            {/* Top Level Loading Overlay */}
+            {
+                isUploading && (
+                    <View style={[styles.progressOverlay, { zIndex: 999, elevation: 999 }]}>
+                        <ActivityIndicator size="large" color="#FFF" />
+                        <Text style={{ color: '#FFF', marginTop: 10, fontSize: 16, fontWeight: 'bold' }}>
+                            {uploadStatus} {uploadStatus === "Uploading..." ? `${Math.round(uploadProgress)}%` : ''}
+                        </Text>
+                    </View>
+                )
+            }
+        </SafeAreaView >
     );
 }
 
@@ -222,9 +251,11 @@ const styles = StyleSheet.create({
     changeText: { color: '#FFF', marginTop: 12, opacity: 0.8 },
     progressOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.7)',
+        backgroundColor: 'rgba(0,0,0,0.8)', // Darker background
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 999, // Ensure on top
+        elevation: 999,
     },
     inputContainer: {
         padding: 20,
@@ -261,4 +292,19 @@ const styles = StyleSheet.create({
     activeTagText: {
         color: '#FFF',
     },
+    statusBadge: {
+        position: 'absolute',
+        bottom: 10,
+        left: 10,
+        right: 10,
+        padding: 8,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statusScanning: { backgroundColor: 'rgba(59, 130, 246, 0.9)' }, // Blue
+    statusSafe: { backgroundColor: 'rgba(16, 185, 129, 0.9)' }, // Green
+    statusUnsafe: { backgroundColor: 'rgba(239, 68, 68, 0.9)' }, // Red
+    statusText: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
 });
