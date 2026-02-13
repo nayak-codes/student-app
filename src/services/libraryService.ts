@@ -59,6 +59,10 @@ export interface LibraryResource {
     currency?: 'INR' | 'USD';
     resourceType?: 'file' | 'course';
     courseModules?: CourseModule[];
+
+    // Access Control Fields
+    accessLevel: 'public' | 'private' | 'protected';
+    accessKey?: string; // Only for 'protected' resources
 }
 
 export interface CourseModule {
@@ -116,6 +120,10 @@ export const uploadResource = async (
         isPremium?: boolean;
         price?: number;
         resourceType?: 'file' | 'course';
+
+        // Access Control
+        accessLevel?: 'public' | 'private' | 'protected';
+        accessKey?: string | null;
     },
     onProgress?: (progress: number) => void
 ): Promise<string> => {
@@ -134,8 +142,8 @@ export const uploadResource = async (
 
         console.log('✅ File uploaded to Cloudinary:', downloadURL);
 
-        // Save metadata to Firestore
-        const docRef = await addDoc(collection(db, LIBRARY_COLLECTION), {
+        // Build document data
+        const documentData: any = {
             ...metadata,
             customCoverUrl: metadata.customCoverUrl || null,
             fileUrl: downloadURL,
@@ -154,7 +162,18 @@ export const uploadResource = async (
             price: metadata.price || 0,
             currency: 'INR',
             resourceType: metadata.resourceType || 'file',
-        });
+
+            // Access Control defaults
+            accessLevel: metadata.accessLevel || 'public',
+        };
+
+        // Only add accessKey if it exists and is not null
+        if (metadata.accessKey) {
+            documentData.accessKey = metadata.accessKey;
+        }
+
+        // Save metadata to Firestore
+        const docRef = await addDoc(collection(db, LIBRARY_COLLECTION), documentData);
 
         console.log('✅ Resource saved to Firestore:', docRef.id);
         return docRef.id;
@@ -251,6 +270,10 @@ export const getResourceById = async (resourceId: string): Promise<LibraryResour
                 currency: data.currency || 'INR',
                 resourceType: data.resourceType || 'file',
                 courseModules: data.courseModules || [],
+
+                // Access Control
+                accessLevel: data.accessLevel || 'public',
+                accessKey: data.accessKey,
             };
         }
         return null;
@@ -309,6 +332,10 @@ export const getAllResources = async (limitCount: number = 50): Promise<LibraryR
                 price: data.price || 0,
                 currency: data.currency || 'INR',
                 resourceType: data.resourceType || 'file',
+
+                // Access Control
+                accessLevel: data.accessLevel || 'public',
+                accessKey: data.accessKey,
             });
         });
 

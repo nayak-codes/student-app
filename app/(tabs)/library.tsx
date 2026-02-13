@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   RefreshControl,
   StatusBar,
@@ -78,6 +79,49 @@ const LibraryScreen = () => {
     // If premium, go to details page to buy/unlock
     if (item.isPremium) {
       handlePressInfo(item);
+      return;
+    }
+
+    // Check access control before opening
+    const { canAccessResource } = await import('../../src/utils/accessControl');
+    const accessCheck = canAccessResource(item, userProfile, null);
+
+    if (!accessCheck.canAccess) {
+      Alert.alert('Access Denied', accessCheck.reason || 'You cannot access this resource');
+      return;
+    }
+
+    // If protected, prompt for access key
+    if (item.accessLevel === 'protected' && item.accessKey) {
+      Alert.prompt(
+        'Enter Access Key',
+        'This resource is protected. Please enter the access key.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Unlock',
+            onPress: async (key?: string) => {
+              if (!key) {
+                Alert.alert('Invalid Key', 'Please enter a valid access key.');
+                return;
+              }
+              if (key === item.accessKey) {
+                // Correct key, open the document
+                try {
+                  await incrementViews(item.id);
+                  setSelectedResource(item);
+                  setViewerVisible(true);
+                } catch (error) {
+                  console.error("Error opening pdf:", error);
+                }
+              } else {
+                Alert.alert('Incorrect Key', 'The access key you entered is incorrect.');
+              }
+            }
+          }
+        ],
+        'plain-text'
+      );
       return;
     }
 

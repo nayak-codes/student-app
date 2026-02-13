@@ -46,6 +46,10 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
     const [isPremium, setIsPremium] = useState(false);
     const [price, setPrice] = useState('');
 
+    // Access Control State
+    const [accessLevel, setAccessLevel] = useState<'public' | 'private' | 'protected'>('public');
+    const [accessKey, setAccessKey] = useState('');
+
     const availableTags = [
         'Formulas', 'Notes', 'Quick Revision',
         'Important Questions', 'Tips & Tricks',
@@ -164,6 +168,10 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                     isPremium,
                     price: isPremium ? parseFloat(price) : 0,
                     resourceType: 'file', // Default to file for now
+
+                    // Access Control
+                    accessLevel,
+                    accessKey: accessLevel === 'protected' ? accessKey : null,
                 },
                 (progress) => {
                     setUploadProgress(progress);
@@ -188,6 +196,8 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
             setUploadProgress(0);
             setIsPremium(false);
             setPrice('');
+            setAccessLevel('public');
+            setAccessKey('');
 
             onUploadComplete();
             onClose();
@@ -451,6 +461,73 @@ const UploadResourceModal: React.FC<UploadModalProps> = ({ visible, onClose, onU
                                 </View>
                             )}
                         </View>
+
+                        {/* Access Control */}
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Who can access this?</Text>
+                        <View style={styles.accessButtons}>
+                            <TouchableOpacity
+                                style={[styles.accessButton, accessLevel === 'public' && styles.accessButtonActive]}
+                                onPress={() => setAccessLevel('public')}
+                                disabled={isUploading}
+                            >
+                                <Ionicons
+                                    name="globe-outline"
+                                    size={20}
+                                    color={accessLevel === 'public' ? '#FFF' : '#64748B'}
+                                />
+                                <Text style={[styles.accessButtonText, accessLevel === 'public' && styles.accessButtonTextActive]}>
+                                    Public
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.accessButton, accessLevel === 'private' && styles.accessButtonActive]}
+                                onPress={() => setAccessLevel('private')}
+                                disabled={isUploading}
+                            >
+                                <Ionicons
+                                    name="people-outline"
+                                    size={20}
+                                    color={accessLevel === 'private' ? '#FFF' : '#64748B'}
+                                />
+                                <Text style={[styles.accessButtonText, accessLevel === 'private' && styles.accessButtonTextActive]}>
+                                    Network
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.accessButton, accessLevel === 'protected' && styles.accessButtonActive]}
+                                onPress={() => setAccessLevel('protected')}
+                                disabled={isUploading}
+                            >
+                                <Ionicons
+                                    name="lock-closed-outline"
+                                    size={20}
+                                    color={accessLevel === 'protected' ? '#FFF' : '#64748B'}
+                                />
+                                <Text style={[styles.accessButtonText, accessLevel === 'protected' && styles.accessButtonTextActive]}>
+                                    Protected
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {accessLevel === 'protected' && (
+                            <>
+                                <Text style={[styles.label, { color: colors.textSecondary }]}>Access Key</Text>
+                                <TextInput
+                                    style={[styles.input, { color: colors.text, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
+                                    placeholder="Enter a key (e.g., COLLEGE2025)"
+                                    placeholderTextColor={colors.textSecondary}
+                                    value={accessKey}
+                                    onChangeText={setAccessKey}
+                                    maxLength={20}
+                                    editable={!isUploading}
+                                />
+                                <Text style={[styles.helperText, { marginTop: 4 }]}>
+                                    Students in your network will need this key to access
+                                </Text>
+                            </>
+                        )}
 
                         {/* Exam */}
                         <Text style={[styles.label, { color: colors.textSecondary }]}>Exam</Text>
@@ -791,6 +868,37 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    accessButtons: {
+        flexDirection: 'row',
+        gap: 8,
+        flexWrap: 'wrap',
+    },
+    accessButton: {
+        flex: 1,
+        minWidth: '30%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: '#F1F5F9',
+        gap: 6,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    accessButtonActive: {
+        backgroundColor: '#6366F1',
+        borderColor: '#6366F1',
+    },
+    accessButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#64748B',
+    },
+    accessButtonTextActive: {
+        color: '#FFF',
     }
 });
 

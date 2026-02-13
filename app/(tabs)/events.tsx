@@ -7,6 +7,7 @@ import {
     Dimensions,
     FlatList,
     Image,
+    Keyboard,
     Modal,
     RefreshControl,
     ScrollView,
@@ -58,28 +59,68 @@ const CATEGORY_GROUPS = [
     }
 ];
 
+
 interface FilterOption { label: string; value: string; }
 interface FilterGroup { title: string; type: string; options: FilterOption[]; }
 
+const POPULAR_CITIES = ['Hyderabad', 'Bangalore', 'Mumbai', 'Delhi', 'Pune', 'Chennai', 'Kolkata', 'Ahmedabad', 'Visakhapatnam', 'Vijayawada'];
+
 const CATEGORY_FILTERS: Record<string, FilterGroup[]> = {
     'Hackathons': [
-        { title: 'Location', type: 'location', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }, { label: 'Hybrid', value: 'hybrid' }] },
-        { title: 'Prize Pool', type: 'prizePool', options: [{ label: 'Free', value: 'free' }, { label: 'Under ₹10k', value: '<10k' }, { label: '₹10k-₹50k', value: '10k-50k' }, { label: 'Above ₹50k', value: '>50k' }] }
+        { title: 'Status', type: 'status', options: [{ label: 'Live', value: 'live' }, { label: 'Upcoming', value: 'upcoming' }, { label: 'Ended', value: 'ended' }] },
+        { title: 'Location', type: 'location', options: [] }, // Dynamic Location Search
+        { title: 'Prize Pool', type: 'prizePool', options: [{ label: 'Free', value: 'free' }, { label: 'Under ₹10k', value: '<10k' }, { label: '₹10k-₹50k', value: '10k-50k' }, { label: 'Above ₹50k', value: '>50k' }] },
+        { title: 'Team Size', type: 'teamSize', options: [{ label: 'Solo', value: 'solo' }, { label: '2-4 People', value: '2-4' }, { label: '5+ People', value: '5+' }] },
+        { title: 'Domain', type: 'domain', options: [{ label: 'Web Dev', value: 'web' }, { label: 'AI/ML', value: 'ai' }, { label: 'Mobile', value: 'mobile' }, { label: 'Blockchain', value: 'blockchain' }] }
     ],
-    'JEE': [{ title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] }],
-    'NEET': [{ title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] }],
-    'EAMCET': [{ title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] }],
+    'JEE': [
+        { title: 'Status', type: 'status', options: [{ label: 'Registration Open', value: 'open' }, { label: 'Upcoming', value: 'upcoming' }, { label: 'Closed', value: 'closed' }] },
+        { title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] },
+        { title: 'Exam Type', type: 'examType', options: [{ label: 'Mains', value: 'mains' }, { label: 'Advanced', value: 'advanced' }, { label: 'Mock Test', value: 'mock' }] }
+    ],
+    'NEET': [
+        { title: 'Status', type: 'status', options: [{ label: 'Registration Open', value: 'open' }, { label: 'Upcoming', value: 'upcoming' }, { label: 'Closed', value: 'closed' }] },
+        { title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] },
+        { title: 'Exam Type', type: 'examType', options: [{ label: 'UG', value: 'ug' }, { label: 'PG', value: 'pg' }, { label: 'Mock Test', value: 'mock' }] }
+    ],
+    'EAMCET': [
+        { title: 'Status', type: 'status', options: [{ label: 'Registration Open', value: 'open' }, { label: 'Upcoming', value: 'upcoming' }, { label: 'Closed', value: 'closed' }] },
+        { title: 'Exam Mode', type: 'examMode', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] },
+        { title: 'Stream', type: 'stream', options: [{ label: 'Engineering', value: 'engineering' }, { label: 'Medical', value: 'medical' }, { label: 'Agriculture', value: 'agriculture' }] }
+    ],
     'Internships': [
+        { title: 'Status', type: 'status', options: [{ label: 'Accepting Applications', value: 'open' }, { label: 'Closing Soon', value: 'closing' }, { label: 'Closed', value: 'closed' }] },
+        { title: 'Work Mode', type: 'workMode', options: [{ label: 'Remote', value: 'remote' }, { label: 'On-site', value: 'on-site' }, { label: 'Hybrid', value: 'hybrid' }] }, // Work Mode is different from Location
+        { title: 'Location', type: 'location', options: [] }, // Dynamic Location Search
+        { title: 'Stipend', type: 'stipend', options: [{ label: 'Unpaid', value: 'unpaid' }, { label: 'Under ₹10k', value: '<10k' }, { label: '₹10k-₹25k', value: '10k-25k' }, { label: 'Above ₹25k', value: '>25k' }] },
+        { title: 'Duration', type: 'duration', options: [{ label: '1-3 months', value: '1-3' }, { label: '3-6 months', value: '3-6' }, { label: '6+ months', value: '6+' }] },
+        { title: 'Domain', type: 'domain', options: [{ label: 'Software Dev', value: 'software' }, { label: 'Design', value: 'design' }, { label: 'Marketing', value: 'marketing' }, { label: 'Data Science', value: 'data' }] }
+    ],
+    'Jobs': [
+        { title: 'Status', type: 'status', options: [{ label: 'Actively Hiring', value: 'active' }, { label: 'Recently Posted', value: 'recent' }, { label: 'Closing Soon', value: 'closing' }] },
         { title: 'Work Mode', type: 'workMode', options: [{ label: 'Remote', value: 'remote' }, { label: 'On-site', value: 'on-site' }, { label: 'Hybrid', value: 'hybrid' }] },
-        { title: 'Stipend', type: 'stipend', options: [{ label: 'Unpaid', value: 'unpaid' }, { label: 'Under ₹10k', value: '<10k' }, { label: '₹10k-₹25k', value: '10k-25k' }, { label: 'Above ₹25k', value: '>25k' }] }
+        { title: 'Location', type: 'location', options: [] }, // Dynamic Location Search
+        { title: 'Experience', type: 'experience', options: [{ label: 'Fresher', value: 'fresher' }, { label: '0-2 years', value: '0-2' }, { label: '2-5 years', value: '2-5' }, { label: '5+ years', value: '5+' }] },
+        { title: 'Domain', type: 'domain', options: [{ label: 'Engineering', value: 'engineering' }, { label: 'Product', value: 'product' }, { label: 'Sales', value: 'sales' }, { label: 'Operations', value: 'operations' }] }
     ],
-    'Jobs': [{ title: 'Work Mode', type: 'workMode', options: [{ label: 'Remote', value: 'remote' }, { label: 'On-site', value: 'on-site' }, { label: 'Hybrid', value: 'hybrid' }] }],
     'Workshops': [
-        { title: 'Location', type: 'location', options: [{ label: 'Online', value: 'online' }, { label: 'Offline', value: 'offline' }] },
-        { title: 'Certificate', type: 'certificate', options: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }] }
+        { title: 'Status', type: 'status', options: [{ label: 'Registration Open', value: 'open' }, { label: 'Starting Soon', value: 'soon' }, { label: 'Ended', value: 'ended' }] },
+        { title: 'Location', type: 'location', options: [] }, // Dynamic Location Search
+        { title: 'Payment', type: 'payment', options: [{ label: 'Free', value: 'free' }, { label: 'Paid', value: 'paid' }] },
+        { title: 'Certificate', type: 'certificate', options: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }] },
+        { title: 'Domain', type: 'domain', options: [{ label: 'Technical', value: 'technical' }, { label: 'Soft Skills', value: 'soft-skills' }, { label: 'Career', value: 'career' }] }
     ],
-    'Scholarships': [{ title: 'Award Amount', type: 'awardAmount', options: [{ label: 'Under ₹25k', value: '<25k' }, { label: '₹25k-₹50k', value: '25k-50k' }, { label: 'Above ₹50k', value: '>50k' }] }],
-    'College Events': [{ title: 'Event Type', type: 'eventType', options: [{ label: 'Cultural', value: 'cultural' }, { label: 'Technical', value: 'technical' }, { label: 'Sports', value: 'sports' }] }],
+    'Scholarships': [
+        { title: 'Status', type: 'status', options: [{ label: 'Open', value: 'open' }, { label: 'Closing Soon', value: 'closing' }, { label: 'Closed', value: 'closed' }] },
+        { title: 'Award Amount', type: 'awardAmount', options: [{ label: 'Under ₹25k', value: '<25k' }, { label: '₹25k-₹50k', value: '25k-50k' }, { label: 'Above ₹50k', value: '>50k' }] },
+        { title: 'Eligibility', type: 'eligibility', options: [{ label: '10th Pass', value: '10th' }, { label: '12th Pass', value: '12th' }, { label: 'Undergraduate', value: 'ug' }, { label: 'Postgraduate', value: 'pg' }] }
+    ],
+    'College Events': [
+        { title: 'Status', type: 'status', options: [{ label: 'Registration Open', value: 'open' }, { label: 'Happening Soon', value: 'soon' }, { label: 'Ended', value: 'ended' }] },
+        { title: 'Location', type: 'location', options: [] }, // Dynamic Location Search
+        { title: 'Event Type', type: 'eventType', options: [{ label: 'Cultural', value: 'cultural' }, { label: 'Technical', value: 'technical' }, { label: 'Sports', value: 'sports' }, { label: 'Fest', value: 'fest' }] },
+        { title: 'Entry Fee', type: 'entryFee', options: [{ label: 'Free', value: 'free' }, { label: 'Paid', value: 'paid' }] }
+    ],
 };
 
 const EventsScreen = () => {
@@ -113,6 +154,9 @@ const EventsScreen = () => {
     // Advanced Filter State
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
+    const [selectedFilterCategory, setSelectedFilterCategory] = useState<number>(0); // Index of selected filter category in sidebar
+    const [locationSearch, setLocationSearch] = useState(''); // Search text for location filter
+    const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
     // Saved Events State
     const [savedEventIds, setSavedEventIds] = useState<Set<string>>(new Set());
@@ -150,6 +194,26 @@ const EventsScreen = () => {
     }, []);
 
     useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener(
+            'keyboardDidShow',
+            () => {
+                setKeyboardVisible(true);
+            }
+        );
+        const keyboardDidHideListener = Keyboard.addListener(
+            'keyboardDidHide',
+            () => {
+                setKeyboardVisible(false);
+            }
+        );
+
+        return () => {
+            keyboardDidHideListener.remove();
+            keyboardDidShowListener.remove();
+        };
+    }, []);
+
+    useEffect(() => {
         let filtered = events;
 
         // Apply category filter
@@ -174,11 +238,51 @@ const EventsScreen = () => {
                     if (selectedValues.length === 0) return true;
 
                     // Location filter (checks both isOnline and location fields)
+                    // Location filter (checks both isOnline and location fields)
                     if (filterType === 'location') {
                         return selectedValues.some(value => {
                             if (value === 'online') return event.isOnline === true;
                             if (value === 'offline') return event.isOnline === false;
-                            if (value === 'hybrid') return event.location?.toLowerCase().includes('hybrid');
+
+                            // Check if event location contains the selected city
+                            return event.location?.toLowerCase().includes(value.toLowerCase());
+                        });
+                    }
+
+                    // Status filter
+                    if (filterType === 'status') {
+                        // Assumption: 'status' is checked against 'isVerified' or date logic, 
+                        // BUT looking at data structure, 'status' might be inferred from date/results or a specific field.
+                        // For now, let's check against dynamicFields['status'] OR derived status.
+                        // If it's a dynamic field, it will be caught below, but let's be explicit if needed.
+                        // Actually, looking at the config, 'status' is likely a dynamic field for most categories.
+                        // However, if it fails, we might need to check 'isVerified' or date.
+                        // For 'Live', 'Upcoming', 'Ended':
+                        const now = new Date();
+                        const eventDate = new Date(event.date);
+                        return selectedValues.some(value => {
+                            if (value === 'live') return eventDate <= now && eventDate.getTime() + 86400000 > now.getTime(); // Rough 'Live'
+                            if (value === 'upcoming') return eventDate > now;
+                            if (value === 'ended' || value === 'closed') return eventDate < now;
+                            if (value === 'open') return true; // generic 'open' usually means upcoming or live
+                            return false;
+                        });
+                    }
+
+                    // Prize Pool / Fee filter (mapped to registrationFee or dynamic 'prizePool')
+                    if (filterType === 'prizePool' || filterType === 'entryFee' || filterType === 'stipend' || filterType === 'awardAmount') {
+                        const feeStr = event.registrationFee || event.dynamicFields?.[filterType] || '';
+                        if (!feeStr) return false;
+                        const fee = parseInt(feeStr.replace(/[^0-9]/g, '')) || 0;
+                        const isFree = feeStr.toLowerCase().includes('free');
+
+                        return selectedValues.some(value => {
+                            if (value === 'free' || value === 'unpaid') return isFree || fee === 0;
+                            if (value === 'paid') return !isFree && fee > 0;
+                            if (value === '<10k' || value === '<25k') return fee < (value.includes('25') ? 25000 : 10000);
+                            if (value === '>50k' || value === '>25k') return fee > (value.includes('25') ? 25000 : 50000);
+                            if (value === '10k-50k') return fee >= 10000 && fee <= 50000;
+                            if (value === '25k-50k') return fee >= 25000 && fee <= 50000;
                             return false;
                         });
                     }
@@ -186,6 +290,8 @@ const EventsScreen = () => {
                     // Dynamic field filters
                     if (event.dynamicFields) {
                         const fieldValue = event.dynamicFields[filterType];
+                        // If field is missing but filter is selected, checks if we should skip or fail. 
+                        // Usually fail, unless logic above handled it.
                         if (!fieldValue) return false;
 
                         return selectedValues.some(value => {
@@ -212,7 +318,7 @@ const EventsScreen = () => {
         }
 
         setFilteredEvents(filtered);
-    }, [activeSubFilter, events, searchQuery]);
+    }, [activeSubFilter, events, searchQuery, activeFilters]);
 
     const loadInitialData = async () => {
         setLoading(true);
@@ -326,9 +432,12 @@ const EventsScreen = () => {
             const isSelected = current.includes(value);
             return { ...prev, [filterType]: isSelected ? current.filter(v => v !== value) : [...current, value] };
         });
+        // Filters apply immediately via useEffect
     };
 
-    const clearAllFilters = () => setActiveFilters({});
+    const clearAllFilters = () => {
+        setActiveFilters({});
+    };
 
     const getCurrentFilters = (): FilterGroup[] => {
         if (activeSubFilter === 'All') return [];
@@ -401,14 +510,14 @@ const EventsScreen = () => {
 
     // Collapsible Header Logic
     const scrollY = useRef(new Animated.Value(0)).current;
-    const diffClamp = Animated.diffClamp(scrollY, 0, 140); // Estimated header height
+    const diffClamp = Animated.diffClamp(scrollY, 0, 170); // Estimated header height
     const translateY = diffClamp.interpolate({
-        inputRange: [0, 140],
-        outputRange: [0, -140],
+        inputRange: [0, 170],
+        outputRange: [0, -170],
     });
 
     const renderListHeader = () => (
-        <View>
+        <View style={{ backgroundColor: colors.background }}>
             {/* Recommendations Section */}
             {recommendedEvents.length > 0 && activeSubFilter === 'All' && showRecommendations && (
                 <View style={styles.sectionContainer}>
@@ -427,25 +536,14 @@ const EventsScreen = () => {
                 </View>
             )}
 
-            {/* Main Feed Title with Filter Button */}
-            <View style={styles.feedHeader}>
-                <Text style={[styles.feedTitle, { color: colors.text }]}>
-                    {activeSubFilter !== 'All' ? activeSubFilter : 'Your Feed'}
-                </Text>
-                {activeSubFilter !== 'All' && getCurrentFilters().length > 0 && (
-                    <TouchableOpacity
-                        style={[styles.feedFilterButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-                        onPress={() => setShowFilterModal(true)}
-                    >
-                        <Ionicons name="filter" size={18} color={colors.primary} />
-                        {getActiveFilterCount() > 0 && (
-                            <View style={styles.filterBadge}>
-                                <Text style={styles.filterBadgeText}>{getActiveFilterCount()}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                )}
-            </View>
+            {/* Main Feed Title - Only for 'All' View (filtered views have sticky header title) */}
+            {activeSubFilter === 'All' && (
+                <View style={styles.feedHeader}>
+                    <Text style={[styles.feedTitle, { color: colors.text }]}>
+                        Your Feed
+                    </Text>
+                </View>
+            )}
         </View>
     );
 
@@ -566,6 +664,64 @@ const EventsScreen = () => {
                                 />
                             </View>
                         )}
+
+                        {/* Filter Button Row - Fixed below categories */}
+                        {activeSubFilter !== 'All' && (
+                            <View style={{
+                                paddingHorizontal: 20,
+                                paddingBottom: 8,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                            }}>
+                                <Text style={{
+                                    fontSize: 18,
+                                    fontWeight: '700',
+                                    color: colors.text,
+                                }}>
+                                    {activeSubFilter}
+                                </Text>
+                                <TouchableOpacity
+                                    style={[
+                                        {
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            paddingHorizontal: 14,
+                                            paddingVertical: 8,
+                                            borderRadius: 12,
+                                            backgroundColor: getActiveFilterCount() > 0 ? colors.primary : (isDark ? '#1E293B' : '#FFF'),
+                                            borderWidth: 1,
+                                            borderColor: getActiveFilterCount() > 0 ? colors.primary : colors.border,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.1,
+                                            shadowRadius: 3,
+                                            elevation: 2,
+                                        }
+                                    ]}
+                                    onPress={() => setShowFilterModal(true)}
+                                >
+                                    <Ionicons
+                                        name="filter"
+                                        size={18}
+                                        color={getActiveFilterCount() > 0 ? '#FFF' : colors.primary}
+                                    />
+                                    <Text style={{
+                                        color: getActiveFilterCount() > 0 ? '#FFF' : colors.primary,
+                                        fontSize: 13,
+                                        fontWeight: '600',
+                                    }}>
+                                        {getCurrentFilters().length === 0 ? 'No Filters' : 'Filter'}
+                                    </Text>
+                                    {getActiveFilterCount() > 0 && (
+                                        <View style={[styles.filterBadge, { position: 'relative', top: 0, right: 0 }]}>
+                                            <Text style={styles.filterBadgeText}>{getActiveFilterCount()}</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 </SafeAreaView>
             </Animated.View>
@@ -590,7 +746,13 @@ const EventsScreen = () => {
                             })}
                         />)}
                     keyExtractor={(item) => item.id || `event-${Math.random()}`}
-                    contentContainerStyle={[styles.feed, { paddingTop: 140 }]} // Add padding for collapsible header
+                    contentContainerStyle={[
+                        styles.feed,
+                        {
+                            paddingTop: 170,
+                            paddingBottom: 150,
+                        }
+                    ]}
                     onScroll={Animated.event(
                         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                         { useNativeDriver: false }
@@ -698,87 +860,346 @@ const EventsScreen = () => {
                 </View>
             </Modal>
 
-            {/* Filter Modal */}
+            {/* Filter Modal - Horizontal Layout Like Unstop */}
             <Modal
                 animationType="slide"
                 transparent={true}
                 visible={showFilterModal}
                 onRequestClose={() => setShowFilterModal(false)}
             >
-                <View style={styles.modalContainer}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-                        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.modalTitle, { color: colors.text }]}>
-                                Filter {activeSubFilter}
-                            </Text>
-                            <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-                                <Ionicons name="close" size={24} color={colors.text} />
+                <View style={[styles.modalContainer, { justifyContent: 'flex-end', padding: 0 }]}>
+                    <View style={[
+                        styles.modalContent,
+                        {
+                            backgroundColor: colors.background,
+                            borderTopLeftRadius: 24,
+                            borderTopRightRadius: 24,
+                            borderBottomLeftRadius: 0,
+                            borderBottomRightRadius: 0,
+                            overflow: 'hidden',
+                            height: '55%',
+                            width: '100%',
+                        }
+                    ]}>
+                        {/* Drag Handle */}
+                        <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+                            <View style={{
+                                width: 40,
+                                height: 5,
+                                backgroundColor: isDark ? '#334155' : '#E2E8F0',
+                                borderRadius: 10
+                            }} />
+                        </View>
+
+                        {/* Header */}
+                        <View style={[
+                            styles.modalHeader,
+                            {
+                                backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                                borderBottomColor: colors.border,
+                                borderBottomWidth: 1,
+                                paddingBottom: 16,
+                                paddingTop: 4, // Reduced top padding defined in styles
+                            }
+                        ]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <View style={{
+                                    backgroundColor: colors.primary,
+                                    padding: 8,
+                                    borderRadius: 10,
+                                }}>
+                                    <Ionicons name="filter" size={20} color="#FFF" />
+                                </View>
+                                <View>
+                                    {getActiveFilterCount() > 0 && (
+                                        <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '500' }}>
+                                            {getActiveFilterCount()} {getActiveFilterCount() === 1 ? 'filter' : 'filters'} active
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+                            <TouchableOpacity onPress={() => setShowFilterModal(false)} style={{ padding: 4 }}>
+                                <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView contentContainerStyle={styles.modalScrollContent}>
-                            {getCurrentFilters().map((filterGroup, index) => (
-                                <View key={index} style={styles.filterGroupContainer}>
-                                    <Text style={[styles.filterGroupTitle, { color: colors.text }]}>{filterGroup.title}</Text>
-                                    <View style={styles.filterOptionsContainer}>
-                                        {filterGroup.options.map((option) => {
-                                            const isSelected = (activeFilters[filterGroup.type] || []).includes(option.value);
-                                            return (
-                                                <TouchableOpacity
-                                                    key={option.value}
-                                                    style={[
-                                                        styles.filterOption,
-                                                        { backgroundColor: colors.card, borderColor: colors.border },
-                                                        isSelected && { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : '#EEF2FF', borderColor: colors.primary }
-                                                    ]}
-                                                    onPress={() => toggleFilter(filterGroup.type, option.value)}
-                                                >
-                                                    <Text style={[
-                                                        styles.filterOptionText,
-                                                        { color: colors.textSecondary },
-                                                        isSelected && { color: colors.primary, fontWeight: '600' }
-                                                    ]}>
-                                                        {option.label}
-                                                    </Text>
-                                                    {isSelected && (
-                                                        <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
-                                                    )}
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </View>
-                                </View>
-                            ))}
+                        {/* Horizontal Filter Categories Tabs at TOP */}
+                        {getCurrentFilters().length > 0 && (
+                            <View style={{
+                                borderBottomWidth: 1,
+                                borderBottomColor: colors.border,
+                                backgroundColor: isDark ? '#0F172A' : '#F1F5F9',
+                                paddingVertical: 12,
+                            }}>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+                                >
+                                    {getCurrentFilters().map((filterGroup, index) => {
+                                        const isActive = selectedFilterCategory === index;
+                                        const filterCount = (activeFilters[filterGroup.type] || []).length;
+
+                                        return (
+                                            <TouchableOpacity
+                                                key={index}
+                                                style={{
+                                                    paddingHorizontal: 16,
+                                                    paddingVertical: 10,
+                                                    borderRadius: 20,
+                                                    backgroundColor: isActive ? colors.primary : (isDark ? '#1E293B' : '#FFF'),
+                                                    borderWidth: 1,
+                                                    borderColor: isActive ? colors.primary : colors.border,
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    gap: 6,
+                                                }}
+                                                onPress={() => setSelectedFilterCategory(index)}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={{
+                                                    fontSize: 14,
+                                                    fontWeight: '600',
+                                                    color: isActive ? '#FFF' : colors.text,
+                                                }}>
+                                                    {filterGroup.title}
+                                                </Text>
+                                                {filterCount > 0 && (
+                                                    <View style={{
+                                                        backgroundColor: isActive ? '#FFF' : colors.primary,
+                                                        borderRadius: 10,
+                                                        minWidth: 20,
+                                                        height: 20,
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        paddingHorizontal: 6,
+                                                    }}>
+                                                        <Text style={{
+                                                            color: isActive ? colors.primary : '#FFF',
+                                                            fontSize: 11,
+                                                            fontWeight: '700'
+                                                        }}>
+                                                            {filterCount}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        {/* Filter Options Area - MIDDLE */}
+                        <ScrollView
+                            style={{ flex: 1 }}
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ padding: 20 }}
+                        >
+                            {getCurrentFilters().length > 0 && (
+                                <>
+                                    {getCurrentFilters()[selectedFilterCategory]?.type === 'location' ? (
+                                        <View>
+                                            {/* Location Search Bar */}
+                                            <View style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+                                                borderRadius: 12,
+                                                paddingHorizontal: 12,
+                                                height: 46,
+                                                marginBottom: 20,
+                                                borderWidth: 1,
+                                                borderColor: isDark ? '#334155' : '#E2E8F0',
+                                            }}>
+                                                <Ionicons name="search" size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                                                <TextInput
+                                                    style={{
+                                                        flex: 1,
+                                                        fontSize: 15,
+                                                        color: colors.text,
+                                                        fontWeight: '500'
+                                                    }}
+                                                    placeholder="Search city..."
+                                                    placeholderTextColor={colors.textSecondary}
+                                                    value={locationSearch}
+                                                    onChangeText={setLocationSearch}
+                                                />
+                                                {locationSearch.length > 0 && (
+                                                    <TouchableOpacity onPress={() => setLocationSearch('')}>
+                                                        <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+
+                                            {/* Popular/Filtered Cities */}
+                                            <Text style={{
+                                                fontSize: 14,
+                                                fontWeight: '600',
+                                                color: colors.textSecondary,
+                                                marginBottom: 12,
+                                                marginLeft: 4
+                                            }}>
+                                                {locationSearch ? 'Search Results' : 'Popular Cities'}
+                                            </Text>
+
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                                {POPULAR_CITIES.filter(city => city.toLowerCase().includes(locationSearch.toLowerCase())).map((city) => {
+                                                    const isSelected = (activeFilters['location'] || []).includes(city);
+
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={city}
+                                                            style={{
+                                                                paddingHorizontal: 18,
+                                                                paddingVertical: 10,
+                                                                borderRadius: 20,
+                                                                borderWidth: 1.5,
+                                                                borderColor: isSelected ? colors.primary : colors.border,
+                                                                backgroundColor: isSelected
+                                                                    ? (isDark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF')
+                                                                    : (isDark ? '#1E293B' : '#FFF'),
+                                                                flexDirection: 'row',
+                                                                alignItems: 'center',
+                                                                gap: 6,
+                                                            }}
+                                                            onPress={() => toggleFilter('location', city)}
+                                                            activeOpacity={0.7}
+                                                        >
+                                                            {isSelected && (
+                                                                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+                                                            )}
+                                                            <Text style={{
+                                                                fontSize: 14,
+                                                                fontWeight: isSelected ? '600' : '500',
+                                                                color: isSelected ? colors.primary : colors.textSecondary,
+                                                            }}>
+                                                                {city}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                            </View>
+
+                                            {POPULAR_CITIES.filter(city => city.toLowerCase().includes(locationSearch.toLowerCase())).length === 0 && (
+                                                <Text style={{
+                                                    textAlign: 'center',
+                                                    marginTop: 20,
+                                                    color: colors.textSecondary
+                                                }}>
+                                                    No cities found matching "{locationSearch}"
+                                                </Text>
+                                            )}
+                                        </View>
+                                    ) : (
+                                        /* Standard Filter Options */
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                            {getCurrentFilters()[selectedFilterCategory]?.options.map((option) => {
+                                                const isSelected = (activeFilters[getCurrentFilters()[selectedFilterCategory]?.type] || []).includes(option.value);
+
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={option.value}
+                                                        style={{
+                                                            paddingHorizontal: 18,
+                                                            paddingVertical: 10,
+                                                            borderRadius: 20,
+                                                            borderWidth: 1.5,
+                                                            borderColor: isSelected ? colors.primary : colors.border,
+                                                            backgroundColor: isSelected
+                                                                ? (isDark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF')
+                                                                : (isDark ? '#1E293B' : '#FFF'),
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            gap: 6,
+                                                        }}
+                                                        onPress={() => toggleFilter(getCurrentFilters()[selectedFilterCategory]?.type, option.value)}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        {isSelected && (
+                                                            <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+                                                        )}
+                                                        <Text style={{
+                                                            fontSize: 14,
+                                                            fontWeight: isSelected ? '600' : '500',
+                                                            color: isSelected ? colors.primary : colors.textSecondary,
+                                                        }}>
+                                                            {option.label}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    )}
+
+                                    {/* Clear option for current category - Bottom Right */}
+                                    {(activeFilters[getCurrentFilters()[selectedFilterCategory]?.type] || []).length > 0 && (
+                                        <TouchableOpacity
+                                            style={{
+                                                alignSelf: 'flex-end',
+                                                marginTop: 16,
+                                                paddingHorizontal: 4,
+                                                paddingVertical: 6,
+                                            }}
+                                            onPress={() => {
+                                                const filterType = getCurrentFilters()[selectedFilterCategory]?.type;
+                                                if (filterType) {
+                                                    setActiveFilters(prev => ({ ...prev, [filterType]: [] }));
+                                                }
+                                            }}
+                                        >
+                                            <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '600' }}>
+                                                Clear
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </>
+                            )}
 
                             {getCurrentFilters().length === 0 && (
-                                <View style={styles.noFiltersContainer}>
-                                    <Ionicons name="options-outline" size={48} color={colors.textSecondary} />
-                                    <Text style={[styles.noFiltersText, { color: colors.textSecondary }]}>No filters available for this category</Text>
+                                <View style={{ paddingVertical: 60, alignItems: 'center' }}>
+                                    <View style={{
+                                        backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+                                        padding: 20,
+                                        borderRadius: 100,
+                                        marginBottom: 16
+                                    }}>
+                                        <Ionicons name="options-outline" size={48} color={colors.textSecondary} />
+                                    </View>
+                                    <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+                                        No Filters Available
+                                    </Text>
+                                    <Text style={{ color: colors.textSecondary, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 }}>
+                                        This category doesn't have additional filter options yet
+                                    </Text>
                                 </View>
                             )}
                         </ScrollView>
 
-                        <View style={[styles.modalFooter, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-                                onPress={clearAllFilters}
-                                disabled={getActiveFilterCount() === 0}
-                            >
-                                <Text style={[
-                                    styles.cancelButtonText,
-                                    { color: colors.text },
-                                    getActiveFilterCount() === 0 && styles.disabledButtonText
-                                ]}>
-                                    Clear All
-                                </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.saveButton, { backgroundColor: colors.primary }]}
-                                onPress={() => setShowFilterModal(false)}
-                            >
-                                <Text style={styles.saveButtonText}>Apply Filters</Text>
-                            </TouchableOpacity>
-                        </View>
+                        {/* Footer Buttons - Hide when searching location to show more list */}
+                        {!isKeyboardVisible && (
+                            <View style={[styles.modalFooter, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.cancelButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                                    onPress={clearAllFilters}
+                                    disabled={getActiveFilterCount() === 0}
+                                >
+                                    <Text style={[
+                                        styles.cancelButtonText,
+                                        { color: colors.text },
+                                        getActiveFilterCount() === 0 && styles.disabledButtonText
+                                    ]}>
+                                        Clear All
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.saveButton, { backgroundColor: colors.primary }]}
+                                    onPress={() => setShowFilterModal(false)}
+                                >
+                                    <Text style={styles.saveButtonText}>Show Result</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 </View>
             </Modal>

@@ -117,6 +117,7 @@ const DocumentDetailScreen = () => {
                     likedBy: [],
                     tags: [], // Default
                     approved: true,
+                    accessLevel: 'public', // Default access level for offline docs
                     createdAt: new Date(localDoc.downloadedAt),
                     updatedAt: new Date(localDoc.downloadedAt),
                 });

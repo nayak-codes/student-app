@@ -121,6 +121,7 @@ const DownloadsScreen = () => {
                 approved: true,
                 createdAt: new Date(doc.downloadedAt),
                 updatedAt: new Date(doc.downloadedAt),
+                accessLevel: 'public', // Default for offline resources
             };
             mergedMap.set(doc.id, resource);
         });

@@ -70,6 +70,17 @@ const BookCard = ({ item, onPressCover, onPressInfo, onOptionPress, style }: Boo
                                 </View>
                             )
                         )}
+
+                        {/* Access Level Badge */}
+                        {item.accessLevel !== 'public' && (
+                            <View style={[styles.accessBadge, { backgroundColor: item.accessLevel === 'protected' ? '#DC2626' : '#6366F1', marginTop: 4 }]}>
+                                <Ionicons
+                                    name={item.accessLevel === 'protected' ? 'lock-closed' : 'people'}
+                                    size={8}
+                                    color="#FFF"
+                                />
+                            </View>
+                        )}
                     </View>
 
                     {/* Options Button (Overlay) - Only show if callback provided */}
@@ -161,6 +172,12 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 8,
         fontWeight: 'bold',
+    },
+    accessBadge: {
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 4,
+        alignSelf: 'flex-start',
     },
     optionsButton: {
         position: 'absolute',
