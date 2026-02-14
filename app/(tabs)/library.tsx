@@ -353,13 +353,7 @@ const LibraryScreen = () => {
       </Animated.ScrollView>
 
       {/* Floating Upload Button - Bottom Right */}
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => setShowUploadModal(true)}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="add" size={32} color="#FFF" />
-      </TouchableOpacity>
+
 
       <UploadResourceModal
         visible={showUploadModal}

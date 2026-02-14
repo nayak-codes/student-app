@@ -190,11 +190,11 @@ const PostDetailModal: React.FC<PostDetailModalProps> = ({ visible, onClose, pos
 
                 {/* Header */}
                 <SafeAreaView>
-                    <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                    <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: 16 }]}>
+                        <TouchableOpacity onPress={onClose} style={[styles.closeButton, { marginTop: 4 }]}>
                             <Ionicons name="close" size={28} color={colors.text} />
                         </TouchableOpacity>
-                        <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
+                        <Text style={[styles.headerTitle, { color: colors.text, marginTop: 4 }]}>Post</Text>
                         <View style={{ width: 28 }} />
                     </View>
                 </SafeAreaView>

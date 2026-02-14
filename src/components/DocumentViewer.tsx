@@ -18,6 +18,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { getPdfHtml } from '../utils/pdfHtml';
 
@@ -96,40 +97,42 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
         <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
             <View style={styles.container}>
                 {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                        <Ionicons name="close" size={28} color="#FFF" />
-                    </TouchableOpacity>
-                    <View style={styles.headerInfo}>
-                        <Text style={styles.headerTitle} numberOfLines={1}>
-                            {documentName}
-                        </Text>
-                        <Text style={styles.headerSubtitle}>
-                            {isImage ? 'Image' : isPDF ? 'PDF Document' : 'Document'}
-                        </Text>
-                    </View>
-                    <View style={styles.headerActions}>
-                        {isImage && (
-                            <TouchableOpacity
-                                style={[styles.headerButton, downloading && styles.headerButtonDisabled]}
-                                onPress={handleSaveToGallery}
-                                disabled={downloading}
-                            >
-                                {downloading ? (
-                                    <ActivityIndicator size="small" color="#FFF" />
-                                ) : (
-                                    <Ionicons name="download" size={22} color="#FFF" />
-                                )}
-                            </TouchableOpacity>
-                        )}
-                        <TouchableOpacity
-                            style={styles.headerButton}
-                            onPress={handleOpenInBrowser}
-                        >
-                            <Ionicons name="open-outline" size={22} color="#FFF" />
+                <SafeAreaView edges={['top']} style={styles.safeArea}>
+                    <View style={styles.header}>
+                        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                            <Ionicons name="close" size={28} color="#FFF" />
                         </TouchableOpacity>
+                        <View style={styles.headerInfo}>
+                            <Text style={styles.headerTitle} numberOfLines={1}>
+                                {documentName}
+                            </Text>
+                            <Text style={styles.headerSubtitle}>
+                                {isImage ? 'Image' : isPDF ? 'PDF Document' : 'Document'}
+                            </Text>
+                        </View>
+                        <View style={styles.headerActions}>
+                            {isImage && (
+                                <TouchableOpacity
+                                    style={[styles.headerButton, downloading && styles.headerButtonDisabled]}
+                                    onPress={handleSaveToGallery}
+                                    disabled={downloading}
+                                >
+                                    {downloading ? (
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                    ) : (
+                                        <Ionicons name="download" size={22} color="#FFF" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                            <TouchableOpacity
+                                style={styles.headerButton}
+                                onPress={handleOpenInBrowser}
+                            >
+                                <Ionicons name="open-outline" size={22} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
+                </SafeAreaView>
 
                 {/* Content */}
                 <View style={styles.content}>
@@ -208,14 +211,16 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#000',
     },
+    safeArea: {
+        backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingVertical: 10,
-        paddingTop: 0, // Removed extra padding
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        paddingVertical: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.95)',
     },
     closeButton: {
         width: 44,
@@ -228,6 +233,7 @@ const styles = StyleSheet.create({
     headerInfo: {
         flex: 1,
         marginHorizontal: 12,
+        minWidth: 0,
     },
     headerTitle: {
         fontSize: 16,

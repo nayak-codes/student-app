@@ -63,7 +63,7 @@ import {
 } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type TabType = 'home' | 'posts' | 'videos' | 'docs' | 'clips' | 'events';
+type TabType = 'posts' | 'docs' | 'clips' | 'events' | 'playlists';
 
 
 
@@ -784,18 +784,11 @@ const ProfileScreen = () => {
 
         // 1. Filter by Tab
         switch (activeTab) {
-            case 'home':
-                content = [...posts]; // Show all posts in Home
-                break;
             case 'posts':
-                content = posts.filter(p => p.type === 'image' || p.type === 'note' || p.type === 'news');
-                break;
-            case 'videos':
-                // Show long-form videos (Exclude things that look like shorts)
-                content = posts.filter(p =>
-                    p.type === 'video' &&
-                    !p.videoLink?.includes('shorts')
-                );
+                // Show all posts except clips if we want to separate them?
+                // Or just show everything that isn't explicitly a clip?
+                // Current logic implies 'posts' includes standard posts.
+                content = posts.filter(p => !p.type || p.type === 'image' || p.type === 'note' || p.type === 'news');
                 break;
             case 'clips':
                 // Handled in render directly for specific logic, but keeping this safe
@@ -926,7 +919,7 @@ const ProfileScreen = () => {
                         <View style={styles.ytHandleRow}>
                             <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>@{username}</Text>
                             <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
-                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Subscribers</Text>
+                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Followers</Text>
                             <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
                             <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.posts} Posts</Text>
                         </View>
@@ -985,7 +978,7 @@ const ProfileScreen = () => {
                                                             styles.primaryButtonText,
                                                             connectionStatus.isFollowing && styles.followingButtonText
                                                         ]}>
-                                                            {connectionStatus.isFollowing ? 'Subscribed' : 'Subscribe'}
+                                                            {connectionStatus.isFollowing ? 'Following' : 'Follow'}
                                                         </Text>
                                                     </>
                                                 )}
@@ -1081,24 +1074,10 @@ const ProfileScreen = () => {
                     <View style={[styles.ytTabsContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ytTabsContent}>
                             <TouchableOpacity
-                                style={[styles.ytTab, activeTab === 'home' && styles.ytTabActive, { borderBottomColor: activeTab === 'home' ? colors.text : 'transparent' }]}
-                                onPress={() => setActiveTab('home')}
-                            >
-                                <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.text }]}>Home</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
                                 style={[styles.ytTab, activeTab === 'posts' && styles.ytTabActive, { borderBottomColor: activeTab === 'posts' ? colors.text : 'transparent' }]}
                                 onPress={() => setActiveTab('posts')}
                             >
                                 <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'posts' && { color: colors.text }]}>Posts</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.ytTab, activeTab === 'videos' && styles.ytTabActive, { borderBottomColor: activeTab === 'videos' ? colors.text : 'transparent' }]}
-                                onPress={() => setActiveTab('videos')}
-                            >
-                                <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'videos' && { color: colors.text }]}>Videos</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -1127,7 +1106,7 @@ const ProfileScreen = () => {
                     </View>
 
                     {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}
-                    {activeTab !== 'home' && (
+                    {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}{
                         <View style={[styles.subFilterContainer, { backgroundColor: colors.background }]}>
                             <View style={{ flexDirection: 'row', gap: 12 }}>
                                 {['recent', 'old', 'popular'].map((type) => (
@@ -1165,7 +1144,7 @@ const ProfileScreen = () => {
                                 </TouchableOpacity>
                             )}
                         </View>
-                    )}
+                    }
 
                     {/* Content Grid */}
                 </View>
@@ -1180,91 +1159,14 @@ const ProfileScreen = () => {
                         ) : (
                             <View style={[
                                 styles.gridContainer,
-                                (activeTab === 'videos' || activeTab === 'posts') && viewMode === 'list' && {
+                                (activeTab === 'posts') && viewMode === 'list' && {
                                     flexDirection: 'column',
                                     flexWrap: 'nowrap',
                                     width: Dimensions.get('window').width,
                                     alignSelf: 'center'
                                 }
                             ]}>
-                                {activeTab === 'home' ? (
-                                    <View>
-                                        {/* Latest Posts Section */}
-                                        <View style={styles.homeSectionHeader}>
-                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Latest Posts</Text>
-                                            <TouchableOpacity onPress={() => setActiveTab('posts')}>
-                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-                                            {posts.filter(p => !p.videoLink && p.type !== 'video').slice(0, 5).map((item) => (
-                                                <View key={item.id} style={{ width: 350, marginRight: 16 }}>
-                                                    <FeedPost
-                                                        post={item}
-                                                        currentUserId={authUser?.uid || ''}
-                                                        onLike={handleLike}
-                                                        onReact={handleReact}
-                                                        onComment={handleComment}
-                                                        onShare={handleShare}
-                                                        onSave={handleSavePost}
-                                                        onDelete={() => handleDeletePost(item)}
-                                                        onEdit={() => handleEditPost(item)}
-                                                        currentUserLiked={item.likedBy?.includes(authUser?.uid || '')}
-                                                        currentUserSaved={item.savedBy?.includes(authUser?.uid || '')}
-                                                        currentUserReaction={item.reactedBy?.[authUser?.uid || '']}
-                                                    />
-                                                </View>
-                                            ))}
-                                            {posts.filter(p => !p.videoLink && p.type !== 'video').length === 0 && (
-                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic' }}>No recent posts</Text>
-                                            )}
-                                        </ScrollView>
-
-                                        {/* Videos Section */}
-                                        <View style={styles.homeSectionHeader}>
-                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Videos</Text>
-                                            <TouchableOpacity onPress={() => setActiveTab('videos')}>
-                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                        <View>
-                                            {posts.filter(p => p.type === 'video' || !!p.videoLink).slice(0, 3).map((item) => (
-                                                <VideoListItem
-                                                    key={item.id}
-                                                    post={item}
-                                                    onPress={(p) => openVideo(p.videoLink || '', p)}
-                                                    onDelete={isOwnProfile ? handleDeletePost : undefined}
-                                                    onEdit={isOwnProfile ? handleEditPost : undefined}
-                                                />
-                                            ))}
-                                            {posts.filter(p => p.type === 'video' || !!p.videoLink).length === 0 && (
-                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic', marginBottom: 16 }}>No videos yet</Text>
-                                            )}
-                                        </View>
-
-                                        {/* Docs Section */}
-                                        <View style={styles.homeSectionHeader}>
-                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Documents</Text>
-                                            <TouchableOpacity onPress={() => setActiveTab('docs')}>
-                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-                                            {resources.slice(0, 5).map((item) => (
-                                                <View key={item.id} style={{ marginRight: 12 }}>
-                                                    <BookCard
-                                                        item={item}
-                                                        onPressCover={openResource}
-                                                        onPressInfo={(r) => router.push({ pathname: '/document-detail', params: { id: r.id } })}
-                                                    />
-                                                </View>
-                                            ))}
-                                            {resources.length === 0 && (
-                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic' }}>No documents</Text>
-                                            )}
-                                        </ScrollView>
-                                    </View>
-                                ) : activeTab === 'docs' ? (
+                                {activeTab === 'docs' ? (
                                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', paddingHorizontal: 16 }}>
                                         {getFilteredAndSortedContent().map((item: any, index: number) => (
                                             <BookCard
@@ -1292,16 +1194,6 @@ const ProfileScreen = () => {
                                             />
                                         ))}
                                     </View>
-                                ) : activeTab === 'videos' ? (
-                                    getFilteredAndSortedContent().map((item: any) => (
-                                        <VideoListItem
-                                            key={item.id}
-                                            post={item}
-                                            onPress={(p) => openVideo(p.videoLink || '', p)}
-                                            onDelete={isOwnProfile ? handleDeletePost : undefined}
-                                            onEdit={isOwnProfile ? handleEditPost : undefined}
-                                        />
-                                    ))
                                 ) : activeTab === 'clips' ? (
                                     <View style={styles.clipsGridContainer}>
                                         {/* Filter specifically for SHORTS/CLIPS structure based on URL or Type */}

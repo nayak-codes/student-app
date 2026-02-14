@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
@@ -7,10 +6,8 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -66,7 +63,27 @@ export default function LoginScreen() {
       await signIn(email, password);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      let title = "Login Failed";
+      let message = "Something went wrong. Please try again.";
+
+      if (error.code === 'auth/invalid-credential' || error.message.includes('invalid-credential')) {
+        title = "Incorrect Details";
+        message = "The email or password you entered is incorrect. Please try again.";
+      } else if (error.code === 'auth/user-not-found' || error.message.includes('user-not-found')) {
+        title = "Account Not Found";
+        message = "No account found with this email. Please sign up first.";
+      } else if (error.code === 'auth/wrong-password' || error.message.includes('wrong-password')) {
+        title = "Incorrect Password";
+        message = "The password you entered is incorrect.";
+      } else if (error.code === 'auth/invalid-email' || error.message.includes('invalid-email')) {
+        title = "Invalid Email";
+        message = "Please enter a valid email address.";
+      } else if (error.code === 'auth/too-many-requests') {
+        title = "Too Many Attempts";
+        message = "Access to this account has been temporarily disabled due to many failed login attempts. Please try again later.";
+      }
+
+      Alert.alert(title, message);
     } finally {
       setLoading(false);
     }
@@ -96,171 +113,91 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar style="dark" />
 
-      {/* Background Gradient Mesh (Subtle) */}
-      <View style={styles.backgroundMesh}>
-        <View style={[styles.meshBlob, styles.blob1]} />
-        <View style={[styles.meshBlob, styles.blob2]} />
-      </View>
+      {/* Main Content Centered */}
+      <View style={styles.contentContainer}>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
+        {/* Logo Section */}
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoText}>Vidhyardhi</Text>
+        </View>
 
-          {/* Header */}
-          <View style={styles.header}>
-            {/* Logo */}
-            <Image
-              source={require('../assets/images/vidhyardhi_icon.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
+        {/* Form Inputs */}
+        <View style={styles.formContainer}>
+          <TextInput
+            style={styles.instagramInput}
+            placeholder="Email"
+            placeholderTextColor="#94A3B8"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            editable={!loading}
+          />
+
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Password"
+              placeholderTextColor="#94A3B8"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              editable={!loading}
             />
-            <Text style={styles.logo}>Vidhyardhi</Text>
-            <Text style={styles.welcomeText}>Welcome Back! 👋</Text>
-            <Text style={styles.subtitle}>Log in to catch up with your campus</Text>
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+              <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#94A3B8" />
+            </TouchableOpacity>
           </View>
 
-          {/* Form */}
-          <View style={styles.formCard}>
-            {/* Email Input */}
-            <View style={styles.inputWrapper}>
-              <View style={[
-                styles.inputContainer,
-                focusedInput === 'email' && styles.inputContainerFocused
-              ]}>
-                <Ionicons
-                  name="at"
-                  size={20}
-                  color={focusedInput === 'email' ? COLORS.primary : COLORS.textSecondary}
-                  style={styles.inputIcon}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Email</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="you@example.com"
-                    placeholderTextColor={COLORS.textSecondary}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    textContentType="emailAddress"
-                    importantForAutofill="yes"
-                    onFocus={() => setFocusedInput('email')}
-                    onBlur={() => setFocusedInput(null)}
-                    editable={!loading}
-                  />
-                </View>
-              </View>
-            </View>
+          {/* Forgot Password Link - Right Aligned or Centered like Insta */}
+          <TouchableOpacity style={styles.forgotPassword} onPress={() => { }}>
+            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+          </TouchableOpacity>
 
-            {/* Password Input */}
-            <View style={styles.inputWrapper}>
-              <View style={[
-                styles.inputContainer,
-                focusedInput === 'password' && styles.inputContainerFocused
-              ]}>
-                <Ionicons
-                  name="key-outline"
-                  size={20}
-                  color={focusedInput === 'password' ? COLORS.primary : COLORS.textSecondary}
-                  style={styles.inputIcon}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Password</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Your secret key"
-                    placeholderTextColor={COLORS.textSecondary}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoComplete="password"
-                    textContentType="password"
-                    importantForAutofill="yes"
-                    onFocus={() => setFocusedInput('password')}
-                    onBlur={() => setFocusedInput(null)}
-                    editable={!loading}
-                    onSubmitEditing={handleLogin}
-                    returnKeyType="go"
-                  />
-                </View>
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeIcon}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons
-                    name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                    size={20}
-                    color={COLORS.textSecondary}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
+          {/* Login Button */}
+          <TouchableOpacity
+            style={[styles.instagramButton, (!email || !password) && styles.instagramButtonDisabled]}
+            onPress={handleLogin}
+            disabled={loading || !email || !password}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.instagramButtonText}>Log in</Text>
+            )}
+          </TouchableOpacity>
 
-            {/* Forgot Password */}
-            <TouchableOpacity style={styles.forgotPassword}>
-              <Text style={styles.forgotPasswordText}>Recover Password?</Text>
-            </TouchableOpacity>
-
-            {/* Login Button */}
-            <TouchableOpacity
-              style={styles.loginButtonShadow}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={[COLORS.primary, COLORS.primaryDark]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.loginButton}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Text style={styles.loginButtonText}>Enter StudentVerse</Text>
-                    <Ionicons name="rocket-outline" size={20} color="#FFF" style={{ marginLeft: 8 }} />
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* OR Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Social Login - Temporarily disabled until OAuth is configured */}
-            {/* <View style={styles.socialRow}>
-              <TouchableOpacity
-                style={styles.socialButton}
-                onPress={handleGoogleSignIn}
-              >
-                <Ionicons name="logo-google" size={24} color="#DB4437" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-apple" size={24} color="#000" />
-              </TouchableOpacity>
+          {/* Divider OR */}
+          {/* <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
             </View> */}
 
-            {/* Sign Up Link */}
-            <View style={styles.signupContainer}>
-              <Text style={styles.signupText}>New to the Verse? </Text>
-              <TouchableOpacity onPress={() => router.push('/signup')}>
-                <Text style={styles.signupLink}>Join Now</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {/* Google Login Link (Insta style often has FB link here) */}
+          {/* <TouchableOpacity style={styles.googleLink} onPress={handleGoogleSignIn}>
+                <Ionicons name="logo-google" size={20} color="#4F46E5" />
+                <Text style={styles.googleLinkText}>Log in with Google</Text>
+            </TouchableOpacity> */}
+
         </View>
-      </ScrollView>
+      </View>
+
+      {/* Footer Area - "Don't have an account? Sign up" */}
+      <View style={styles.footerContainer}>
+        <View style={styles.footerDivider} />
+        <View style={styles.footerContent}>
+          <Text style={styles.footerText}>Don't have an account?</Text>
+          <TouchableOpacity onPress={() => router.push('/signup')}>
+            <Text style={styles.footerLink}>Sign up</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
     </KeyboardAvoidingView>
   );
 }
@@ -268,214 +205,138 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  backgroundMesh: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    zIndex: -1,
-    overflow: 'hidden',
-  },
-  meshBlob: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    opacity: 0.2, // Slightly more vibrant
-    filter: 'blur(60px)',
-  },
-  blob1: {
-    backgroundColor: '#818CF8', // Indigo 400
-    top: -100,
-    right: -80,
-  },
-  blob2: {
-    backgroundColor: '#C084FC', // Purple 400
-    bottom: -80,
-    left: -50,
-  },
-  scrollContent: {
-    flexGrow: 1,
+    backgroundColor: '#FFFFFF', // Clean White
     justifyContent: 'center',
   },
-  content: {
+  contentContainer: {
     flex: 1,
     justifyContent: 'center',
-    padding: 24,
-    paddingTop: 60,
+    paddingHorizontal: 30, // Standard padding
   },
-  header: {
+  logoContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingTop: 60,
-    backgroundColor: COLORS.surface,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 5,
-    marginBottom: 24,
+    marginBottom: 40,
   },
   logoImage: {
-    width: 80,
-    height: 80,
-    marginBottom: 16,
+    width: 60,
+    height: 60,
+    marginBottom: 10,
   },
-  logo: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: COLORS.text,
-    letterSpacing: -0.5,
-    marginBottom: 8,
+  logoText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    fontSize: 32,
+    fontWeight: 'bold', // Or a specific font like 'Billabong' for true Insta feel if available
+    color: '#000',
   },
-  welcomeText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    maxWidth: '85%',
-    lineHeight: 22,
-    opacity: 0.9,
-  },
-  formCard: {
+  formContainer: {
     width: '100%',
-    // Optional: Add card styling if distinct from background
   },
-  inputWrapper: {
-    marginBottom: 20,
+  instagramInput: {
+    backgroundColor: '#FAFAFA', // Very light grey
+    borderColor: '#DBDBDB', // Subtle border
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 14,
+    marginBottom: 12,
+    color: '#262626',
   },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-    textTransform: 'none',
-  },
-  inputContainer: {
+  passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 20, // Softer corners
-    paddingHorizontal: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    height: 60, // Taller inputs
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    backgroundColor: '#FAFAFA',
+    borderColor: '#DBDBDB',
+    borderWidth: 1,
+    borderRadius: 5,
+    marginBottom: 12,
   },
-  inputContainerFocused: {
-    borderColor: COLORS.primary,
-    backgroundColor: '#F5F3FF', // Very light violet tint
-    transform: [{ scale: 1.01 }], // Subtle pop
-  },
-  inputIcon: {
-    marginRight: 14,
-  },
-  input: {
+  passwordInput: {
     flex: 1,
-    fontSize: 16,
-    color: COLORS.text,
-    height: '100%',
-    fontWeight: '500',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#262626',
   },
   eyeIcon: {
-    padding: 8,
+    padding: 10,
   },
   forgotPassword: {
-    alignSelf: 'center',
-    marginBottom: 24,
+    alignItems: 'flex-end',
+    marginBottom: 30,
   },
   forgotPasswordText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
+    color: '#3797EF', // Insta Blue
+    fontSize: 12,
     fontWeight: '600',
-    textDecorationLine: 'underline',
   },
-  loginButtonShadow: {
-    shadowColor: COLORS.primaryDark,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 15,
-    marginBottom: 32,
-  },
-  loginButton: {
-    borderRadius: 20,
-    paddingVertical: 18,
-    flexDirection: 'row',
+  instagramButton: {
+    backgroundColor: '#3797EF', // Insta Blue
+    borderRadius: 5,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  instagramButtonDisabled: {
+    backgroundColor: '#B2DFFC', // Faded Blue
   },
-  divider: {
+  instagramButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    opacity: 0.8,
+    marginVertical: 20,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: '#DBDBDB',
   },
   dividerText: {
-    marginHorizontal: 16,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '500',
-    textTransform: 'uppercase',
+    marginHorizontal: 15,
+    color: '#8E8E8E',
+    fontWeight: '600',
+    fontSize: 12,
   },
-  socialRow: {
+  googleLink: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-    marginBottom: 32,
-  },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    justifyContent: 'center',
+    marginTop: 10,
   },
-  signupContainer: {
+  googleLinkText: {
+    color: '#3797EF',
+    fontWeight: '700',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  footerContainer: {
+    paddingVertical: 20,
+    paddingBottom: 50, // Added extra padding for Android navigation bar
+    alignItems: 'center',
+    marginBottom: Platform.OS === 'ios' ? 20 : 0,
+  },
+  footerDivider: {
+    height: 1,
+    width: '100%',
+    backgroundColor: '#DBDBDB',
+    marginBottom: 15,
+  },
+  footerContent: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 20,
   },
-  signupText: {
-    color: COLORS.textSecondary,
-    fontSize: 16,
-    fontWeight: '500',
+  footerText: {
+    color: '#8E8E8E',
+    fontSize: 12,
+    marginRight: 5,
   },
-  signupLink: {
-    color: COLORS.primary,
-    fontSize: 16,
-    fontWeight: '800',
+  footerLink: {
+    color: '#3797EF', // Insta Blue
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

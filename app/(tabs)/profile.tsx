@@ -20,7 +20,6 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import {
     getPendingFriendRequests
 } from '../../src/services/connectionService';
-import { getHistory, HistoryItem } from '../../src/services/historyService';
 import { Playlist } from '../../src/services/playlistService';
 
 const ProfileMenuScreen = () => {
@@ -28,22 +27,14 @@ const ProfileMenuScreen = () => {
     const { userProfile, user } = useAuth(); // Need user for ID
     const { colors, isDark } = useTheme();
 
-    const [recentHistory, setRecentHistory] = useState<HistoryItem[]>([]);
-
     const [pendingRequests, setPendingRequests] = useState<any[]>([]);
     const [customPlaylists, setCustomPlaylists] = useState<Playlist[]>([]);
 
     useFocusEffect(
         useCallback(() => {
-            loadRecentHistory();
             loadPendingRequests();
         }, [user?.uid])
     );
-
-    const loadRecentHistory = async () => {
-        const history = await getHistory();
-        setRecentHistory(history.slice(0, 5));
-    };
 
     const loadPendingRequests = async () => {
         if (user?.uid) {
@@ -160,50 +151,6 @@ const ProfileMenuScreen = () => {
 
                 <View style={[styles.sectionDivider, { backgroundColor: colors.cardBorder }]} />
 
-                {/* History Section */}
-                <View style={styles.section}>
-                    <View style={[styles.sectionHeader, { justifyContent: 'flex-end' }]}>
-                        <TouchableOpacity
-                            onPress={() => router.push('/history')}
-                            style={[styles.historyButtonBox, { backgroundColor: colors.cardBorder }]}
-                        >
-                            <Text style={[styles.sectionTitle, { color: colors.text }]}>History</Text>
-                            <Ionicons name="arrow-forward" size={20} color={colors.text} style={{ marginLeft: 8 }} />
-                        </TouchableOpacity>
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.historyList}>
-                        {recentHistory.length > 0 ? recentHistory.map((item) => (
-                            <TouchableOpacity key={item.id + item.timestamp} style={styles.historyCard}>
-                                {item.image ? (
-                                    <Image source={{ uri: item.image }} style={styles.historyImage} />
-                                ) : (
-                                    <View style={[styles.historyImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.cardBorder }]}>
-                                        <Ionicons
-                                            name={item.type === 'pdf' ? 'document-text' : 'newspaper'}
-                                            size={32}
-                                            color="#94A3B8"
-                                        />
-                                    </View>
-                                )}
-                                {(item.type === 'video' || item.type === 'clip') && (
-                                    <View style={styles.historyOverlay}>
-                                        <Text style={styles.historyTime}>{item.type === 'clip' ? 'Short' : 'Video'}</Text>
-                                    </View>
-                                )}
-                                <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
-                                <Text style={styles.historyMeta} numberOfLines={1}>{item.subtitle || 'Viewed'}</Text>
-                            </TouchableOpacity>
-                        )) : (
-                            <View style={{ padding: 20, alignItems: 'center' }}>
-                                <Text style={{ color: colors.textSecondary }}>No recent history</Text>
-                            </View>
-                        )}
-                    </ScrollView>
-                </View>
-
-                {/* VISUAL SEPARATOR */}
-                <View style={[styles.sectionDivider, { backgroundColor: colors.cardBorder }]} />
-
                 {/* Create Section (Polished - Clean & Professional) */}
                 <View style={styles.menuGroup}>
                     <TouchableOpacity
@@ -256,6 +203,13 @@ const ProfileMenuScreen = () => {
                             <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 13 }}>+ New</Text>
                         </TouchableOpacity>
                     </View>
+
+                    <MenuOption
+                        icon={<MaterialIcons name="history" />}
+                        label="History"
+                        subLabel="Recently viewed"
+                        onPress={() => router.push('/history')}
+                    />
 
                     <MenuOption
                         icon={<Ionicons name="heart" />}

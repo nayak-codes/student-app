@@ -1,1 +1,2 @@
-eas build -p android --profile preview
+eas build -p android --profile 
+buddy e photo view lo top unna "X' and koncham kindhaku

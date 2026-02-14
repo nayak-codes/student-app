@@ -8,6 +8,7 @@ import {
     Dimensions,
     FlatList,
     Image,
+    Keyboard,
     Linking,
     SafeAreaView,
     ScrollView,
@@ -685,6 +686,9 @@ const SearchScreen = () => {
     };
 
     const handleResultClick = (item: SearchResult) => {
+        // Dismiss keyboard first to ensure click registers properly
+        Keyboard.dismiss();
+
         // Save search query on click if it was typed
         if (searchQuery.trim()) {
             saveRecentSearch(searchQuery.trim());
@@ -862,7 +866,16 @@ const SearchScreen = () => {
                             <Text style={[styles.channelHandle, { color: colors.textSecondary }]}>
                                 @{user.name?.replace(/\s+/g, '').toLowerCase()} • {user.role === 'creator' ? 'Creator' : 'Student'}
                             </Text>
-                            <TouchableOpacity style={[styles.subscribeButton, { backgroundColor: isDark ? '#FFF' : '#0F172A' }]}>
+                            <TouchableOpacity
+                                style={[styles.subscribeButton, { backgroundColor: isDark ? '#FFF' : '#0F172A' }]}
+                                onPress={() => {
+                                    Keyboard.dismiss();
+                                    router.push({
+                                        pathname: '/public-profile',
+                                        params: { userId: user.id }
+                                    });
+                                }}
+                            >
                                 <Text style={[styles.subscribeText, { color: isDark ? '#000' : '#FFF' }]}>View Profile</Text>
                             </TouchableOpacity>
                         </View>

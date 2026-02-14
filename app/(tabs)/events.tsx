@@ -749,7 +749,7 @@ const EventsScreen = () => {
                     contentContainerStyle={[
                         styles.feed,
                         {
-                            paddingTop: 170,
+                            paddingTop: activeSubFilter !== 'All' ? 220 : 170,
                             paddingBottom: 150,
                         }
                     ]}
@@ -1205,12 +1205,7 @@ const EventsScreen = () => {
             </Modal>
 
             {/* Create Event FAB */}
-            <TouchableOpacity
-                style={[styles.fab, { backgroundColor: colors.primary }]}
-                onPress={() => router.push('/post-event')}
-            >
-                <Ionicons name="add" size={32} color="#FFF" />
-            </TouchableOpacity>
+
 
             {/* Static Top Black Card - Instagram Style (outside FeedList) */}
             <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />

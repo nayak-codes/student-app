@@ -38,7 +38,7 @@ export default function WelcomeScreen() {
             <View style={styles.content}>
                 {/* Logo */}
                 <Text style={styles.logo}>📚</Text>
-                <Text style={styles.appName}>StudentVerse</Text>
+                <Text style={styles.appName}>Vidhyardhi</Text>
                 <Text style={styles.tagline}>Your Complete Education Companion</Text>
 
                 {/* Features */}

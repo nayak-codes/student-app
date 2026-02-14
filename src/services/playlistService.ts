@@ -1,112 +1,285 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
-const PLAYLISTS_KEY = 'offline_playlists';
+export type PlaylistPrivacy = 'public' | 'protected' | 'private';
+export type PlaylistItemType = 'document' | 'video' | 'post';
+
+export interface PlaylistItem {
+    id: string;
+    type: PlaylistItemType;
+    itemId: string; // Reference to the actual document/video/post
+    title: string; // Cached title for display
+    thumbnail?: string; // Cached thumbnail
+    addedAt: Date;
+}
 
 export interface Playlist {
     id: string;
-    name: string;
-    resourceIds: string[];
-    createdAt: number;
+    userId: string;
+    title: string;
+    description?: string;
+    privacy: PlaylistPrivacy;
+    items: PlaylistItem[];
+    itemCount: number;
+    createdAt: Date;
+    updatedAt: Date;
+    thumbnail?: string; // Cover image or first item thumbnail
 }
 
-// Get all playlists
-export const getPlaylists = async (): Promise<Playlist[]> => {
-    try {
-        const json = await AsyncStorage.getItem(PLAYLISTS_KEY);
-        return json ? JSON.parse(json) : [];
-    } catch (error) {
-        console.error('Error getting playlists:', error);
-        return [];
+/**
+ * Create a new playlist
+ */
+export const createPlaylist = async (
+    userId: string,
+    data: {
+        title: string;
+        description?: string;
+        privacy: PlaylistPrivacy;
     }
-};
-
-// Create a new playlist
-export const createPlaylist = async (name: string): Promise<Playlist | null> => {
+): Promise<string> => {
     try {
-        if (!name.trim()) return null;
-
-        const playlists = await getPlaylists();
-
-        // Check for duplicate names
-        if (playlists.some(p => p.name.trim().toLowerCase() === name.trim().toLowerCase())) {
-            throw new Error('Playlist with this name already exists');
-        }
-
-        const newPlaylist: Playlist = {
-            id: Date.now().toString(),
-            name: name.trim(),
-            resourceIds: [],
-            createdAt: Date.now()
+        const playlistData = {
+            userId,
+            title: data.title,
+            description: data.description || '',
+            privacy: data.privacy,
+            items: [],
+            itemCount: 0,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
         };
 
-        const updated = [newPlaylist, ...playlists];
-        await AsyncStorage.setItem(PLAYLISTS_KEY, JSON.stringify(updated));
-        return newPlaylist;
+        const docRef = await addDoc(collection(db, 'playlists'), playlistData);
+        return docRef.id;
     } catch (error) {
         console.error('Error creating playlist:', error);
         throw error;
     }
 };
 
-// Delete a playlist
+/**
+ * Get playlists for a user with privacy filtering
+ */
+export const getUserPlaylists = async (
+    userId: string,
+    viewerId?: string,
+    isFollower: boolean = false
+): Promise<Playlist[]> => {
+    try {
+        const q = query(
+            collection(db, 'playlists'),
+            where('userId', '==', userId)
+        );
+
+        const snapshot = await getDocs(q);
+        const playlists: Playlist[] = [];
+
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            const playlist: Playlist = {
+                id: doc.id,
+                userId: data.userId,
+                title: data.title,
+                description: data.description,
+                privacy: data.privacy,
+                items: data.items || [],
+                itemCount: data.itemCount || 0,
+                createdAt: data.createdAt?.toDate() || new Date(),
+                updatedAt: data.updatedAt?.toDate() || new Date(),
+                thumbnail: data.thumbnail,
+            };
+
+            // Filter based on privacy and viewer
+            if (canViewPlaylist(playlist, userId, viewerId, isFollower)) {
+                playlists.push(playlist);
+            }
+        });
+
+        // Sort by updatedAt desc
+        return playlists.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    } catch (error) {
+        console.error('Error getting playlists:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get a single playlist by ID
+ */
+export const getPlaylist = async (playlistId: string): Promise<Playlist | null> => {
+    try {
+        const docRef = doc(db, 'playlists', playlistId);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+            return null;
+        }
+
+        const data = docSnap.data();
+        return {
+            id: docSnap.id,
+            userId: data.userId,
+            title: data.title,
+            description: data.description,
+            privacy: data.privacy,
+            items: data.items || [],
+            itemCount: data.itemCount || 0,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+            thumbnail: data.thumbnail,
+        };
+    } catch (error) {
+        console.error('Error getting playlist:', error);
+        throw error;
+    }
+};
+
+/**
+ * Check if a viewer can access a playlist
+ */
+export const canViewPlaylist = (
+    playlist: Playlist,
+    ownerId: string,
+    viewerId?: string,
+    isFollower: boolean = false
+): boolean => {
+    // Owner can always view their own playlists
+    if (viewerId && viewerId === ownerId) {
+        return true;
+    }
+
+    // Privacy checks
+    if (playlist.privacy === 'public') {
+        return true;
+    }
+
+    if (playlist.privacy === 'protected') {
+        return isFollower;
+    }
+
+    if (playlist.privacy === 'private') {
+        return viewerId === ownerId;
+    }
+
+    return false;
+};
+
+/**
+ * Add an item to a playlist
+ */
+export const addItemToPlaylist = async (
+    playlistId: string,
+    item: {
+        type: PlaylistItemType;
+        itemId: string;
+        title: string;
+        thumbnail?: string;
+    }
+): Promise<void> => {
+    try {
+        const playlistRef = doc(db, 'playlists', playlistId);
+        const playlistSnap = await getDoc(playlistRef);
+
+        if (!playlistSnap.exists()) {
+            throw new Error('Playlist not found');
+        }
+
+        const currentItems = playlistSnap.data().items || [];
+
+        // Check if item already exists
+        if (currentItems.some((i: PlaylistItem) => i.itemId === item.itemId)) {
+            throw new Error('Item already in playlist');
+        }
+
+        const newItem: PlaylistItem = {
+            id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            type: item.type,
+            itemId: item.itemId,
+            title: item.title,
+            thumbnail: item.thumbnail,
+            addedAt: new Date(),
+        };
+
+        const updatedItems = [...currentItems, newItem];
+
+        await updateDoc(playlistRef, {
+            items: updatedItems,
+            itemCount: updatedItems.length,
+            updatedAt: serverTimestamp(),
+            // Update thumbnail if first item
+            ...(updatedItems.length === 1 && item.thumbnail ? { thumbnail: item.thumbnail } : {}),
+        });
+    } catch (error) {
+        console.error('Error adding item to playlist:', error);
+        throw error;
+    }
+};
+
+/**
+ * Remove an item from a playlist
+ */
+export const removeItemFromPlaylist = async (
+    playlistId: string,
+    itemId: string
+): Promise<void> => {
+    try {
+        const playlistRef = doc(db, 'playlists', playlistId);
+        const playlistSnap = await getDoc(playlistRef);
+
+        if (!playlistSnap.exists()) {
+            throw new Error('Playlist not found');
+        }
+
+        const currentItems = playlistSnap.data().items || [];
+        const updatedItems = currentItems.filter((i: PlaylistItem) => i.id !== itemId);
+
+        await updateDoc(playlistRef, {
+            items: updatedItems,
+            itemCount: updatedItems.length,
+            updatedAt: serverTimestamp(),
+            // Update thumbnail if needed
+            ...(updatedItems.length > 0 ? { thumbnail: updatedItems[0].thumbnail } : { thumbnail: null }),
+        });
+    } catch (error) {
+        console.error('Error removing item from playlist:', error);
+        throw error;
+    }
+};
+
+/**
+ * Update playlist details
+ */
+export const updatePlaylist = async (
+    playlistId: string,
+    updates: {
+        title?: string;
+        description?: string;
+        privacy?: PlaylistPrivacy;
+        thumbnail?: string;
+    }
+): Promise<void> => {
+    try {
+        const playlistRef = doc(db, 'playlists', playlistId);
+
+        await updateDoc(playlistRef, {
+            ...updates,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error('Error updating playlist:', error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a playlist
+ */
 export const deletePlaylist = async (playlistId: string): Promise<void> => {
     try {
-        const playlists = await getPlaylists();
-        const updated = playlists.filter(p => p.id !== playlistId);
-        await AsyncStorage.setItem(PLAYLISTS_KEY, JSON.stringify(updated));
+        const playlistRef = doc(db, 'playlists', playlistId);
+        await deleteDoc(playlistRef);
     } catch (error) {
         console.error('Error deleting playlist:', error);
-        throw error;
-    }
-};
-
-// Add resource to playlist
-export const addToPlaylist = async (playlistId: string, resourceId: string): Promise<void> => {
-    try {
-        const playlists = await getPlaylists();
-        const index = playlists.findIndex(p => p.id === playlistId);
-
-        if (index === -1) throw new Error('Playlist not found');
-
-        // Check if already in playlist
-        if (!playlists[index].resourceIds.includes(resourceId)) {
-            playlists[index].resourceIds.push(resourceId);
-            await AsyncStorage.setItem(PLAYLISTS_KEY, JSON.stringify(playlists));
-        }
-    } catch (error) {
-        console.error('Error adding to playlist:', error);
-        throw error;
-    }
-};
-
-// Remove resource from playlist
-export const removeFromPlaylist = async (playlistId: string, resourceId: string): Promise<void> => {
-    try {
-        const playlists = await getPlaylists();
-        const index = playlists.findIndex(p => p.id === playlistId);
-
-        if (index === -1) return;
-
-        playlists[index].resourceIds = playlists[index].resourceIds.filter(id => id !== resourceId);
-        await AsyncStorage.setItem(PLAYLISTS_KEY, JSON.stringify(playlists));
-    } catch (error) {
-        console.error('Error removing from playlist:', error);
-        throw error;
-    }
-};
-
-// Rename playlist
-export const renamePlaylist = async (playlistId: string, newName: string): Promise<void> => {
-    try {
-        const playlists = await getPlaylists();
-        const index = playlists.findIndex(p => p.id === playlistId);
-
-        if (index !== -1) {
-            playlists[index].name = newName.trim();
-            await AsyncStorage.setItem(PLAYLISTS_KEY, JSON.stringify(playlists));
-        }
-    } catch (error) {
-        console.error('Error renaming playlist:', error);
         throw error;
     }
 };

@@ -16,6 +16,7 @@ import {
     Pressable,
     RefreshControl,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TextInput,
@@ -28,6 +29,7 @@ import ClipsFeed from '../src/components/ClipsFeed';
 import DocumentViewer from '../src/components/DocumentViewer';
 import EditProfileModal from '../src/components/EditProfileModal';
 import { EventCard } from '../src/components/EventCard';
+import FeedPost from '../src/components/feed/FeedPost';
 import BookCard from '../src/components/library/BookCard';
 import PostOptionsModal from '../src/components/PostOptionsModal';
 import { db } from '../src/config/firebase';
@@ -46,10 +48,10 @@ import {
 } from '../src/services/connectionService';
 import { deleteEvent, EventItem, getUserEvents } from '../src/services/eventService';
 import { deleteResource, getUserResources, LibraryResource } from '../src/services/libraryService';
-import { deletePost, getAllPosts, incrementViewCount, Post, updatePost } from '../src/services/postsService';
+import { addReaction, deletePost, getAllPosts, incrementViewCount, Post, savePost, unsavePost, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type ProfileTabType = 'home' | 'posts' | 'docs' | 'clips' | 'events';
+type ProfileTabType = 'posts' | 'docs' | 'clips' | 'events';
 
 // Edit Post Modal
 const EditPostModal: React.FC<{
@@ -927,9 +929,7 @@ const ProfileScreen = () => {
 
         // 1. Filter by Tab
         switch (activeTab) {
-            case 'home':
-                content = [...posts]; // Show all posts in Home
-                break;
+
             case 'posts':
                 content = posts.filter(p => p.type === 'image' || p.type === 'note' || p.type === 'news');
                 break;
@@ -1192,12 +1192,7 @@ const ProfileScreen = () => {
                 {/* Tabs */}
                 <View style={[styles.ytTabsContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ytTabsContent}>
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'home' && styles.ytTabActive, { borderBottomColor: activeTab === 'home' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('home')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'home' && { color: colors.text }]}>Home</Text>
-                        </TouchableOpacity>
+
 
                         <TouchableOpacity
                             style={[styles.ytTab, activeTab === 'posts' && styles.ytTabActive, { borderBottomColor: activeTab === 'posts' ? colors.text : 'transparent' }]}
@@ -1231,8 +1226,7 @@ const ProfileScreen = () => {
                     </ScrollView>
                 </View>
 
-                {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}
-                {activeTab !== 'home' && (
+                {/* Sub-Section Filters (Recent, Old, Popular) - Hide on Home */}{
                     <View style={[styles.subFilterContainer, { backgroundColor: colors.background }]}>
                         <View style={{ flexDirection: 'row', gap: 12 }}>
                             {['recent', 'old', 'popular'].map((type) => (
@@ -1270,7 +1264,7 @@ const ProfileScreen = () => {
                             </TouchableOpacity>
                         )}
                     </View>
-                )}
+                }
 
                 {/* Content Grid */}
                 <View style={styles.contentSection}>
@@ -1286,54 +1280,7 @@ const ProfileScreen = () => {
                                 styles.gridContainer,
                                 (activeTab === 'posts') && viewMode === 'list' && { flexDirection: 'column', flexWrap: 'nowrap', paddingHorizontal: 16 }
                             ]}>
-                                {activeTab === 'home' ? (
-                                    <View>
-                                        {/* Latest Posts Section */}
-                                        <View style={styles.homeSectionHeader}>
-                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Latest Posts</Text>
-                                            <TouchableOpacity onPress={() => setActiveTab('posts')}>
-                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-                                            {posts.filter(p => !p.videoLink && p.type !== 'video').slice(0, 5).map((item) => (
-                                                <View key={item.id} style={{ width: 320, marginRight: 16 }}>
-                                                    <PostCard
-                                                        post={item}
-                                                        onPress={openPostModal}
-                                                        onImagePress={openImageViewer}
-                                                        onVideoPress={openVideo}
-                                                        onOptionsPress={isOwnProfile ? (p) => handleOptionsPress('post', p) : undefined}
-                                                    // Minimal props for preview
-                                                    />
-                                                </View>
-                                            ))}
-                                            {posts.filter(p => !p.videoLink && p.type !== 'video').length === 0 && (
-                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic' }}>No recent posts</Text>
-                                            )}
-                                        </ScrollView>
-
-
-
-                                        {/* Docs Section */}
-                                        <View style={styles.homeSectionHeader}>
-                                            <Text style={[styles.homeSectionTitle, { color: colors.text }]}>Documents</Text>
-                                            <TouchableOpacity onPress={() => setActiveTab('docs')}>
-                                                <Text style={[styles.seeAllText, { color: colors.primary }]}>See All</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-                                            {resources.slice(0, 5).map((item) => (
-                                                <View key={item.id} style={{ width: 280, marginRight: 12 }}>
-                                                    <ResourceGridItem resource={item} onPress={openResource} />
-                                                </View>
-                                            ))}
-                                            {resources.length === 0 && (
-                                                <Text style={{ color: colors.textSecondary, fontStyle: 'italic' }}>No documents</Text>
-                                            )}
-                                        </ScrollView>
-                                    </View>
-                                ) : activeTab === 'docs' ? (
+                                {activeTab === 'docs' ? (
                                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', paddingHorizontal: 16 }}>
                                         {getFilteredAndSortedContent().map((item: any, index: number) => (
                                             <BookCard
@@ -1511,14 +1458,55 @@ const ProfileScreen = () => {
                                 ) : activeTab === 'posts' ? (
                                     viewMode === 'list' ? (
                                         getFilteredAndSortedContent().map((item: any) => (
-                                            <PostCard
+                                            <FeedPost
                                                 key={item.id}
                                                 post={item}
-                                                onImagePress={openImageViewer}
-                                                onVideoPress={openVideo}
-                                                onPress={openPostModal}
-                                                onDelete={isOwnProfile ? handleDeletePost : undefined}
-                                                onEdit={isOwnProfile ? handleEditPost : undefined}
+                                                currentUserId={authUser?.uid || ''}
+                                                onLike={() => { }} // Legacy, handled by onReact
+                                                onReact={async (postId, reaction) => {
+                                                    if (!authUser?.uid) return;
+                                                    // Optimistic update
+                                                    const post = posts.find(p => p.id === postId);
+                                                    if (!post) return;
+                                                    const currentReactions = post.reactedBy || {};
+                                                    const newReactions = { ...currentReactions, [authUser.uid]: reaction };
+                                                    setPosts(prev => prev.map(p =>
+                                                        p.id === postId
+                                                            ? { ...p, reactedBy: newReactions }
+                                                            : p
+                                                    ));
+                                                    await addReaction(postId, authUser.uid, reaction);
+                                                }}
+                                                onComment={() => openPostModal(item)}
+                                                onShare={async (postId) => {
+                                                    try {
+                                                        const post = posts.find(p => p.id === postId);
+                                                        if (!post) return;
+                                                        await Share.share({
+                                                            message: `Check out this post: ${post.content}`,
+                                                        });
+                                                    } catch (e) { }
+                                                }}
+                                                onSave={async (postId) => {
+                                                    if (!authUser?.uid) return;
+                                                    const post = posts.find(p => p.id === postId);
+                                                    if (!post) return;
+                                                    const isSaved = post.savedBy?.includes(authUser.uid);
+                                                    const newSavedBy = isSaved
+                                                        ? post.savedBy?.filter(id => id !== authUser.uid)
+                                                        : [...(post.savedBy || []), authUser.uid];
+                                                    setPosts(prev => prev.map(p =>
+                                                        p.id === postId ? { ...p, savedBy: newSavedBy } : p
+                                                    ));
+                                                    if (isSaved) await unsavePost(postId, authUser.uid);
+                                                    else await savePost(postId, authUser.uid);
+                                                }}
+                                                onDelete={isOwnProfile ? () => handleDeletePost(item) : undefined}
+                                                onEdit={isOwnProfile ? () => handleEditPost(item) : undefined}
+                                                currentUserLiked={item.likedBy?.includes(authUser?.uid || '')}
+                                                currentUserSaved={item.savedBy?.includes(authUser?.uid || '')}
+                                                currentUserReaction={item.reactedBy?.[authUser?.uid || '']}
+                                                isVisible={true}
                                             />
                                         ))
                                     ) : (
@@ -1530,15 +1518,7 @@ const ProfileScreen = () => {
                                             />
                                         ))
                                     )
-                                ) : (
-                                    getFilteredAndSortedContent().map((item: any) => (
-                                        <PostGridItem
-                                            key={item.id}
-                                            post={item}
-                                            onPress={openPostModal}
-                                        />
-                                    ))
-                                )}
+                                ) : null}
                             </View>
                         )}
                     </View>

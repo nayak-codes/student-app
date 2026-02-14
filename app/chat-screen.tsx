@@ -213,6 +213,29 @@ const ChatScreen = () => {
     const [showPollCreator, setShowPollCreator] = useState(false);
 
     const flatListRef = useRef<FlatList>(null);
+    const [showMenu, setShowMenu] = useState(false);
+
+    const toggleMenu = () => setShowMenu(!showMenu);
+    const closeMenu = () => setShowMenu(false);
+
+    const handleMenuOption = (option: string) => {
+        setShowMenu(false);
+        if (option === 'View contact') {
+            router.push({
+                pathname: '/chat-user-info',
+                params: {
+                    userId: otherUserId,
+                    name: otherUserName,
+                    photoURL: otherUserPhoto,
+                    conversationId
+                }
+            });
+        } else if (option === 'Search' || option === 'Wallpaper' || option === 'Mute notifications') {
+            Alert.alert('Coming Soon', `${option} feature will be available in the next update!`);
+        } else if (option === 'More') {
+            Alert.alert('More Options', 'Block, Report, and Clear Chat options will be here.');
+        }
+    };
 
     // Collapsible Header Vars - REMOVED for Static Header
     // const scrollY = React.useRef(new Animated.Value(0)).current; 
@@ -731,21 +754,49 @@ const ChatScreen = () => {
                     </TouchableOpacity>
 
                     <View style={styles.headerRight}>
-                        <TouchableOpacity style={[styles.headerButton, { backgroundColor: '#1F2C34' }]}>
-                            <Ionicons name="videocam" size={22} color="#FFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.headerButton, { backgroundColor: '#1F2C34' }]}>
-                            <Ionicons name="call" size={20} color="#FFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.headerButton, { backgroundColor: '#1F2C34' }]}>
-                            <Ionicons name="ellipsis-vertical" size={20} color="#FFF" />
+                        <TouchableOpacity
+                            style={[styles.headerButton, { backgroundColor: 'transparent' }]}
+                            onPress={toggleMenu}
+                        >
+                            <Ionicons name="ellipsis-vertical" size={24} color="#FFF" />
                         </TouchableOpacity>
                     </View>
                 </View>
             </View>
 
+            {/* Bottom Sheet Menu Overlay */}
+            {showMenu && (
+                <TouchableOpacity
+                    style={styles.menuOverlay}
+                    activeOpacity={1}
+                    onPress={closeMenu}
+                >
+                    <View style={[styles.menuContainer, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+                        {/* Handle bar for visual cue */}
+                        <View style={{ alignSelf: 'center', width: 40, height: 4, backgroundColor: isDark ? '#334155' : '#E2E8F0', borderRadius: 2, marginBottom: 12 }} />
+
+                        {[
+                            { label: 'View contact', icon: 'person-outline' },
+                            { label: 'Search', icon: 'search-outline' },
+                            { label: 'Mute notifications', icon: 'notifications-off-outline' },
+                            { label: 'Wallpaper', icon: 'image-outline' },
+                            { label: 'More', icon: 'ellipsis-horizontal-circle-outline' }
+                        ].map((option, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={styles.menuItem}
+                                onPress={() => handleMenuOption(option.label)}
+                            >
+                                <Ionicons name={option.icon as any} size={22} color={isDark ? '#94A3B8' : '#64748B'} style={{ marginRight: 16 }} />
+                                <Text style={[styles.menuText, { color: isDark ? '#F1F5F9' : '#0F172A' }]}>{option.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            )}
+
             {/* Chat Background with Doodle Wallpaper */}
-            <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#E5E5E5' }}>
+            < View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#E5E5E5' }}>
                 <ImageBackground
                     source={require('../assets/chat-background-doodle.png')}
                     style={{ flex: 1, width: '100%', height: '100%' }}
@@ -822,7 +873,7 @@ const ChatScreen = () => {
                         </View>
                     </KeyboardAvoidingView>
                 </ImageBackground>
-            </View>
+            </View >
 
             <ChatAttachmentMenu
                 visible={showAttachmentMenu}
@@ -853,16 +904,18 @@ const ChatScreen = () => {
                 postData={selectedPost}
             />
 
-            {selectedResource && (
-                <DocumentViewer
-                    visible={viewerVisible}
-                    onClose={() => setViewerVisible(false)}
-                    documentUrl={selectedResource.fileUrl}
-                    documentName={selectedResource.title}
-                    documentType={selectedResource.type}
-                />
-            )}
-        </SafeAreaView>
+            {
+                selectedResource && (
+                    <DocumentViewer
+                        visible={viewerVisible}
+                        onClose={() => setViewerVisible(false)}
+                        documentUrl={selectedResource.fileUrl}
+                        documentName={selectedResource.title}
+                        documentType={selectedResource.type}
+                    />
+                )
+            }
+        </SafeAreaView >
     );
 };
 
@@ -1285,6 +1338,38 @@ const styles = StyleSheet.create({
     },
     sendButtonDisabled: {
         opacity: 0.5,
+    },
+    menuOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)', // Dimmed background
+        zIndex: 100,
+        justifyContent: 'flex-end', // Align to bottom
+    },
+    menuContainer: {
+        width: '100%',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        elevation: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -2 }, // Shadow upwards
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        paddingVertical: 16,
+        paddingBottom: 30, // Extra padding for bottom safe area
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+    },
+    menuText: {
+        fontSize: 16,
+        fontWeight: '500',
     },
 });
 
