@@ -32,7 +32,7 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
     const [shareData, setShareData] = useState<any>(null);
     const [commentsModalVisible, setCommentsModalVisible] = useState(false);
     const [selectedPostId, setSelectedPostId] = useState<string>('');
-    const { user, logout } = useAuth();
+    const { user, userProfile, logout } = useAuth();
 
     // Track which posts are currently visible in viewport
     const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
@@ -48,10 +48,10 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
             const fetchedPosts = await getAllPosts();
             setAllPosts(fetchedPosts);
 
-            // Get current user's profile to access studentStatus
-            const userProfile = user ? await import('../../services/authService').then(m => m.getUserProfile(user.uid)) : null;
+            // Get current user's role to access studentStatus
             const userStudentStatus = userProfile?.studentStatus;
             const userRole = userProfile?.role || 'student';
+            const followingIds = userProfile?.following || [];
 
             // SMART HYPE ALGORITHM: Filter posts based on tier visibility
             const visiblePosts = fetchedPosts.filter(post =>
@@ -72,55 +72,54 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
                 return array;
             };
 
-            // DYNAMIC FEED LOGIC:
-            // 1. "Viral" = Hype > 0 OR Likes > 5 (High engagement)
-            // 2. "Fresh" = Everything else (Real-time updates)
-            // Goal: Show fresh content FIRST (real-time feel), but inject Viral content frequently.
+            // DYNAMIC FEED LOGIC: "Shuffled Priority Pool"
+            // Goal: Top of feed should be high quality (My/Network/New/Popular) but DYNAMIC (Change order on refresh).
             const dynamicMix = (postsToMix: Post[]) => {
-                const viral = postsToMix.filter(p => (p.reactions?.hype || 0) > 0 || p.likes > 5);
-                const fresh = postsToMix.filter(p => (p.reactions?.hype || 0) === 0 && p.likes <= 5);
+                const myUid = user?.uid;
 
-                // 1. Shuffle Viral posts so they aren't static on refresh
-                const shuffledViral = shuffle([...viral]);
+                // 1. Create a "Priority Candidates" Pool
+                // These are posts eligible to be at the very top.
+                const priorityCandidates = new Map<string, Post>();
 
-                // 2. Sort Fresh posts by Date
-                const sortedAllFresh = fresh.sort((a, b) =>
-                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                );
+                // Helper to add to pool
+                const addToPool = (p: Post) => priorityCandidates.set(p.id, p);
 
-                // VARIETY BOOSTER:
-                // User Feedback: "Not refreshing".
-                // Cause: With few posts, Top 2 Strict made the whole feed separate.
-                // Fix: Shuffle EVERYTHING. No strict top posts.
-                const strictFresh = sortedAllFresh.slice(0, 0); // Changed to 0
-                const shuffledRestFresh = shuffle(sortedAllFresh.slice(0)); // Shuffle all
+                // A. My Posts & Network Posts
+                postsToMix.filter(p => p.userId === myUid || followingIds.includes(p.userId))
+                    .forEach(addToPool);
 
-                const finalFresh = [...strictFresh, ...shuffledRestFresh];
+                // B. Popular/Hyped Posts
+                postsToMix.filter(p => (p.reactions?.hype || 0) > 0 || p.likes > 5)
+                    .forEach(addToPool);
 
-                // 3. Interleave
-                const mixedFeed: Post[] = [];
-                let vIndex = 0;
-                let fIndex = 0;
+                // C. Top 10 Global Newest (to ensure fresh content is in the mix)
+                [...postsToMix].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .slice(0, 10)
+                    .forEach(addToPool);
 
-                while (fIndex < finalFresh.length || vIndex < shuffledViral.length) {
-                    // Random stride between 2 and 4
-                    const stride = Math.floor(Math.random() * 3) + 2;
+                // 2. Select the HEAD (Top 4 Posts)
+                // We take all priority candidates, SHUFFLE them, and pick the top 4.
+                // This ensures the top 4 are always "Good" posts, but the order changes every refresh.
+                const allCandidates = Array.from(priorityCandidates.values());
+                const shuffledCandidates = shuffle([...allCandidates]);
 
-                    for (let i = 0; i < stride && fIndex < finalFresh.length; i++) {
-                        mixedFeed.push(finalFresh[fIndex++]);
-                    }
+                const HEAD_SIZE = 4;
+                const headPosts = shuffledCandidates.slice(0, HEAD_SIZE);
+                const headIds = new Set(headPosts.map(p => p.id));
 
-                    // Add 1 viral post if available
-                    if (vIndex < shuffledViral.length) {
-                        mixedFeed.push(shuffledViral[vIndex++]);
-                    }
-                }
+                // 3. Select the TAIL (Everything else)
+                // Everything not in the head is shuffled into the tail.
+                const tailPosts = postsToMix.filter(p => !headIds.has(p.id));
+                const shuffledTail = shuffle([...tailPosts]);
 
-                return mixedFeed;
+                console.log(`Feed Mix: Pool=${allCandidates.length}, Head=${headPosts.length}, Tail=${tailPosts.length}`);
+
+                // Combine
+                return [...headPosts, ...shuffledTail];
             };
 
             setClips(shuffle(clipPosts)); // Keep clips shuffled for variety
-            setPosts(dynamicMix(regularPosts)); // Dynamic interleaved feed
+            setPosts(dynamicMix(regularPosts)); // Dynamic prioritized feed
         } catch (error: any) {
             console.error('Error fetching posts:', error);
             if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
@@ -136,12 +135,6 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
     useEffect(() => {
         fetchPosts();
     }, []);
-
-    React.useImperativeHandle(ref, () => ({
-        scrollToTop: () => {
-            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-        }
-    }));
 
     const onRefresh = useCallback(() => {
         if (isConnected === false) {
@@ -334,7 +327,7 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.container, { backgroundColor: 'transparent' }]}>
             {isConnected === false && (
                 <View style={[styles.offlineBanner, { backgroundColor: '#EF4444' }]}>
                     <Text style={styles.offlineText}>Offline Mode</Text>

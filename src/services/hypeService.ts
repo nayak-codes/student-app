@@ -40,6 +40,12 @@ export const shouldShowPost = (
     userStudentStatus: string | undefined,
     userRole: string
 ): boolean => {
+    // TEMPORARY FIX: Show all posts to solve "posts not appearing" issue during testing
+    // The strict filtering was hiding posts from different categories (e.g. JEE vs B.Tech)
+    // enabling them to see each other's content.
+    return true;
+
+    /* Original Strict Algorithm (Restored later)
     const postTier = post.audienceTier || AUDIENCE_TIERS.SAME_CATEGORY;
     const authorStatus = post.authorStudentStatus;
 
@@ -64,6 +70,7 @@ export const shouldShowPost = (
 
     // Tier 3: Everyone
     return true;
+    */
 };
 
 /**
