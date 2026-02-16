@@ -130,7 +130,7 @@ export default function HomeScreen() {
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: false }
           )}
-          contentContainerStyle={{ paddingTop: 110 }}
+          contentContainerStyle={{ paddingTop: 95 }}
         />
 
         {/* Static Top Black Card - Instagram Style (outside FeedList) */}

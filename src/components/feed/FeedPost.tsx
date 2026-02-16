@@ -263,6 +263,10 @@ const FeedPost: React.FC<FeedPostProps> = ({
                         )}
                     </TouchableOpacity>
                 )}
+                {/* Timestamp moved here */}
+                <Text style={[styles.timeAgo, { color: colors.textSecondary, paddingHorizontal: 14, marginBottom: 4 }]}>
+                    {post.createdAt ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }) : 'Just now'}
+                </Text>
                 {/* Multi-Photo Carousel or Single Image */}
                 {galleryImages.length > 0 ? (
                     <View>
@@ -486,12 +490,7 @@ const FeedPost: React.FC<FeedPostProps> = ({
                 </View>
             </View>
 
-            {/* Footer Time */}
-            <View style={styles.footer}>
-                <Text style={[styles.timeAgo, { color: colors.textSecondary }]}>
-                    {post.createdAt ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }) : 'Just now'}
-                </Text>
-            </View>
+
 
             <PostOptionsModal
                 visible={showOptionsModal}
@@ -525,8 +524,8 @@ const FeedPost: React.FC<FeedPostProps> = ({
 };
 
 const styles = StyleSheet.create({
-    container: { marginBottom: 12 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+    container: { marginBottom: 8 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8 },
     userInfo: { flexDirection: 'row', alignItems: 'center' },
     avatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' },
     avatarImage: { width: '100%', height: '100%' },
@@ -553,9 +552,9 @@ const styles = StyleSheet.create({
     newActionButton: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 4, gap: 4 },
     newActionText: { fontSize: 11, fontWeight: '600' },
     footer: { paddingHorizontal: 14, paddingBottom: 8 },
-    captionContainer: { marginTop: 4, marginBottom: 8, paddingHorizontal: 14 },
+    captionContainer: { marginTop: 4, marginBottom: 2, paddingHorizontal: 14 },
     captionText: { fontSize: 14, lineHeight: 18 },
-    timeAgo: { fontSize: 11, marginTop: 4 },
+    timeAgo: { fontSize: 11, marginTop: 2 },
 
     // Reaction Picker Styles
     reactionPicker: {
