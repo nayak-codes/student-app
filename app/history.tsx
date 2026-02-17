@@ -22,7 +22,7 @@ const HistoryScreen = () => {
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [activeTab, setActiveTab] = useState('All');
 
-    const tabs = ['All', 'Videos', 'Clips', 'Posts', 'PDFs'];
+    const tabs = ['All', 'Posts', 'PDFs']; // V1: Videos and Clips removed
 
     const loadHistory = async () => {
         const data = await getHistory();

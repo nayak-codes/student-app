@@ -198,10 +198,10 @@ const ProfileMenuScreen = () => {
                 {/* Playlists */}
                 <View style={styles.menuGroup}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 16 }}>
-                        <Text style={styles.groupTitle}>Playlists</Text>
-                        <TouchableOpacity onPress={() => router.push('/create-playlist')}>
+                        <Text style={styles.groupTitle}>Your Activity</Text>
+                        {/* <TouchableOpacity onPress={() => router.push('/create-playlist')}>
                             <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 13 }}>+ New</Text>
-                        </TouchableOpacity>
+                        </TouchableOpacity> */}
                     </View>
 
                     <MenuOption
@@ -223,7 +223,7 @@ const ProfileMenuScreen = () => {
                         subLabel="Read for later"
                         onPress={() => router.push('/playlists/saved')}
                     />
-                    <MenuOption
+                    {/* <MenuOption
                         icon={<Ionicons name="time" />}
                         label="Watch Later"
                         subLabel="Unwatched videos"
@@ -235,7 +235,7 @@ const ProfileMenuScreen = () => {
                         label="Your Playlists"
                         subLabel="Manage your collections"
                         onPress={() => router.push('/playlists')}
-                    />
+                    /> */}
                 </View>
 
                 <View style={[styles.sectionDivider, { backgroundColor: colors.cardBorder }]} />

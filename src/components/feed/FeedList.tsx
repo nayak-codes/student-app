@@ -8,7 +8,6 @@ import { shouldShowPost } from '../../services/hypeService';
 import { addReaction, deletePost, getAllPosts, likePost, Post, ReactionType, removeReaction, savePost, unlikePost, unsavePost } from '../../services/postsService';
 import CommentsBottomSheet from '../CommentsBottomSheet';
 import FeedPost from './FeedPost';
-import ShortsGrid from './ShortsGrid';
 
 interface FeedListProps {
     onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
@@ -118,8 +117,9 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
                 return [...headPosts, ...shuffledTail];
             };
 
-            setClips(shuffle(clipPosts)); // Keep clips shuffled for variety
-            setPosts(dynamicMix(regularPosts)); // Dynamic prioritized feed
+            // V1: Clips removed - only regular posts
+            setPosts(dynamicMix(regularPosts));
+
         } catch (error: any) {
             console.error('Error fetching posts:', error);
             if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
@@ -354,10 +354,7 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
                             onEdit={handleEdit}
                             isVisible={visiblePostIds.has(item.id)}
                         />
-                        {/* Show shorts after 2nd post */}
-                        {index === 1 && clips.length > 0 && (
-                            <ShortsGrid shorts={clips.slice(0, 8)} />
-                        )}
+
                     </>
                 )}
                 refreshControl={

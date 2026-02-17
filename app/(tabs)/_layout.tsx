@@ -49,11 +49,12 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Chitki Tab */}
+      {/* Clips Tab - DISABLED FOR V1 LAUNCH */}
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Clips',
+          href: null, // Hide from navigation for V1
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="explore" size={size} color={color} />
           ),

@@ -74,35 +74,37 @@ export default function CreateHubScreen() {
                 <Text style={[styles.greeting, { color: colors.textSecondary }]}>What would you like to share today?</Text>
 
                 <View style={styles.grid}>
-                    {menuItems.map((item, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={[
-                                styles.card,
-                                { backgroundColor: isDark ? colors.card : '#FFF', borderColor: colors.border }
-                            ]}
-                            onPress={() => router.push(item.route as any)}
-                        >
-                            <View style={[styles.iconContainer, { backgroundColor: `${item.color}15` }]}>
-                                <Ionicons name={item.icon as any} size={32} color={item.color} />
-                            </View>
-
-                            <View style={styles.cardContent}>
-                                <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
-                                <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>{item.subtitle}</Text>
-
-                                <View style={styles.tagsRow}>
-                                    {item.items.map(tag => (
-                                        <Text key={tag} style={[styles.miniTag, { color: item.color, backgroundColor: `${item.color}10` }]}>
-                                            {tag}
-                                        </Text>
-                                    ))}
+                    {menuItems
+                        .filter(item => item.route !== '/publish/clip' && item.route !== '/publish/video') // V1: Hide Clips & Videos
+                        .map((item, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={[
+                                    styles.card,
+                                    { backgroundColor: isDark ? colors.card : '#FFF', borderColor: colors.border }
+                                ]}
+                                onPress={() => router.push(item.route as any)}
+                            >
+                                <View style={[styles.iconContainer, { backgroundColor: `${item.color}15` }]}>
+                                    <Ionicons name={item.icon as any} size={32} color={item.color} />
                                 </View>
-                            </View>
 
-                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} style={{ opacity: 0.5 }} />
-                        </TouchableOpacity>
-                    ))}
+                                <View style={styles.cardContent}>
+                                    <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+                                    <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>{item.subtitle}</Text>
+
+                                    <View style={styles.tagsRow}>
+                                        {item.items.map(tag => (
+                                            <Text key={tag} style={[styles.miniTag, { color: item.color, backgroundColor: `${item.color}10` }]}>
+                                                {tag}
+                                            </Text>
+                                        ))}
+                                    </View>
+                                </View>
+
+                                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+                            </TouchableOpacity>
+                        ))}
                 </View>
             </View>
         </SafeAreaView>

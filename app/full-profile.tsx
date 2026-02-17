@@ -48,10 +48,11 @@ import {
 } from '../src/services/connectionService';
 import { deleteEvent, EventItem, getUserEvents } from '../src/services/eventService';
 import { deleteResource, getUserResources, LibraryResource } from '../src/services/libraryService';
-import { addReaction, deletePost, getAllPosts, incrementViewCount, Post, savePost, unsavePost, updatePost } from '../src/services/postsService';
+import { addReaction, deletePost, getAllPosts, Post, savePost, unsavePost, updatePost } from '../src/services/postsService';
 import { updatePostImpressions } from '../src/services/profileStatsService';
 
-type ProfileTabType = 'posts' | 'docs' | 'clips' | 'events';
+type ProfileTabType = 'posts' | 'docs' | 'events'; // V1: Clips removed
+
 
 // Edit Post Modal
 const EditPostModal: React.FC<{
@@ -934,11 +935,7 @@ const ProfileScreen = () => {
                 content = posts.filter(p => p.type === 'image' || p.type === 'note' || p.type === 'news');
                 break;
 
-            case 'clips':
-                // Handled in render directly for specific logic, but keeping this safe
-                // STRICTER FILTER: Only type='clip' OR link has 'shorts'
-                content = posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts')));
-                break;
+
             case 'events':
                 content = [...events];
                 break;
@@ -1203,12 +1200,7 @@ const ProfileScreen = () => {
 
 
 
-                        <TouchableOpacity
-                            style={[styles.ytTab, activeTab === 'clips' && styles.ytTabActive, { borderBottomColor: activeTab === 'clips' ? colors.text : 'transparent' }]}
-                            onPress={() => setActiveTab('clips')}
-                        >
-                            <Text style={[styles.ytTabText, { color: colors.textSecondary }, activeTab === 'clips' && { color: colors.text }]}>Clips</Text>
-                        </TouchableOpacity>
+
 
                         <TouchableOpacity
                             style={[styles.ytTab, activeTab === 'events' && styles.ytTabActive, { borderBottomColor: activeTab === 'events' ? colors.text : 'transparent' }]}
@@ -1310,114 +1302,6 @@ const ProfileScreen = () => {
                                         ))}
                                     </View>
 
-                                ) : activeTab === 'clips' ? (
-                                    <View style={styles.clipsGridContainer}>
-                                        {/* Filter specifically for SHORTS/CLIPS structure based on URL or Type */}
-                                        {posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts'))).map((item: any, index: number) => {
-                                            // Determine thumbnail
-                                            let thumbnailUrl = item.thumbnailUrl || item.imageUrl;
-                                            if (!thumbnailUrl && item.videoLink) {
-                                                // YouTube Fallback
-                                                const ytMatch = item.videoLink.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-                                                if (ytMatch) {
-                                                    thumbnailUrl = `https://img.youtube.com/vi/${ytMatch[1]}/0.jpg`;
-                                                }
-                                                // Cloudinary Fallback
-                                                else if (item.videoLink.includes('cloudinary')) {
-                                                    // Replace extension with .jpg
-                                                    thumbnailUrl = item.videoLink.replace(/\.[^/.]+$/, ".jpg");
-                                                }
-                                            }
-
-                                            return (
-                                                <Pressable
-                                                    key={item.id}
-                                                    style={styles.clipCardItem}
-                                                    onPress={() => {
-                                                        // Increment view count in background (non-blocking)
-                                                        incrementViewCount(item.id);
-
-                                                        // Launch the ClipsFeed player
-                                                        setInitialClipIndex(index);
-                                                        setShowClipsFeed(true);
-                                                    }}
-                                                >
-                                                    {/* Options Button */}
-                                                    {isOwnProfile && (
-                                                        <TouchableOpacity
-                                                            style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, padding: 4 }}
-                                                            onPress={() => handleOptionsPress('clip', item)}
-                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                        >
-                                                            <Ionicons name="ellipsis-vertical" size={20} color="#FFF" style={{ textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2 }} />
-                                                        </TouchableOpacity>
-                                                    )}
-                                                    {/* Thumbnail */}
-                                                    {thumbnailUrl ? (
-                                                        <Image
-                                                            source={{ uri: thumbnailUrl }}
-                                                            style={styles.clipThumbnail}
-                                                            resizeMode="cover"
-                                                        />
-                                                    ) : (
-                                                        <View style={[styles.clipThumbnail, { backgroundColor: isDark ? '#334155' : '#CBD5E1', justifyContent: 'center', alignItems: 'center' }]}>
-                                                            <Ionicons name="film" size={40} color={colors.textSecondary} />
-                                                            <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 12 }}>Clip</Text>
-                                                        </View>
-                                                    )}
-
-                                                    {/* Gradient Overlay */}
-                                                    <LinearGradient
-                                                        colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
-                                                        locations={[0, 0.4, 0.7, 1]}
-                                                        style={styles.clipGradient}
-                                                    >
-                                                        {/* Bottom section - title + creator */}
-                                                        <View style={styles.clipContent}>
-                                                            {/* Title */}
-                                                            <Text style={styles.clipTitle} numberOfLines={1}>
-                                                                {item.content || 'Untitled'}
-                                                            </Text>
-
-                                                            {/* Creator row */}
-                                                            <View style={styles.clipMetaRow}>
-                                                                <View style={styles.clipAuthor}>
-                                                                    <View style={styles.clipAvatar}>
-                                                                        {item.userProfilePhoto ? (
-                                                                            <Image source={{ uri: item.userProfilePhoto }} style={{ width: '100%', height: '100%' }} />
-                                                                        ) : (
-                                                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>
-                                                                                {item.userName.charAt(0).toUpperCase()}
-                                                                            </Text>
-                                                                        )}
-                                                                    </View>
-                                                                    <Text style={styles.clipAuthorName} numberOfLines={1}>
-                                                                        {item.userName}
-                                                                    </Text>
-                                                                </View>
-
-                                                                {/* Combined play + view count bubble */}
-                                                                <View style={styles.clipStats}>
-                                                                    <Ionicons name="play" size={10} color="#FFF" />
-                                                                    <Text style={styles.clipViewsText}>
-                                                                        {item.viewCount && item.viewCount > 0
-                                                                            ? item.viewCount > 1000 ? `${(item.viewCount / 1000).toFixed(1)}K` : item.viewCount
-                                                                            : '0'}
-                                                                    </Text>
-                                                                </View>
-                                                            </View>
-                                                        </View>
-                                                    </LinearGradient>
-                                                </Pressable>
-                                            );
-                                        })}
-                                        {posts.filter(p => p.type === 'clip' || (p.videoLink && p.videoLink.includes('shorts'))).length === 0 && (
-                                            <View style={{ padding: 40, alignItems: 'center', width: '100%' }}>
-                                                <Ionicons name="videocam-outline" size={48} color={colors.textSecondary} />
-                                                <Text style={{ marginTop: 12, color: colors.textSecondary }}>No clips yet</Text>
-                                            </View>
-                                        )}
-                                    </View>
                                 ) : activeTab === 'events' ? (
                                     <View style={{ width: '100%' }}>
                                         <ScrollView

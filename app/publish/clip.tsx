@@ -124,6 +124,15 @@ export default function PublishClipScreen() {
         }
     };
 
+    // V1 LAUNCH: Clips feature disabled
+    React.useEffect(() => {
+        Alert.alert(
+            'Feature Coming Soon',
+            'Clips feature will be available in V2! For now, enjoy sharing posts with images in the Home feed.',
+            [{ text: 'OK', onPress: () => router.back() }]
+        );
+    }, []);
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: 'black' }]} edges={['top', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="black" />
