@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type HistoryItemType = 'video' | 'post' | 'clip' | 'pdf';
+export type HistoryItemType = 'video' | 'post' | 'clip' | 'pdf' | 'image' | 'document' | 'note';
 
 export interface HistoryItem {
     id: string;

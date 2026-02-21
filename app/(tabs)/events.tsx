@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useNetInfo } from '@react-native-community/netinfo';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
+    DeviceEventEmitter,
     Dimensions,
     FlatList,
     Image,
@@ -20,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EventCard } from '../../src/components/EventCard';
+import OfflineState from '../../src/components/OfflineState';
 import { auth } from '../../src/config/firebase';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { getUserProfile } from '../../src/services/authService';
@@ -126,6 +129,7 @@ const CATEGORY_FILTERS: Record<string, FilterGroup[]> = {
 const EventsScreen = () => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
+    const { isConnected } = useNetInfo();
 
     // Force Dark Mode for this screen - REMOVED to fix status bar issue
     // const isDark = true;
@@ -361,6 +365,10 @@ const EventsScreen = () => {
     };
 
     const handleRefresh = async () => {
+        if (isConnected === false) {
+            DeviceEventEmitter.emit('SHOW_TOAST', { message: "Could not refresh. Check internet.", isOffline: true });
+            return;
+        }
         setRefreshing(true);
         try {
             const user = auth.currentUser;
@@ -768,15 +776,19 @@ const EventsScreen = () => {
                         />
                     }
                     ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <Ionicons name="calendar-clear-outline" size={64} color={colors.textSecondary} />
-                            <Text style={[styles.emptyTitle, { color: colors.text }]}>No events found</Text>
-                            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                                {activeSubFilter !== 'All'
-                                    ? `No events found for ${activeSubFilter}`
-                                    : "Try adjusting your preferences."}
-                            </Text>
-                        </View>
+                        isConnected === false ? (
+                            <OfflineState onRetry={handleRefresh} />
+                        ) : (
+                            <View style={styles.emptyState}>
+                                <Ionicons name="calendar-clear-outline" size={64} color={colors.textSecondary} />
+                                <Text style={[styles.emptyTitle, { color: colors.text }]}>No events found</Text>
+                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                                    {activeSubFilter !== 'All'
+                                        ? `No events found for ${activeSubFilter}`
+                                        : "Try adjusting your preferences."}
+                                </Text>
+                            </View>
+                        )
                     }
                 />
             )}

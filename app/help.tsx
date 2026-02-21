@@ -5,6 +5,7 @@ import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Linking,
     Platform,
     ScrollView,
     StatusBar,
@@ -12,7 +13,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -43,16 +44,30 @@ export default function HelpFeedbackScreen() {
         setExpandedFaq(expandedFaq === index ? null : index);
     };
 
-    const handleSendFeedback = () => {
+    const handleSendFeedback = async () => {
         if (!feedback.trim()) return;
 
         setSending(true);
-        // Simulate API call
-        setTimeout(() => {
+        try {
+            const email = 'vidhyardhi.network@gmail.com';
+            const subject = 'App Feedback - Vidhyardhi';
+            const body = feedback;
+            const url = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+            const supported = await Linking.canOpenURL(url);
+
+            if (supported) {
+                await Linking.openURL(url);
+                setFeedback('');
+                // Alert.alert('Thank You', 'Opening your email app...');
+            } else {
+                Alert.alert('Error', 'No email app found to send feedback.');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Could not open email client.');
+        } finally {
             setSending(false);
-            setFeedback('');
-            Alert.alert('Thank You', 'Your feedback has been received!');
-        }, 1500);
+        }
     };
 
     return (
@@ -65,47 +80,55 @@ export default function HelpFeedbackScreen() {
                 <Text style={[styles.headerTitle, { color: colors.text }]}>Help & Feedback</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Frequently Asked Questions</Text>
-                    {faqs.map((faq, index) => (
-                        <View key={index} style={[styles.faqItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <TouchableOpacity
-                                style={styles.faqHeader}
-                                onPress={() => toggleFaq(index)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={[styles.faqQuestion, { color: colors.text }]}>{faq.question}</Text>
-                                <Ionicons
-                                    name={expandedFaq === index ? "chevron-up" : "chevron-down"}
-                                    size={20}
-                                    color={colors.textSecondary}
-                                />
-                            </TouchableOpacity>
-                            {expandedFaq === index && (
-                                <View style={[styles.faqBody, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC' }]}>
-                                    <Text style={[styles.faqAnswer, { color: colors.textSecondary }]}>{faq.answer}</Text>
-                                </View>
-                            )}
-                        </View>
-                    ))}
-                </View>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 20}
+            >
+                <ScrollView
+                    contentContainerStyle={[styles.content, { paddingBottom: 150 }]}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.section}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Frequently Asked Questions</Text>
+                        {faqs.map((faq, index) => (
+                            <View key={index} style={[styles.faqItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <TouchableOpacity
+                                    style={styles.faqHeader}
+                                    onPress={() => toggleFaq(index)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.faqQuestion, { color: colors.text }]}>{faq.question}</Text>
+                                    <Ionicons
+                                        name={expandedFaq === index ? "chevron-up" : "chevron-down"}
+                                        size={20}
+                                        color={colors.textSecondary}
+                                    />
+                                </TouchableOpacity>
+                                {expandedFaq === index && (
+                                    <View style={[styles.faqBody, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F8FAFC' }]}>
+                                        <Text style={[styles.faqAnswer, { color: colors.textSecondary }]}>{faq.answer}</Text>
+                                    </View>
+                                )}
+                            </View>
+                        ))}
+                    </View>
 
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Contact Us</Text>
-                    <TouchableOpacity style={[styles.contactItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => { }}>
-                        <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#EEF2FF' }]}>
-                            <Ionicons name="mail-outline" size={24} color={colors.primary} />
-                        </View>
-                        <View>
-                            <Text style={[styles.contactLabel, { color: colors.text }]}>Email Support</Text>
-                            <Text style={[styles.contactSub, { color: colors.textSecondary }]}>support@vidhyarthi.com</Text>
-                        </View>
-                        <Ionicons name="open-outline" size={20} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
-                    </TouchableOpacity>
-                </View>
+                    <View style={styles.section}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Contact Us</Text>
+                        <TouchableOpacity style={[styles.contactItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => Linking.openURL('mailto:vidhyardhi.network@gmail.com')}>
+                            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(79, 70, 229, 0.1)' : '#EEF2FF' }]}>
+                                <Ionicons name="mail-outline" size={24} color={colors.primary} />
+                            </View>
+                            <View>
+                                <Text style={[styles.contactLabel, { color: colors.text }]}>Email Support</Text>
+                                <Text style={[styles.contactSub, { color: colors.textSecondary }]}>vidhyardhi.network@gmail.com</Text>
+                            </View>
+                            <Ionicons name="open-outline" size={20} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+                        </TouchableOpacity>
+                    </View>
 
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                     <View style={[styles.feedbackSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
                         <Text style={[styles.sectionTitle, { color: colors.text }]}>Send Feedback</Text>
                         <Text style={[styles.feedbackDesc, { color: colors.textSecondary }]}>
@@ -141,8 +164,8 @@ export default function HelpFeedbackScreen() {
                             )}
                         </TouchableOpacity>
                     </View>
-                </KeyboardAvoidingView>
-            </ScrollView>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }

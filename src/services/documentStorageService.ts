@@ -1,5 +1,5 @@
 // Secure Document Storage Service
-// High-security cloud storage for student documents using imgbb
+// High-security cloud storage for student documents using imgbb and Firestore
 
 import { collection, deleteDoc, doc, getDocs, getFirestore, orderBy, query, setDoc, where } from 'firebase/firestore';
 import app from '../config/firebase';
@@ -7,7 +7,8 @@ import { uploadImageToImgBB } from '../utils/imgbbUpload';
 
 const db = getFirestore(app);
 
-export type DocumentCategory = 'certificate' | 'id' | 'memo' | 'transcript' | 'other';
+// Relaxed strict type to allow custom playlists/categories
+export type DocumentCategory = 'certificate' | 'id' | 'memo' | 'transcript' | 'note' | string;
 
 export interface Document {
     id: string;
@@ -17,8 +18,10 @@ export interface Document {
     fileType: string;
     fileSize: number;
     uploadDate: string;
-    storagePath: string;
-    downloadUrl: string;
+    storagePath: string; // URL for files, or empty for notes
+    downloadUrl: string; // URL for files, or empty for notes
+    content?: string;    // Actual content for text notes
+    isLocked?: boolean;  // Extra security for sensitive notes
 }
 
 // Upload document to imgbb
@@ -28,6 +31,7 @@ export const uploadDocument = async (
     fileName: string,
     fileType: string,
     category: DocumentCategory,
+    fileSize: number,
     onProgress?: (progress: number) => void
 ): Promise<Document> => {
     try {
@@ -49,7 +53,7 @@ export const uploadDocument = async (
             name: fileName,
             category,
             fileType,
-            fileSize: 0, // imgbb doesn't return size, set to 0
+            fileSize: fileSize || 0, // Use provided size or default to 0
             uploadDate: new Date().toISOString(),
             storagePath: imgbbUrl, // Use imgbb URL as storage path
             downloadUrl: imgbbUrl,
@@ -62,6 +66,22 @@ export const uploadDocument = async (
         return document;
     } catch (error) {
         console.error('Error uploading document:', error);
+        throw error;
+    }
+};
+
+// ... (saveTextNote remains unchanged) ...
+
+// Update document category (for moving items to playlists/folders)
+export const updateDocumentCategory = async (
+    documentId: string,
+    newCategory: string
+): Promise<void> => {
+    try {
+        const docRef = doc(db, 'documents', documentId);
+        await setDoc(docRef, { category: newCategory }, { merge: true });
+    } catch (error) {
+        console.error('Error updating document category:', error);
         throw error;
     }
 };
@@ -176,36 +196,63 @@ export const getFileIcon = (fileType: string): string => {
     if (fileType.includes('pdf')) return 'document-text';
     if (fileType.includes('image')) return 'image';
     if (fileType.includes('word') || fileType.includes('doc')) return 'document';
+    if (fileType.includes('text') || fileType.includes('plain')) return 'text';
     return 'document-attach';
 };
 
 // Get category icon
-export const getCategoryIcon = (category: DocumentCategory): string => {
-    switch (category) {
+export const getCategoryIcon = (category: string): string => {
+    switch (category.toLowerCase()) {
         case 'certificate':
+        case 'certificates':
             return 'ribbon';
         case 'id':
+        case 'ids':
             return 'card';
         case 'memo':
+        case 'memos':
             return 'newspaper';
         case 'transcript':
+        case 'transcripts':
             return 'school';
+        case 'note':
+        case 'notes':
+            return 'create';
+        case 'finance':
+        case 'bank':
+            return 'cash';
+        case 'password':
+        case 'pins':
+            return 'key';
         default:
             return 'folder';
     }
 };
 
 // Get category color
-export const getCategoryColor = (category: DocumentCategory): string => {
-    switch (category) {
+export const getCategoryColor = (category: string): string => {
+    switch (category.toLowerCase()) {
         case 'certificate':
+        case 'certificates':
             return '#10B981'; // Green
         case 'id':
+        case 'ids':
             return '#3B82F6'; // Blue
         case 'memo':
+        case 'memos':
             return '#F59E0B'; // Orange
         case 'transcript':
+        case 'transcripts':
             return '#8B5CF6'; // Purple
+        case 'note':
+        case 'notes':
+            return '#EC4899'; // Pink
+        case 'finance':
+        case 'bank':
+            return '#14B8A6'; // Teal
+        case 'password':
+        case 'pins':
+            return '#EF4444'; // Red
         default:
             return '#6B7280'; // Gray
     }

@@ -1,6 +1,6 @@
 import { useNetInfo } from '@react-native-community/netinfo';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text } from 'react-native';
+import { Animated, DeviceEventEmitter, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function NetworkStatusToast() {
@@ -44,6 +44,17 @@ export default function NetworkStatusToast() {
         prevConnectedRef.current = isConnected;
     }, [netInfo.isConnected]);
 
+    // Listener for manual triggers (e.g. from FeedList pull-to-refresh)
+    useEffect(() => {
+        const subscription = DeviceEventEmitter.addListener('SHOW_TOAST', (event: { message: string, isOffline: boolean }) => {
+            showToast(event.message, event.isOffline);
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
+
     const showToast = (msg: string, offline: boolean) => {
         setMessage(msg);
         setIsOffline(offline);
@@ -57,10 +68,10 @@ export default function NetworkStatusToast() {
             bounciness: 4,
         }).start();
 
-        // Auto hide after 3 seconds
+        // Auto hide after 2 seconds (requested by user)
         const timeout = setTimeout(() => {
             hideToast();
-        }, 3000);
+        }, 2000);
 
         return () => clearTimeout(timeout);
     };

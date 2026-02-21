@@ -175,7 +175,7 @@ async function sendPushNotificationToUser(userId: string, body: string, data: an
             const pushToken = userData?.pushToken;
 
             if (pushToken) {
-                await sendPushNotification(pushToken, "StudentVerse", body, data);
+                await sendPushNotification(pushToken, "Vidhyardhi", body, data);
             } else {
                 console.log("User has no push token:", userId);
             }

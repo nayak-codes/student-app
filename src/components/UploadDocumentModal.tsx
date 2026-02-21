@@ -1,9 +1,10 @@
 // Upload Document Modal Component
-// Secure document upload with category selection and progress tracking
+// Secure document upload with category selection, camera capture, and progress tracking
 
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import React, { useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -16,15 +17,17 @@ import {
     View,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { DocumentCategory, uploadDocument } from '../services/documentStorageService';
+import { uploadDocument } from '../services/documentStorageService';
 
 interface UploadDocumentModalProps {
     visible: boolean;
     onClose: () => void;
     onUploadComplete: () => void;
+    existingCategories: string[];
+    defaultCategory?: string; // Automatically assign to a playlist if passed
 }
 
-const categories: { value: DocumentCategory; label: string; icon: string }[] = [
+const defaultCategories: { value: string; label: string; icon: string }[] = [
     { value: 'certificate', label: 'Certificate', icon: 'ribbon' },
     { value: 'id', label: 'ID Card', icon: 'card' },
     { value: 'memo', label: 'Memo', icon: 'newspaper' },
@@ -36,13 +39,37 @@ const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
     visible,
     onClose,
     onUploadComplete,
+    existingCategories = [],
+    defaultCategory
 }) => {
     const { user } = useAuth();
     const [selectedFile, setSelectedFile] = useState<any>(null);
     const [documentName, setDocumentName] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('certificate');
+    const [selectedCategory, setSelectedCategory] = useState<string>('certificate');
+    const [isCustomCategory, setIsCustomCategory] = useState(false);
+    const [customCategory, setCustomCategory] = useState('');
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+
+    // Initial setup with default category
+    useEffect(() => {
+        if (visible) {
+            if (defaultCategory) {
+                const isDefault = defaultCategories.some(c => c.value === defaultCategory);
+                if (isDefault) {
+                    setIsCustomCategory(false);
+                    setSelectedCategory(defaultCategory);
+                } else {
+                    setIsCustomCategory(true);
+                    setCustomCategory(defaultCategory);
+                }
+            } else {
+                setIsCustomCategory(false);
+                setSelectedCategory('certificate');
+                setCustomCategory('');
+            }
+        }
+    }, [visible, defaultCategory]);
 
     const handlePickDocument = async () => {
         try {
@@ -54,7 +81,11 @@ const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const file = result.assets[0];
                 setSelectedFile(file);
-                setDocumentName(file.name || 'Untitled Document');
+                if (file.name) {
+                    setDocumentName(file.name.replace(/\.[^/.]+$/, "")); // Strip extension for cleaner default name
+                } else {
+                    setDocumentName('Untitled Document');
+                }
             }
         } catch (error) {
             console.error('Error picking document:', error);
@@ -62,14 +93,58 @@ const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
         }
     };
 
+    const handleTakePhoto = async () => {
+        try {
+            const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+            if (permissionResult.granted === false) {
+                Alert.alert("Permission Refused", "You've refused to allow this app to access your camera!");
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true, // Allow user to crop documents
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const img = result.assets[0];
+
+                // Get filename from URI or use default
+                const filename = img.uri.split('/').pop() || `Photo_${Date.now()}.jpg`;
+
+                // Construct standard file object format used by DocumentPicker results
+                // This keeps uploadDocument function happy
+                const fakeFile = {
+                    uri: img.uri,
+                    name: filename,
+                    mimeType: img.mimeType || 'image/jpeg',
+                    size: img.fileSize || 0
+                };
+
+                setSelectedFile(fakeFile);
+                setDocumentName(`Scan_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
+            }
+        } catch (error) {
+            console.error('Camera error:', error);
+            Alert.alert('Camera Error', 'Could not open the camera.');
+        }
+    };
+
     const handleUpload = async () => {
         if (!selectedFile || !user) {
-            Alert.alert('Error', 'Please select a file');
+            Alert.alert('Error', 'Please select a file or take a picture');
             return;
         }
 
         if (!documentName.trim()) {
             Alert.alert('Error', 'Please enter a document name');
+            return;
+        }
+
+        const finalCategory = isCustomCategory ? customCategory.trim() : selectedCategory;
+        if (isCustomCategory && !finalCategory) {
+            Alert.alert('Error', 'Please enter a category name');
             return;
         }
 
@@ -80,21 +155,20 @@ const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
             await uploadDocument(
                 user.uid,
                 selectedFile.uri,
-                documentName,
+                documentName.trim(),
                 selectedFile.mimeType || 'application/octet-stream',
-                selectedCategory,
+                finalCategory,
+                selectedFile.size || 0,
                 (progress) => setUploadProgress(progress)
             );
 
-            // Show success alert and wait for user acknowledgment before closing
             Alert.alert(
                 '✅ Upload Successful!',
-                `"${documentName}" has been uploaded successfully to your secure document vault.`,
+                `"${documentName}" has been uploaded successfully.`,
                 [
                     {
                         text: 'OK',
                         onPress: () => {
-                            // Close modal and refresh document list AFTER user acknowledges
                             handleClose();
                             onUploadComplete();
                         },
@@ -112,7 +186,12 @@ const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
     const handleClose = () => {
         setSelectedFile(null);
         setDocumentName('');
-        setSelectedCategory('certificate');
+        // Don't reset category here if defaultCategory is passed, rely on useEffect
+        if (!defaultCategory) {
+            setSelectedCategory('certificate');
+            setIsCustomCategory(false);
+            setCustomCategory('');
+        }
         setUploadProgress(0);
         onClose();
     };
@@ -121,7 +200,6 @@ const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
         <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
             <View style={styles.overlay}>
                 <View style={styles.modalContainer}>
-                    {/* Header */}
                     <View style={styles.header}>
                         <Text style={styles.headerTitle}>Upload Document</Text>
                         <TouchableOpacity onPress={handleClose} disabled={uploading}>
@@ -130,18 +208,28 @@ const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
                     </View>
 
                     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                        {/* File Picker */}
-                        <TouchableOpacity
-                            style={styles.pickButton}
-                            onPress={handlePickDocument}
-                            disabled={uploading}
-                        >
-                            <Ionicons name="cloud-upload-outline" size={48} color="#4F46E5" />
-                            <Text style={styles.pickButtonTitle}>
-                                {selectedFile ? 'Change File' : 'Select Document'}
-                            </Text>
-                            <Text style={styles.pickButtonSubtitle}>PDF or Image file</Text>
-                        </TouchableOpacity>
+                        {/* Split Picker buttons */}
+                        <View style={styles.pickerActions}>
+                            <TouchableOpacity
+                                style={[styles.pickButton, styles.flexHalf]}
+                                onPress={handleTakePhoto}
+                                disabled={uploading}
+                            >
+                                <Ionicons name="camera" size={36} color="#4F46E5" />
+                                <Text style={styles.pickButtonTitle}>Use Camera</Text>
+                                <Text style={styles.pickButtonSubtitle}>Scan Doc</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.pickButton, styles.flexHalf]}
+                                onPress={handlePickDocument}
+                                disabled={uploading}
+                            >
+                                <Ionicons name="folder-open" size={36} color="#4F46E5" />
+                                <Text style={styles.pickButtonTitle}>Browse Files</Text>
+                                <Text style={styles.pickButtonSubtitle}>PDF or Image</Text>
+                            </TouchableOpacity>
+                        </View>
 
                         {/* Selected File Info */}
                         {selectedFile && (
@@ -176,37 +264,94 @@ const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
 
                         {/* Category Selection */}
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Category</Text>
-                            <View style={styles.categoriesGrid}>
-                                {categories.map((category) => (
-                                    <TouchableOpacity
-                                        key={category.value}
-                                        style={[
-                                            styles.categoryCard,
-                                            selectedCategory === category.value && styles.categoryCardActive,
-                                        ]}
-                                        onPress={() => setSelectedCategory(category.value)}
-                                        disabled={uploading}
-                                    >
-                                        <Ionicons
-                                            name={category.icon as any}
-                                            size={24}
-                                            color={
-                                                selectedCategory === category.value ? '#4F46E5' : '#64748B'
-                                            }
-                                        />
-                                        <Text
-                                            style={[
-                                                styles.categoryLabel,
-                                                selectedCategory === category.value &&
-                                                styles.categoryLabelActive,
-                                            ]}
-                                        >
-                                            {category.label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
+                            <Text style={styles.label}>Playlist / Category</Text>
+
+                            <View style={styles.categoryTypeSelector}>
+                                <TouchableOpacity
+                                    style={[styles.typeOption, !isCustomCategory && styles.typeOptionActive]}
+                                    onPress={() => setIsCustomCategory(false)}
+                                >
+                                    <Text style={[styles.typeOptionText, !isCustomCategory && styles.typeOptionTextActive]}>Standard</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.typeOption, isCustomCategory && styles.typeOptionActive]}
+                                    onPress={() => setIsCustomCategory(true)}
+                                >
+                                    <Text style={[styles.typeOptionText, isCustomCategory && styles.typeOptionTextActive]}>Custom Playlist</Text>
+                                </TouchableOpacity>
                             </View>
+
+                            {isCustomCategory ? (
+                                <TextInput
+                                    style={styles.input}
+                                    value={customCategory}
+                                    onChangeText={setCustomCategory}
+                                    placeholder="Enter new playlist name..."
+                                    editable={!uploading}
+                                />
+                            ) : (
+                                <View style={styles.categoriesGrid}>
+                                    {defaultCategories.map((category) => (
+                                        <TouchableOpacity
+                                            key={category.value}
+                                            style={[
+                                                styles.categoryCard,
+                                                selectedCategory === category.value && styles.categoryCardActive,
+                                            ]}
+                                            onPress={() => setSelectedCategory(category.value)}
+                                            disabled={uploading}
+                                        >
+                                            <Ionicons
+                                                name={category.icon as any}
+                                                size={24}
+                                                color={
+                                                    selectedCategory === category.value ? '#4F46E5' : '#64748B'
+                                                }
+                                            />
+                                            <Text
+                                                style={[
+                                                    styles.categoryLabel,
+                                                    selectedCategory === category.value &&
+                                                    styles.categoryLabelActive,
+                                                ]}
+                                            >
+                                                {category.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                    {existingCategories.map((cat) => {
+                                        if (defaultCategories.some(d => d.value === cat) || cat === 'all') return null;
+                                        return (
+                                            <TouchableOpacity
+                                                key={cat}
+                                                style={[
+                                                    styles.categoryCard,
+                                                    selectedCategory === cat && styles.categoryCardActive,
+                                                ]}
+                                                onPress={() => setSelectedCategory(cat)}
+                                                disabled={uploading}
+                                            >
+                                                <Ionicons
+                                                    name="folder"
+                                                    size={24}
+                                                    color={
+                                                        selectedCategory === cat ? '#4F46E5' : '#64748B'
+                                                    }
+                                                />
+                                                <Text
+                                                    style={[
+                                                        styles.categoryLabel,
+                                                        selectedCategory === cat &&
+                                                        styles.categoryLabelActive,
+                                                    ]}
+                                                >
+                                                    {cat}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            )}
                         </View>
 
                         {/* Upload Progress */}
@@ -280,17 +425,25 @@ const styles = StyleSheet.create({
     content: {
         padding: 20,
     },
+    pickerActions: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 24,
+    },
+    flexHalf: {
+        flex: 1,
+        marginBottom: 0,
+    },
     pickButton: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 48,
-        paddingHorizontal: 24,
+        paddingVertical: 32,
+        paddingHorizontal: 16,
         borderRadius: 16,
         borderWidth: 2,
         borderColor: '#E2E8F0',
         borderStyle: 'dashed',
         backgroundColor: '#F8FAFC',
-        marginBottom: 24,
     },
     pickButtonTitle: {
         fontSize: 16,
@@ -343,17 +496,46 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: '#1E293B',
     },
+    categoryTypeSelector: {
+        flexDirection: 'row',
+        backgroundColor: '#F1F5F9',
+        borderRadius: 12,
+        padding: 4,
+        marginBottom: 12,
+    },
+    typeOption: {
+        flex: 1,
+        paddingVertical: 8,
+        alignItems: 'center',
+        borderRadius: 8,
+    },
+    typeOptionActive: {
+        backgroundColor: '#FFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    typeOptionText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#64748B',
+    },
+    typeOptionTextActive: {
+        color: '#4F46E5',
+        fontWeight: '600',
+    },
     categoriesGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 12,
     },
     categoryCard: {
-        flex: 1,
-        minWidth: '30%',
+        width: '30%',
         alignItems: 'center',
         paddingVertical: 16,
-        paddingHorizontal: 12,
+        paddingHorizontal: 4,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#E2E8F0',
@@ -424,12 +606,12 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     uploadButtonDisabled: {
-        backgroundColor: '#CBD5E1',
+        opacity: 0.5,
     },
     uploadButtonText: {
+        color: '#FFF',
         fontSize: 16,
         fontWeight: '600',
-        color: '#FFF',
     },
 });
 

@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useNetInfo } from '@react-native-community/netinfo';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  DeviceEventEmitter,
   RefreshControl,
   StatusBar,
   StyleSheet,
@@ -17,6 +19,7 @@ import DocumentViewer from '../../src/components/DocumentViewer';
 import BookShelf from '../../src/components/library/BookShelf';
 import CategoryPills, { CategoryType } from '../../src/components/library/CategoryPills';
 import HeroCarousel from '../../src/components/library/HeroCarousel';
+import OfflineState from '../../src/components/OfflineState';
 import UploadResourceModal from '../../src/components/UploadResourceModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
@@ -28,6 +31,7 @@ type SubjectFilter = 'All' | 'Physics' | 'Chemistry' | 'Maths' | 'Biology';
 
 const LibraryScreen = () => {
   const { colors, isDark } = useTheme();
+  const { isConnected } = useNetInfo();
   const { user, userProfile } = useAuth();
 
   // State
@@ -62,6 +66,10 @@ const LibraryScreen = () => {
   };
 
   const handleRefresh = async () => {
+    if (isConnected === false) {
+      DeviceEventEmitter.emit('SHOW_TOAST', { message: "Could not refresh. Check internet.", isOffline: true });
+      return;
+    }
     setIsRefreshing(true);
     await loadResources();
     setIsRefreshing(false);
@@ -345,10 +353,14 @@ const LibraryScreen = () => {
             />
           ))
         ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="library-outline" size={64} color={colors.textSecondary} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No resources found here.</Text>
-          </View>
+          isConnected === false ? (
+            <OfflineState onRetry={handleRefresh} />
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="library-outline" size={64} color={colors.textSecondary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No resources found here.</Text>
+            </View>
+          )
         )}
       </Animated.ScrollView>
 

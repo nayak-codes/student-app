@@ -1,12 +1,13 @@
 import { useNetInfo } from '@react-native-community/netinfo';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
+import { ActivityIndicator, Alert, DeviceEventEmitter, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
 import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { shouldShowPost } from '../../services/hypeService';
 import { addReaction, deletePost, getAllPosts, likePost, Post, ReactionType, removeReaction, savePost, unlikePost, unsavePost } from '../../services/postsService';
 import CommentsBottomSheet from '../CommentsBottomSheet';
+import OfflineState from '../OfflineState';
 import FeedPost from './FeedPost';
 
 interface FeedListProps {
@@ -138,7 +139,7 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
 
     const onRefresh = useCallback(() => {
         if (isConnected === false) {
-            Alert.alert("Offline", "You are currently offline. Cannot refresh feed.");
+            DeviceEventEmitter.emit('SHOW_TOAST', { message: "Could not refresh. Check internet.", isOffline: true });
             return;
         }
         setRefreshing(true);
@@ -328,7 +329,7 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
 
     return (
         <View style={[styles.container, { backgroundColor: 'transparent' }]}>
-            {isConnected === false && (
+            {isConnected === false && posts.length > 0 && (
                 <View style={[styles.offlineBanner, { backgroundColor: '#EF4444' }]}>
                     <Text style={styles.offlineText}>Offline Mode</Text>
                 </View>
@@ -374,9 +375,13 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
                     contentContainerStyle // Append external styles (e.g. padding for header)
                 ]}
                 ListEmptyComponent={
-                    <View style={styles.emptyView}>
-                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No posts yet. Be the first to share!</Text>
-                    </View>
+                    isConnected === false ? (
+                        <OfflineState onRetry={fetchPosts} />
+                    ) : (
+                        <View style={styles.emptyView}>
+                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No posts yet. Be the first to share!</Text>
+                        </View>
+                    )
                 }
                 initialNumToRender={3}
                 maxToRenderPerBatch={3}
