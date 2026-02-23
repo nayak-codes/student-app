@@ -148,8 +148,14 @@ export default function GroupChatScreen() {
         const unsubscribe = subscribeToMessages(conversationId, (newMessages) => {
             setMessages(newMessages);
             setLoading(false);
-            // Don't auto-mark as read when new messages arrive
-            // Only mark as read when user focuses the screen (handled by useFocusEffect above)
+
+            // Auto mark new messages as read since the user is on this screen
+            if (auth.currentUser) {
+                const hasUnread = newMessages.some(m => m.senderId !== auth.currentUser?.uid && !m.read);
+                if (hasUnread) {
+                    markMessagesAsRead(conversationId, auth.currentUser.uid);
+                }
+            }
         });
 
         return () => {

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Vidhyardhi",
-    "slug": "balanju",
+    "slug": "vidhyardhi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vithyarthi"
+      "bundleIdentifier": "com.vithyarthi",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.vithyarthi.app",
@@ -54,9 +57,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "bb02cd18-ff8b-404c-a430-61a7299a6dd4"
+        "projectId": "3a51c3ac-c39d-4cc4-8457-1ce142a37105"
       }
     },
-    "owner": "balanju"
+    "owner": "balajimaharajs-organization"
   }
 }

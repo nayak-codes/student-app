@@ -258,8 +258,14 @@ const ChatScreen = () => {
         const unsubscribe = subscribeToMessages(conversationId, (newMessages) => {
             setMessages(newMessages);
             setLoading(false);
-            // Don't auto-mark as read when new messages arrive
-            // Only mark as read when user focuses the screen (handled by useFocusEffect above)
+
+            // Auto mark new messages as read since the user is on this screen
+            if (auth.currentUser) {
+                const hasUnread = newMessages.some(m => m.senderId !== auth.currentUser?.uid && !m.read);
+                if (hasUnread) {
+                    markMessagesAsRead(conversationId, auth.currentUser.uid);
+                }
+            }
         });
 
         return () => unsubscribe();
@@ -445,22 +451,7 @@ const ChatScreen = () => {
                     styles.messageContainer,
                     isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
                 ]}>
-                    {!isOwnMessage && (
-                        <TouchableOpacity
-                            style={styles.avatarContainer}
-                            onPress={() => router.push({ pathname: '/public-profile', params: { userId: item.senderId } })}
-                        >
-                            {item.senderPhoto ? (
-                                <Image source={{ uri: item.senderPhoto }} style={styles.avatar} />
-                            ) : (
-                                <View style={styles.avatarPlaceholder}>
-                                    <Text style={styles.avatarText}>
-                                        {item.senderName?.charAt(0).toUpperCase()}
-                                    </Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
-                    )}
+
 
                     {/* Poll Message */}
                     {item.messageType === 'poll' && item.poll ? (
@@ -643,7 +634,25 @@ const ChatScreen = () => {
                                             </View>
                                         </TouchableOpacity>
                                     </View>
-                                ) : null}
+                                ) : (
+                                    <View style={{ padding: 12 }}>
+                                        <Text style={{ color: colors.text }}>{item.text || 'Shared Content'}</Text>
+                                        <Text style={{ fontSize: 10, color: colors.textSecondary, alignSelf: 'flex-end', marginTop: 4 }}>
+                                            {formatMessageTime(item.timestamp)}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {/* Add Read Receipts inside the shared card container for own messages */}
+                                {isOwnMessage && (
+                                    <View style={{ position: 'absolute', bottom: 6, right: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 2 }}>
+                                        <Ionicons
+                                            name={item.read ? "checkmark-done" : (item.delivered ? "checkmark-done" : "checkmark")}
+                                            size={14}
+                                            color={item.read ? "#22c55e" : (item.delivered ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)")}
+                                        />
+                                    </View>
+                                )}
                             </View>
                         ) : (
                             /* Regular Text / Image / File Bubble */
@@ -698,13 +707,27 @@ const ChatScreen = () => {
                                     </Text>
                                 )}
 
-                                <Text style={[
-                                    styles.messageTimeInline,
-                                    isOwnMessage ? styles.ownMessageTimeInline : [styles.otherMessageTimeInline, { color: colors.textSecondary }],
+                                <View style={[
+                                    styles.messageTimeRow,
+                                    isOwnMessage ? styles.ownMessageTimeRow : styles.otherMessageTimeRow,
                                     (item.messageType === 'image') && { marginRight: 12, marginBottom: 8 } // Add spacing for time overlay
                                 ]}>
-                                    {formatMessageTime(item.timestamp)}
-                                </Text>
+                                    <Text style={[
+                                        styles.messageTimeText,
+                                        isOwnMessage ? styles.ownMessageTimeText : { color: colors.textSecondary }
+                                    ]}>
+                                        {formatMessageTime(item.timestamp)}
+                                    </Text>
+                                    {isOwnMessage && (
+                                        <View style={{ marginLeft: 4, marginTop: 1 }}>
+                                            <Ionicons
+                                                name={item.read ? "checkmark-done" : (item.delivered ? "checkmark-done" : "checkmark")}
+                                                size={16}
+                                                color={item.read ? "#22c55e" : (item.delivered ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)")}
+                                            />
+                                        </View>
+                                    )}
+                                </View>
                             </View>
                         )
                     )
@@ -1105,15 +1128,26 @@ const styles = StyleSheet.create({
     otherMessageText: {
         color: '#FFFFFF',
     },
-    messageTimeInline: {
-        fontSize: 10,
+    messageTimeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         alignSelf: 'flex-end',
+        marginTop: 2,
+    },
+    ownMessageTimeRow: {
+        justifyContent: 'flex-end',
+    },
+    otherMessageTimeRow: {
+        justifyContent: 'flex-start',
+    },
+    messageTimeText: {
+        fontSize: 10,
         opacity: 0.8,
     },
-    ownMessageTimeInline: {
+    ownMessageTimeText: {
         color: 'rgba(255, 255, 255, 0.9)',
     },
-    otherMessageTimeInline: {
+    otherMessageTimeText: {
         color: 'rgba(255, 255, 255, 0.7)',
     },
 

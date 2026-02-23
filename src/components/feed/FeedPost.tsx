@@ -64,6 +64,7 @@ const FeedPost: React.FC<FeedPostProps> = ({
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const screenWidth = Dimensions.get('window').width;
     const [sliderWidth, setSliderWidth] = useState(screenWidth);
+    const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
 
     // Animation for picker
     const [fadeAnim] = useState(new Animated.Value(0));
@@ -71,7 +72,9 @@ const FeedPost: React.FC<FeedPostProps> = ({
     const isOwnPost = post.userId === currentUserId;
 
     // Unified Image Logic
-    const galleryImages = (post.imageUrls && post.imageUrls.length > 0) ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []);
+    const galleryImages = (post.imageUrls && post.imageUrls.length > 0)
+        ? post.imageUrls.filter(url => url && url.trim() !== '')
+        : (post.imageUrl && post.imageUrl.trim() !== '' ? [post.imageUrl] : []);
 
     // Determine total reactions count (including local optimistic update if needed)
     // For simplicity, we use post.reactions count + delta or just rely on post.likes (legacy) + post.reactions keys
@@ -88,8 +91,17 @@ const FeedPost: React.FC<FeedPostProps> = ({
     useEffect(() => {
         if (post.imageUrl) {
             Image.getSize(post.imageUrl, (width, height) => {
-                setAspectRatio(width / height);
+                if (width && height && height > 0) {
+                    setAspectRatio(width / height);
+                } else {
+                    setAspectRatio(4 / 3);
+                }
+            }, () => {
+                // Failure callback
+                setAspectRatio(4 / 3);
             });
+        } else {
+            setAspectRatio(4 / 3);
         }
     }, [post.imageUrl]);
 
@@ -246,7 +258,7 @@ const FeedPost: React.FC<FeedPostProps> = ({
 
             {/* Content (Caption Top) */}
             <View style={styles.content}>
-                {post.content && (
+                {!!post.content && post.content.trim().length > 0 && (
                     <TouchableOpacity
                         style={styles.captionContainer}
                         activeOpacity={1}
@@ -267,9 +279,14 @@ const FeedPost: React.FC<FeedPostProps> = ({
                 <Text style={[styles.timeAgo, { color: colors.textSecondary, paddingHorizontal: 14, marginBottom: 4 }]}>
                     {post.createdAt ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }) : 'Just now'}
                 </Text>
-                {/* Multi-Photo Carousel or Single Image */}
                 {galleryImages.length > 0 ? (
-                    <View>
+                    <View
+                        onLayout={(e) => {
+                            const w = e.nativeEvent.layout.width;
+                            if (w > 0) setSliderWidth(w);
+                        }}
+                        style={{ width: '100%' }}
+                    >
                         {galleryImages.length > 1 ? (
                             <ScrollView
                                 horizontal
@@ -278,32 +295,37 @@ const FeedPost: React.FC<FeedPostProps> = ({
                                 scrollEventThrottle={16}
                                 onScroll={(e) => {
                                     const offset = e.nativeEvent.contentOffset.x;
-                                    if (screenWidth > 0) {
-                                        const index = Math.round(offset / screenWidth);
-                                        setCurrentImageIndex(index);
-                                    }
+                                    const w = sliderWidth || screenWidth;
+                                    if (w > 0) setCurrentImageIndex(Math.round(offset / w));
                                 }}
-                                style={{ width: screenWidth, aspectRatio: aspectRatio || 4 / 3 }}
                             >
                                 {galleryImages.map((url, index) => (
                                     <TouchableOpacity
                                         key={index}
                                         activeOpacity={0.95}
                                         onPress={() => {
-                                            router.push({
-                                                pathname: '/image-viewer' as any,
-                                                params: {
-                                                    images: JSON.stringify(galleryImages),
-                                                    index: index
-                                                }
-                                            });
+                                            if (!imageErrors[index]) {
+                                                router.push({
+                                                    pathname: '/image-viewer' as any,
+                                                    params: { images: JSON.stringify(galleryImages), index }
+                                                });
+                                            }
                                         }}
+                                        style={{ width: sliderWidth || screenWidth, height: 260, backgroundColor: isDark ? '#1E293B' : '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
                                     >
-                                        <Image
-                                            source={{ uri: url }}
-                                            style={{ width: screenWidth, height: '100%', aspectRatio: aspectRatio }}
-                                            resizeMode="cover"
-                                        />
+                                        {imageErrors[index] ? (
+                                            <View style={{ alignItems: 'center', opacity: 0.5 }}>
+                                                <Ionicons name="image-outline" size={48} color={colors.textSecondary} />
+                                                <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 13 }}>Image unavailable</Text>
+                                            </View>
+                                        ) : (
+                                            <Image
+                                                source={{ uri: url }}
+                                                style={{ width: sliderWidth || screenWidth, height: 260 }}
+                                                resizeMode="cover"
+                                                onError={() => setImageErrors(prev => ({ ...prev, [index]: true }))}
+                                            />
+                                        )}
                                     </TouchableOpacity>
                                 ))}
                             </ScrollView>
@@ -311,16 +333,28 @@ const FeedPost: React.FC<FeedPostProps> = ({
                             <TouchableOpacity
                                 activeOpacity={0.95}
                                 onPress={() => {
-                                    router.push({
-                                        pathname: '/image-viewer' as any,
-                                        params: {
-                                            images: JSON.stringify(galleryImages),
-                                            index: 0
-                                        }
-                                    });
+                                    if (!imageErrors[0]) {
+                                        router.push({
+                                            pathname: '/image-viewer' as any,
+                                            params: { images: JSON.stringify(galleryImages), index: 0 }
+                                        });
+                                    }
                                 }}
+                                style={{ width: '100%', height: 260, backgroundColor: isDark ? '#1E293B' : '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}
                             >
-                                <Image source={{ uri: galleryImages[0] }} style={{ width: screenWidth, aspectRatio: aspectRatio || 4 / 3 }} resizeMode="cover" />
+                                {imageErrors[0] ? (
+                                    <View style={{ alignItems: 'center', opacity: 0.5 }}>
+                                        <Ionicons name="image-outline" size={48} color={colors.textSecondary} />
+                                        <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 13 }}>Image unavailable</Text>
+                                    </View>
+                                ) : (
+                                    <Image
+                                        source={{ uri: galleryImages[0] }}
+                                        style={{ width: '100%', height: 260 }}
+                                        resizeMode="cover"
+                                        onError={() => setImageErrors(prev => ({ ...prev, [0]: true }))}
+                                    />
+                                )}
                             </TouchableOpacity>
                         )}
 

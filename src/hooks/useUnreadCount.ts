@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Conversation, subscribeToConversations } from '../services/chatService';
+import { Conversation, markMessagesAsDelivered, subscribeToConversations } from '../services/chatService';
 
 export const useUnreadCount = () => {
     const { user } = useAuth();
@@ -15,6 +15,12 @@ export const useUnreadCount = () => {
         const unsubscribe = subscribeToConversations(user.uid, (conversations: Conversation[]) => {
             const count = conversations.reduce((sum, conversation) => {
                 const userUnread = conversation.unreadCount?.[user.uid] || 0;
+
+                // If there are unread messages, we can assume they have been delivered since we received them
+                if (userUnread > 0) {
+                    markMessagesAsDelivered(conversation.id, user.uid);
+                }
+
                 return sum + userUnread;
             }, 0);
             setUnreadCount(count);

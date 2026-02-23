@@ -1,5 +1,6 @@
 import { useNetInfo } from '@react-native-community/netinfo';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, DeviceEventEmitter, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
 import ShareModal from '../../components/ShareModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -45,7 +46,7 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
 
     const fetchPosts = async () => {
         try {
-            const fetchedPosts = await getAllPosts();
+            const fetchedPosts = await getAllPosts(100);
             setAllPosts(fetchedPosts);
 
             // Get current user's role to access studentStatus
@@ -63,63 +64,15 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
             // Filter out 'clip' AND 'video' from main feed (LinkedIn style text/image focus)
             const regularPosts = visiblePosts.filter(p => p.type !== 'clip' && p.type !== 'video');
 
-            // Shuffle helper
-            const shuffle = (array: any[]) => {
-                for (let i = array.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [array[i], array[j]] = [array[j], array[i]];
-                }
-                return array;
-            };
+            // Sort posts by date descending (newest first)
+            const sortedPosts = regularPosts.sort((a, b) => {
+                const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+                const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+                return dateB.getTime() - dateA.getTime();
+            });
 
-            // DYNAMIC FEED LOGIC: "Shuffled Priority Pool"
-            // Goal: Top of feed should be high quality (My/Network/New/Popular) but DYNAMIC (Change order on refresh).
-            const dynamicMix = (postsToMix: Post[]) => {
-                const myUid = user?.uid;
-
-                // 1. Create a "Priority Candidates" Pool
-                // These are posts eligible to be at the very top.
-                const priorityCandidates = new Map<string, Post>();
-
-                // Helper to add to pool
-                const addToPool = (p: Post) => priorityCandidates.set(p.id, p);
-
-                // A. My Posts & Network Posts
-                postsToMix.filter(p => p.userId === myUid || followingIds.includes(p.userId))
-                    .forEach(addToPool);
-
-                // B. Popular/Hyped Posts
-                postsToMix.filter(p => (p.reactions?.hype || 0) > 0 || p.likes > 5)
-                    .forEach(addToPool);
-
-                // C. Top 10 Global Newest (to ensure fresh content is in the mix)
-                [...postsToMix].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                    .slice(0, 10)
-                    .forEach(addToPool);
-
-                // 2. Select the HEAD (Top 4 Posts)
-                // We take all priority candidates, SHUFFLE them, and pick the top 4.
-                // This ensures the top 4 are always "Good" posts, but the order changes every refresh.
-                const allCandidates = Array.from(priorityCandidates.values());
-                const shuffledCandidates = shuffle([...allCandidates]);
-
-                const HEAD_SIZE = 4;
-                const headPosts = shuffledCandidates.slice(0, HEAD_SIZE);
-                const headIds = new Set(headPosts.map(p => p.id));
-
-                // 3. Select the TAIL (Everything else)
-                // Everything not in the head is shuffled into the tail.
-                const tailPosts = postsToMix.filter(p => !headIds.has(p.id));
-                const shuffledTail = shuffle([...tailPosts]);
-
-                console.log(`Feed Mix: Pool=${allCandidates.length}, Head=${headPosts.length}, Tail=${tailPosts.length}`);
-
-                // Combine
-                return [...headPosts, ...shuffledTail];
-            };
-
-            // V1: Clips removed - only regular posts
-            setPosts(dynamicMix(regularPosts));
+            // Set the posts directly
+            setPosts(sortedPosts);
 
         } catch (error: any) {
             console.error('Error fetching posts:', error);
@@ -133,9 +86,11 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
         }
     };
 
-    useEffect(() => {
-        fetchPosts();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            fetchPosts();
+        }, [])
+    );
 
     const onRefresh = useCallback(() => {
         if (isConnected === false) {

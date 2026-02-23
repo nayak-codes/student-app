@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { createPost } from '../../src/services/postsService';
-import { uploadImageWithProgress } from '../../src/utils/imgbbUpload';
+import { uploadImageToFirebase } from '../../src/utils/firebaseStorageUpload';
 
 export default function PublishPostScreen() {
     const router = useRouter();
@@ -74,8 +74,7 @@ export default function PublishPostScreen() {
                     // Update progress (rough estimation: (i / total) * 100)
                     setUploadProgress(((i) / selectedImages.length) * 100);
 
-                    const url = await uploadImageWithProgress(selectedImages[i], (p) => {
-                        // Fine-grained progress for current image could be calculated here
+                    const url = await uploadImageToFirebase(selectedImages[i], 'posts', (p) => {
                         setUploadProgress(((i + (p / 100)) / selectedImages.length) * 100);
                     });
                     if (url) uploadedUrls.push(url);
@@ -89,8 +88,8 @@ export default function PublishPostScreen() {
                 userHeadline: userProfile?.headline || userProfile?.about || '',
                 userProfilePhoto: userProfile?.profilePhoto || userProfile?.photoURL || '',
                 content: content.trim(),
-                type: 'image',
-                imageUrl: uploadedUrls[0], // Backwards compatibility: use first image as main
+                type: uploadedUrls.length > 0 ? 'image' : 'note',
+                imageUrl: uploadedUrls[0] || undefined, // Backwards compatibility: use first image as main
                 imageUrls: uploadedUrls,    // Save all images
                 tags: selectedTags,
                 authorStudentStatus: userProfile?.studentStatus, // For smart hype algorithm

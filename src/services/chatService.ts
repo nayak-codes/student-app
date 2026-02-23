@@ -40,6 +40,7 @@ export interface Message {
     };
     timestamp: Timestamp;
     read: boolean;
+    delivered?: boolean;
 }
 
 export interface Conversation {
@@ -172,6 +173,7 @@ export const sendMessage = async (
             messageType,
             timestamp: serverTimestamp(),
             read: false,
+            delivered: false,
         };
 
         if (mediaUrl) {
@@ -418,6 +420,38 @@ export const markMessagesAsRead = async (
     } catch (error) {
         console.error('Error marking messages as read:', error);
         throw error;
+    }
+};
+
+/**
+ * Mark messages in a conversation as delivered
+ */
+export const markMessagesAsDelivered = async (
+    conversationId: string,
+    userId: string
+): Promise<void> => {
+    try {
+        const batch = writeBatch(db);
+
+        // Get unread messages sent by others
+        const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+        const q = query(messagesRef, where('read', '==', false), where('senderId', '!=', userId));
+        const snapshot = await getDocs(q);
+
+        let updateCount = 0;
+        snapshot.docs.forEach((document) => {
+            const data = document.data();
+            if (data.delivered !== true) {
+                batch.update(document.ref, { delivered: true });
+                updateCount++;
+            }
+        });
+
+        if (updateCount > 0) {
+            await batch.commit();
+        }
+    } catch (error) {
+        console.error('Error marking messages as delivered:', error);
     }
 };
 

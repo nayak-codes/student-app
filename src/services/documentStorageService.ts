@@ -1,7 +1,18 @@
 // Secure Document Storage Service
 // High-security cloud storage for student documents using imgbb and Firestore
 
-import { collection, deleteDoc, doc, getDocs, getFirestore, orderBy, query, setDoc, where } from 'firebase/firestore';
+import {
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+    getFirestore, // Retained getFirestore
+    orderBy,
+    query,
+    setDoc, // Added updateDoc
+    where
+} from 'firebase/firestore';
 import app from '../config/firebase';
 import { uploadImageToImgBB } from '../utils/imgbbUpload';
 
@@ -139,6 +150,36 @@ export const deleteDocument = async (documentId: string, storagePath: string): P
 // Get document download URL (for imgbb, the storagePath IS the download URL)
 export const getDocumentDownloadUrl = async (storagePath: string): Promise<string> => {
     return storagePath;
+};
+
+// Save a simple text note directly to Firestore
+export const saveTextNote = async (
+    userId: string,
+    title: string,
+    content: string,
+    category: string,
+    isLocked: boolean = false
+): Promise<void> => {
+    try {
+        const documentsRef = collection(db, 'documents');
+        const newDoc: Omit<Document, 'id'> = {
+            userId,
+            name: title,
+            fileType: 'text/plain',
+            downloadUrl: '', // Not needed for notes
+            storagePath: '', // Not needed for notes
+            uploadDate: new Date().toISOString(),
+            category,
+            fileSize: new Blob([content]).size, // Approximate size of the text
+            content: content,
+            isLocked: isLocked
+        };
+
+        await addDoc(documentsRef, newDoc);
+    } catch (error) {
+        console.error('Error saving text note:', error);
+        throw error;
+    }
 };
 
 // Get documents by category
