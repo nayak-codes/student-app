@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { createPost } from '../../src/services/postsService';
-import { uploadImageToFirebase } from '../../src/utils/firebaseStorageUpload';
+import { uploadImageWithProgress } from '../../src/utils/imgbbUpload';
 
 export default function PublishPostScreen() {
     const router = useRouter();
@@ -74,7 +74,8 @@ export default function PublishPostScreen() {
                     // Update progress (rough estimation: (i / total) * 100)
                     setUploadProgress(((i) / selectedImages.length) * 100);
 
-                    const url = await uploadImageToFirebase(selectedImages[i], 'posts', (p) => {
+                    const url = await uploadImageWithProgress(selectedImages[i], (p) => {
+                        // Fine-grained progress for current image could be calculated here
                         setUploadProgress(((i + (p / 100)) / selectedImages.length) * 100);
                     });
                     if (url) uploadedUrls.push(url);

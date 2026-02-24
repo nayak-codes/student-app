@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { createPost } from '../../src/services/postsService';
-import { uploadImageToFirebase } from '../utils/firebaseStorageUpload';
+import { uploadImageWithProgress } from '../utils/imgbbUpload';
 import { YouTubeVideoMetadata, getVideoMetadata, isYouTubeUrl } from '../utils/youtubeUtils';
 
 interface CreatePostModalProps {
@@ -118,9 +118,8 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClose, onP
             // Upload image if selected
             if (selectedImage && postType === 'image') {
                 console.log('Uploading image...');
-                imageUrl = await uploadImageToFirebase(
+                imageUrl = await uploadImageWithProgress(
                     selectedImage,
-                    'posts',
                     (progress) => setUploadProgress(progress)
                 );
                 console.log('Image uploaded:', imageUrl);
