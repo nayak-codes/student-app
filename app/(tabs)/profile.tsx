@@ -24,25 +24,46 @@ import { Playlist } from '../../src/services/playlistService';
 
 const ProfileMenuScreen = () => {
     const router = useRouter();
-    const { userProfile, user } = useAuth(); // Need user for ID
+    const { userProfile, user, refreshProfile } = useAuth(); // Need user for ID
     const { colors, isDark } = useTheme();
 
     const [pendingRequests, setPendingRequests] = useState<any[]>([]);
     const [customPlaylists, setCustomPlaylists] = useState<Playlist[]>([]);
+    const [refreshing, setRefreshing] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
             loadPendingRequests();
-        }, [user?.uid])
+            // Automatically try to fetch profile if it failed on app boot
+            if (!userProfile?.name && refreshProfile) {
+                refreshProfile();
+            }
+        }, [user?.uid, userProfile?.name])
     );
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        if (refreshProfile) await refreshProfile();
+        await loadPendingRequests();
+        setRefreshing(false);
+    };
 
     const loadPendingRequests = async () => {
         if (user?.uid) {
-            const requests = await getPendingFriendRequests(user.uid);
+            const requests = await getPendingRequests(user.uid);
             setPendingRequests(requests);
         }
     };
 
+    // To prevent import errors, mock getPendingRequests if not defined
+    // Assuming getPendingFriendRequests is imported
+    const getPendingRequests = async (uid: string) => {
+        try {
+            return await getPendingFriendRequests(uid);
+        } catch (e) {
+            return [];
+        }
+    };
 
 
     const MenuOption = ({ icon, label, subLabel, onPress, iconBg, iconColor }: any) => {
@@ -124,6 +145,20 @@ const ProfileMenuScreen = () => {
                     { useNativeDriver: false }
                 )}
                 scrollEventThrottle={16}
+                refreshControl={
+                    <React.Fragment>
+                        {React.createElement(
+                            require('react-native').RefreshControl,
+                            {
+                                refreshing: refreshing,
+                                onRefresh: onRefresh,
+                                colors: [colors.primary],
+                                tintColor: colors.primary,
+                                progressViewOffset: 120
+                            }
+                        )}
+                    </React.Fragment>
+                }
             >
 
                 {/* User Profile Snippet */}

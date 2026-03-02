@@ -61,14 +61,13 @@ try {
 export async function registerForPushNotificationsAsync(userId?: string) {
     let token;
 
-    // 1. TIMING & ENV CHECK: Block immediately if in Expo Go to prevent "removed in SDK 53" error
+    // 1. TIMING & ENV CHECK: Removed strict Expo Go blockage
     // Constants.appOwnership === 'expo' OR Constants.executionEnvironment === 'storeClient' usually detects Expo Go
-    const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-
-    if (isExpoGo) {
-        console.log("Push Notifications: Skipped in Expo Go (Functionality removed in SDK 53). strict mode: off");
-        return null;
-    }
+    // We will attempt to run it anyway and let the try/catch handle it if it fails.
+    // if (isExpoGo) {
+    //     console.log("Push Notifications: Skipped in Expo Go (Functionality removed in SDK 53). strict mode: off");
+    //     return null;
+    // }
 
     if (Platform.OS === 'android') {
         try {
@@ -112,11 +111,15 @@ export async function registerForPushNotificationsAsync(userId?: string) {
             }
 
         } catch (e: any) {
-            // Enhanced error handling for Expo Go SDK 53+
+            // Enhanced error handling
             if (e?.message?.includes('removed from Expo Go') || e?.message?.includes('Development Build')) {
                 console.log("Push Notifications: Skipped in Expo Go (Functionality removed in SDK 53)");
             } else {
-                console.error("Error getting push token:", e);
+                console.error("⚠️ Error getting push token:", e);
+                // Optionally alert user here if this is a standalone build and fails
+                if (!Constants.appOwnership || Constants.appOwnership !== 'expo') {
+                    console.error("Critical push token failure in standalone build.", e);
+                }
             }
         }
     } else {
@@ -207,8 +210,11 @@ async function sendPushNotification(expoPushToken: string, title: string, body: 
             },
             body: JSON.stringify(message),
         });
-        // const result = await response.json();
-        // console.log("Push Send Result:", result);
+        const result = await response.json();
+        console.log("Push Send Result:", result);
+        if (result.errors) {
+            console.error("Expo Push Error Details:", result.errors);
+        }
     } catch (error) {
         console.error("Error sending push to Expo API:", error);
     }

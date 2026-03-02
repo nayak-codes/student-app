@@ -1,2 +1,11 @@
-eas build -p android --profile 
-running command : npx expo start --go
+
+aab: 
+eas build -p android --profile production
+
+APK:
+eas build -p android --profile preview
+
+running command Andrioid  : 
+   npx expo start --go
+Running command :
+   npx expo start

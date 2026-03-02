@@ -20,6 +20,8 @@ export default function SettingsScreen() {
     const { logout, user, userProfile, refreshProfile } = useAuth();
     const { colors, isDark, toggleTheme } = useTheme();
     const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+    // Import the register function to allow manual re-registration
+    const { registerForPushNotificationsAsync } = require('../src/services/notificationService');
 
     useEffect(() => {
         if (userProfile?.preferences) {
@@ -95,6 +97,37 @@ export default function SettingsScreen() {
         }
     };
 
+    const testPushNotifications = async () => {
+        if (!user) return;
+        try {
+            Alert.alert("Testing", "Generating token and trying to send a test push...");
+            // 1. Force re-register to ensure we have a fresh token
+            const token = await registerForPushNotificationsAsync(user.uid);
+
+            if (!token) {
+                Alert.alert("Failed", "Could not generate Expo Push Token. Are you on a physical device?");
+                return;
+            }
+
+            // 2. Send a test push via our service
+            const { sendNotification } = require('../src/services/notificationService');
+            await sendNotification(
+                user.uid,
+                user.uid,
+                'System Test',
+                null,
+                'system',
+                'This is a test push notification. If you see this, notifications are working!',
+                { test: true }
+            );
+            Alert.alert("Success", "Test notification saved and push requested. Check your system tray!");
+
+        } catch (e: any) {
+            console.error("Test push failed:", e);
+            Alert.alert("Error", `Test failed: ${e.message}`);
+        }
+    };
+
     const SettingItem = ({ icon, label, onPress, value, type = 'link' }: any) => (
         <TouchableOpacity
             style={[styles.item, { borderBottomColor: colors.border }]}
@@ -158,6 +191,11 @@ export default function SettingsScreen() {
                         type="switch"
                         value={notificationsEnabled}
                         onPress={toggleNotifications}
+                    />
+                    <SettingItem
+                        icon="paper-plane-outline"
+                        label="Test Push Notifications"
+                        onPress={testPushNotifications}
                     />
                     <SettingItem
                         icon={isDark ? "moon" : "moon-outline"}

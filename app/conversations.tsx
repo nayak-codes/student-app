@@ -473,6 +473,7 @@ const ConversationsScreen = () => {
                             })()}
                         </TouchableOpacity>
 
+                        {/* Pages tab temporarily hidden
                         <TouchableOpacity
                             style={[
                                 styles.tab,
@@ -509,6 +510,7 @@ const ConversationsScreen = () => {
                                 ) : null;
                             })()}
                         </TouchableOpacity>
+                        */}
                     </View>
                 </SafeAreaView>
             </Animated.View>

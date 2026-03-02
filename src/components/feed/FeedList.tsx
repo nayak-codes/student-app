@@ -1,5 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetInfo } from '@react-native-community/netinfo';
-import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, DeviceEventEmitter, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
 import ShareModal from '../../components/ShareModal';
@@ -37,6 +37,8 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
 
     // Track which posts are currently visible in viewport
     const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
+    // Track posts seen historically across sessions
+    const [historicalSeenIds, setHistoricalSeenIds] = useState<Set<string>>(new Set());
 
     React.useImperativeHandle(ref, () => ({
         scrollToTop: () => {
@@ -44,8 +46,20 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
         }
     }));
 
-    const fetchPosts = async () => {
+    const fetchPosts = async (isManualRefresh = false) => {
         try {
+            // 1. Load seen posts first to use in scoring
+            let currentSeenIds = new Set<string>();
+            try {
+                const seenStr = await AsyncStorage.getItem('seenPostIds');
+                if (seenStr) {
+                    currentSeenIds = new Set(JSON.parse(seenStr));
+                    setHistoricalSeenIds(currentSeenIds);
+                }
+            } catch (e) {
+                console.error("Error loading seen posts:", e);
+            }
+
             const fetchedPosts = await getAllPosts(100);
             setAllPosts(fetchedPosts);
 
@@ -64,11 +78,35 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
             // Filter out 'clip' AND 'video' from main feed (LinkedIn style text/image focus)
             const regularPosts = visiblePosts.filter(p => p.type !== 'clip' && p.type !== 'video');
 
-            // Sort posts by date descending (newest first)
+            const now = new Date().getTime();
+
             const sortedPosts = regularPosts.sort((a, b) => {
                 const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
                 const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
-                return dateB.getTime() - dateA.getTime();
+                const timeA = dateA.getTime();
+                const timeB = dateB.getTime();
+
+                // Dynamic Score
+                // Score = Engagement (likes + comments) + Recency Weight + Random Factor
+                // On refresh, random factor is HUGE to guarantee a shuffle. On initial load, it's smaller and recency matters more.
+                const randomMultiplier = isManualRefresh ? 40 : 5;
+                const recencyMultiplier = isManualRefresh ? 2 : 15;
+
+                // Penalty: If a post has already been seen, its 'recency' power is reset so it isn't stuck at the top every load.
+                const appliedRecencyMultiplierA = currentSeenIds.has(a.id) ? 1 : recencyMultiplier;
+                const appliedRecencyMultiplierB = currentSeenIds.has(b.id) ? 1 : recencyMultiplier;
+
+                const scoreA =
+                    ((a.likes || 0) + (a.comments || 0)) * 2 +
+                    (Math.max(0, 7 - (now - timeA) / (1000 * 60 * 60 * 24))) * appliedRecencyMultiplierA +
+                    (Math.random() * randomMultiplier);
+
+                const scoreB =
+                    ((b.likes || 0) + (b.comments || 0)) * 2 +
+                    (Math.max(0, 7 - (now - timeB) / (1000 * 60 * 60 * 24))) * appliedRecencyMultiplierB +
+                    (Math.random() * randomMultiplier);
+
+                return scoreB - scoreA;
             });
 
             // Set the posts directly
@@ -86,11 +124,19 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
         }
     };
 
-    useFocusEffect(
-        useCallback(() => {
-            fetchPosts();
-        }, [])
-    );
+    React.useEffect(() => {
+        let mounted = true;
+
+        fetchPosts().then(() => {
+            if (mounted && flatListRef.current && posts.length > 0) {
+                // Initial load complete
+            }
+        });
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
     const onRefresh = useCallback(() => {
         if (isConnected === false) {
@@ -98,7 +144,7 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
             return;
         }
         setRefreshing(true);
-        fetchPosts();
+        fetchPosts(true);
     }, [isConnected]);
 
     const handleLike = async (postId: string) => {
@@ -267,6 +313,32 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
                 .filter(id => id !== undefined)
         );
         setVisiblePostIds(visibleIds);
+
+        // Update historical seen tracking
+        setHistoricalSeenIds(prev => {
+            let changed = false;
+            const next = new Set(prev);
+            viewableItems.forEach(item => {
+                if (item.item?.id && !next.has(item.item.id)) {
+                    next.add(item.item.id);
+                    changed = true;
+                }
+            });
+
+            if (changed) {
+                // Limit to last 300 seen posts so storage doesn't bloat
+                const arr = Array.from(next);
+                const truncated = arr.length > 300 ? arr.slice(-300) : arr;
+
+                // Fire and forget Async storage
+                AsyncStorage.setItem('seenPostIds', JSON.stringify(truncated))
+                    .catch(e => console.error("Error saving seen posts:", e));
+
+                return new Set(truncated);
+            }
+            return prev;
+        });
+
     }).current;
 
     const viewabilityConfig = useRef({
