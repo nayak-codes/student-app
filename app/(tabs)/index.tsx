@@ -2,12 +2,11 @@ import { useScrollToTop } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { Animated, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import FeedList, { FeedListRef } from '../../src/components/feed/FeedList';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
-import { testFirebaseConnection } from '../../src/utils/testFirebase';
 
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -38,11 +37,6 @@ export default function HomeScreen() {
       loadRequests();
     }, [loadRequests])
   );
-
-  // Test Firebase connection on mount
-  useEffect(() => {
-    testFirebaseConnection();
-  }, []);
 
   // Load unread count
   const unreadCount = useUnreadCount();

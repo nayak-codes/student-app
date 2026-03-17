@@ -1,8 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../src/config/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -11,6 +21,157 @@ import { acceptFriendRequest, rejectFriendRequest } from '../src/services/connec
 import { NotificationItem, subscribeToNotifications } from '../src/services/notificationService';
 
 type TabType = 'all' | 'requests' | 'activity';
+
+// Animated notification card
+const NotificationCard = ({ item, onAccept, onReject, onPress, colors, isDark }: {
+    item: NotificationItem & { type: string; data?: any };
+    onAccept?: (id: string) => void;
+    onReject?: (id: string) => void;
+    onPress: () => void;
+    colors: any;
+    isDark: boolean;
+}) => {
+    const slideAnim = useRef(new Animated.Value(30)).current;
+    const opacityAnim = useRef(new Animated.Value(0)).current;
+    const acceptScale = useRef(new Animated.Value(1)).current;
+    const rejectScale = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.spring(slideAnim, {
+                toValue: 0,
+                useNativeDriver: true,
+                tension: 80,
+                friction: 10,
+            }),
+            Animated.timing(opacityAnim, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, []);
+
+    const isRequest = item.type === 'friend_request';
+
+    const iconConfig: Record<string, { name: string; color: string }> = {
+        like: { name: 'heart', color: '#EF4444' },
+        comment: { name: 'chatbubble', color: '#3B82F6' },
+        friend_request: { name: 'person-add', color: '#8B5CF6' },
+        follow_request: { name: 'person-add', color: '#8B5CF6' },
+        message: { name: 'mail', color: '#10B981' },
+    };
+    const icon = iconConfig[item.type] || { name: 'notifications', color: colors.primary };
+
+    const animatePress = (ref: Animated.Value, cb: () => void) => {
+        Animated.sequence([
+            Animated.spring(ref, { toValue: 0.88, useNativeDriver: true, tension: 300, friction: 10 }),
+            Animated.spring(ref, { toValue: 1, useNativeDriver: true, tension: 300, friction: 10 }),
+        ]).start(cb);
+    };
+
+    return (
+        <Animated.View
+            style={{
+                transform: [{ translateY: slideAnim }],
+                opacity: opacityAnim,
+            }}
+        >
+            <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={onPress}
+                style={[
+                    styles.card,
+                    {
+                        backgroundColor: isDark ? colors.card : '#FFF',
+                        borderColor: item.read ? colors.border : isDark ? '#4C1D95' : '#EDE9FE',
+                        borderWidth: 1,
+                        shadowColor: '#000',
+                        shadowOpacity: isDark ? 0.2 : 0.06,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowRadius: 8,
+                        elevation: 3,
+                    },
+                ]}
+            >
+                {/* Unread accent bar */}
+                {!item.read && (
+                    <View style={[styles.accentBar, { backgroundColor: icon.color }]} />
+                )}
+
+                <View style={styles.cardInner}>
+                    {/* Avatar + badge */}
+                    <View style={styles.avatarWrap}>
+                        {item.actorPhotoURL ? (
+                            <Image source={{ uri: item.actorPhotoURL }} style={styles.avatar} />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: icon.color + '33' }]}>
+                                <Text style={[styles.avatarLetter, { color: icon.color }]}>
+                                    {(item.actorName || '?').charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                        )}
+                        <View style={[styles.iconBadge, { backgroundColor: icon.color }]}>
+                            <Ionicons name={icon.name as any} size={10} color="#FFF" />
+                        </View>
+                    </View>
+
+                    {/* Text */}
+                    <View style={styles.textWrap}>
+                        <Text style={[styles.msgText, { color: colors.text }]}>
+                            <Text style={styles.boldName}>{item.actorName}</Text>
+                            {'  '}{item.message}
+                        </Text>
+                        <Text style={[styles.timeText, { color: colors.textSecondary }]}>
+                            {formatTime(item.timestamp)}
+                        </Text>
+
+                        {/* Accept / Reject */}
+                        {isRequest && onAccept && onReject && (
+                            <View style={styles.actionRow}>
+                                <Animated.View style={{ transform: [{ scale: acceptScale }] }}>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, { backgroundColor: icon.color }]}
+                                        onPress={() => animatePress(acceptScale, () => onAccept(item.data?.requestId || item.id))}
+                                        activeOpacity={0.9}
+                                    >
+                                        <Ionicons name="checkmark" size={14} color="#FFF" style={{ marginRight: 4 }} />
+                                        <Text style={styles.actionBtnText}>Accept</Text>
+                                    </TouchableOpacity>
+                                </Animated.View>
+                                <Animated.View style={{ transform: [{ scale: rejectScale }] }}>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, {
+                                            backgroundColor: isDark ? '#374151' : '#F1F5F9',
+                                            marginLeft: 8,
+                                        }]}
+                                        onPress={() => animatePress(rejectScale, () => onReject(item.data?.requestId || item.id))}
+                                        activeOpacity={0.9}
+                                    >
+                                        <Ionicons name="close" size={14} color={isDark ? '#9CA3AF' : '#64748B'} style={{ marginRight: 4 }} />
+                                        <Text style={[styles.actionBtnText, { color: isDark ? '#9CA3AF' : '#64748B' }]}>Decline</Text>
+                                    </TouchableOpacity>
+                                </Animated.View>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </TouchableOpacity>
+        </Animated.View>
+    );
+};
+
+function formatTime(ts: number): string {
+    const diff = Date.now() - ts;
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d < 7) return `${d}d ago`;
+    return new Date(ts).toLocaleDateString();
+}
 
 export default function NotificationsScreen() {
     const { colors, isDark } = useTheme();
@@ -21,39 +182,38 @@ export default function NotificationsScreen() {
     const [loading, setLoading] = useState(true);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [friendRequests, setFriendRequests] = useState<any[]>([]);
+    const tabAnim = useRef(new Animated.Value(0)).current;
 
-    // 1. Fetch Real Friend Requests
+    // ─── CRITICAL FIX: Query 'friends' collection (not 'friendships') ───
     useEffect(() => {
         if (!user) return;
 
         const q = query(
-            collection(db, 'friendships'),
-            where('receiverId', '==', user.uid),
+            collection(db, 'friends'),          // ← was 'friendships' which is WRONG
+            where('friendId', '==', user.uid),   // ← was 'receiverId' which is WRONG
             where('status', '==', 'pending')
         );
 
         const unsubscribe = onSnapshot(q, async (snapshot) => {
-            const requests = [];
+            const requests: any[] = [];
             for (const docSnapshot of snapshot.docs) {
                 const data = docSnapshot.data();
                 try {
-                    // Fetch sender profile
-                    const senderRef = doc(db, 'users', data.senderId); // Assuming 'users' collection stores profiles
-                    const senderSnap = await getDoc(senderRef);
+                    const senderSnap = await getDoc(doc(db, 'users', data.userId)); // ← was 'senderId'
                     if (senderSnap.exists()) {
-                        const senderData = senderSnap.data();
+                        const sd = senderSnap.data();
                         requests.push({
                             id: docSnapshot.id,
-                            senderId: data.senderId,
-                            senderName: senderData.displayName || 'User',
-                            senderPhoto: senderData.photoURL || null,
-                            senderRole: senderData.role || 'student',
+                            senderId: data.userId,
+                            senderName: sd.name || sd.displayName || 'User',
+                            senderPhoto: sd.profilePhoto || sd.photoURL || null,
+                            senderRole: sd.role || 'student',
                             timestamp: data.createdAt?.toMillis() || Date.now(),
-                            type: 'friend_request' as const
+                            type: 'friend_request',
                         });
                     }
                 } catch (err) {
-                    console.error("Error fetching sender details", err);
+                    console.error('Error fetching sender details', err);
                 }
             }
             setFriendRequests(requests);
@@ -63,197 +223,135 @@ export default function NotificationsScreen() {
         return () => unsubscribe();
     }, [user]);
 
-    // 2. Fetch Activity (Real-time)
+    // Activity notifications
     useEffect(() => {
         if (!user) return;
-
-        const unsubscribe = subscribeToNotifications(user.uid, (data) => {
-            setNotifications(data);
-        });
-
+        const unsubscribe = subscribeToNotifications(user.uid, setNotifications);
         return () => unsubscribe();
     }, [user]);
 
-
-    // Combined List
-    const getDisplayData = () => {
-        // Convert Requests to NotificationItem format for unified display
-        const requestItems: NotificationItem[] = friendRequests.map(req => ({
+    const getDisplayData = (): (NotificationItem & { data?: any })[] => {
+        const requestItems: any[] = friendRequests.map(req => ({
             id: req.id,
             type: 'friend_request',
             actorId: req.senderId,
             actorName: req.senderName,
             actorPhotoURL: req.senderPhoto,
-            recipientId: user!.uid, // Required by new type
-            message: `sent you a ${req.senderRole === 'creator' ? 'network' : 'friend'} request`,
+            recipientId: user!.uid,
+            message: 'sent you a connection request',
             timestamp: req.timestamp,
             read: false,
-            data: { requestId: req.id }
+            data: { requestId: req.id },
         }));
 
-        const allItems = [...requestItems, ...notifications].sort((a, b) => b.timestamp - a.timestamp);
+        const activity = notifications.filter(n => n.type !== 'message' && n.type !== 'friend_request');
+        const all = [...requestItems, ...activity].sort((a, b) => b.timestamp - a.timestamp);
 
         if (activeTab === 'requests') return requestItems;
-        if (activeTab === 'activity') return notifications;
-        return allItems;
+        if (activeTab === 'activity') return activity;
+        return all;
     };
 
     const handleAccept = async (requestId: string) => {
         try {
             await acceptFriendRequest(requestId);
-            // State updates automatically via snapshot
-        } catch (error) {
-            Alert.alert("Error", "Could not accept request");
+        } catch {
+            Alert.alert('Error', 'Could not accept request');
         }
     };
 
     const handleReject = async (requestId: string) => {
         try {
             await rejectFriendRequest(requestId);
-        } catch (error) {
-            Alert.alert("Error", "Could not reject request");
+        } catch {
+            Alert.alert('Error', 'Could not reject request');
         }
     };
 
-    const renderItem = (item: NotificationItem) => {
-        const isRequest = item.type === 'friend_request' || item.type === 'follow_request';
-
-        return (
-            <TouchableOpacity
-                key={item.id}
-                style={[
-                    styles.itemContainer,
-                    { backgroundColor: isDark ? colors.card : '#FFF', borderBottomColor: colors.border }
-                ]}
-                onPress={() => {
-                    // Navigate to profile
-                    router.push({
-                        pathname: '/public-profile',
-                        params: { userId: item.actorId }
-                    });
-                }}
-            >
-                {/* Avatar */}
-                <View style={styles.avatarContainer}>
-                    {item.actorPhotoURL ? (
-                        <Image source={{ uri: item.actorPhotoURL }} style={styles.avatar} />
-                    ) : (
-                        <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
-                            <Text style={styles.avatarLetter}>{item.actorName.charAt(0).toUpperCase()}</Text>
-                        </View>
-                    )}
-                    {/* Icon Badge */}
-                    <View style={[styles.iconBadge, {
-                        backgroundColor:
-                            item.type === 'like' ? '#EF4444' :
-                                item.type === 'comment' ? '#3B82F6' :
-                                    colors.primary
-                    }]}>
-                        <Ionicons
-                            name={
-                                item.type === 'like' ? 'heart' :
-                                    item.type === 'comment' ? 'chatbubble' :
-                                        'person-add'
-                            }
-                            size={10}
-                            color="#FFF"
-                        />
-                    </View>
-                </View>
-
-                {/* Content */}
-                <View style={styles.contentContainer}>
-                    <Text style={[styles.messageText, { color: colors.text }]}>
-                        <Text style={{ fontWeight: 'bold' }}>{item.actorName}</Text>
-                        {' '}{item.message}
-                    </Text>
-                    <Text style={[styles.timeText, { color: colors.textSecondary }]}>
-                        {new Date(item.timestamp).toLocaleDateString()}
-                    </Text>
-
-                    {/* Action Buttons for Requests */}
-                    {isRequest && (
-                        <View style={styles.actionRow}>
-                            <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                                onPress={() => handleAccept(item.data.requestId)}
-                            >
-                                <Text style={styles.actionButtonText}>Confirm</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}
-                                onPress={() => handleReject(item.data.requestId)}
-                            >
-                                <Text style={[styles.actionButtonText, { color: isDark ? '#E2E8F0' : '#475569' }]}>Delete</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-                </View>
-
-                {/* Unread Indicator */}
-                {!item.read && (
-                    <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
-                )}
-            </TouchableOpacity>
-        );
+    const switchTab = (tab: TabType, index: number) => {
+        setActiveTab(tab);
+        Animated.spring(tabAnim, {
+            toValue: index,
+            useNativeDriver: true,
+            tension: 120,
+            friction: 10,
+        }).start();
     };
 
+    const tabs: TabType[] = ['all', 'requests', 'activity'];
     const displayData = getDisplayData();
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: isDark ? '#333' : colors.border, backgroundColor: colors.background }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
-                <TouchableOpacity style={styles.menuButton}>
-                    <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
-                </TouchableOpacity>
+                <View style={{ width: 40 }} />
             </View>
 
-            {/* Tabs */}
-            <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
-                {(['all', 'requests', 'activity'] as TabType[]).map((tab) => (
-                    <TouchableOpacity
-                        key={tab}
-                        style={[
-                            styles.tab,
-                            activeTab === tab && { borderBottomColor: colors.text }
-                        ]}
-                        onPress={() => setActiveTab(tab)}
-                    >
-                        <Text style={[
-                            styles.tabText,
-                            { color: activeTab === tab ? colors.text : colors.textSecondary }
-                        ]}>
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                            {tab === 'requests' && friendRequests.length > 0 && (
-                                <Text style={{ color: colors.primary }}> ({friendRequests.length})</Text>
+            {/* Tabs with animated underline */}
+            <View style={[styles.tabsRow, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+                {tabs.map((tab, i) => {
+                    const isActive = activeTab === tab;
+                    return (
+                        <TouchableOpacity
+                            key={tab}
+                            style={styles.tabBtn}
+                            onPress={() => switchTab(tab, i)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.tabText, {
+                                color: isActive ? colors.primary : colors.textSecondary,
+                                fontWeight: isActive ? '700' : '500',
+                            }]}>
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                {tab === 'requests' && friendRequests.length > 0 && (
+                                    <Text style={{ color: colors.primary }}> ({friendRequests.length})</Text>
+                                )}
+                            </Text>
+                            {isActive && (
+                                <Animated.View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
                             )}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+                        </TouchableOpacity>
+                    );
+                })}
             </View>
 
-            {/* List */}
+            {/* Content */}
             {loading ? (
-                <View style={styles.centerContainer}>
+                <View style={styles.center}>
                     <ActivityIndicator size="large" color={colors.primary} />
                 </View>
+            ) : displayData.length === 0 ? (
+                <View style={styles.center}>
+                    <Ionicons name="notifications-off-outline" size={72} color={colors.border} />
+                    <Text style={[styles.emptyTitle, { color: colors.text }]}>All caught up!</Text>
+                    <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                        No {activeTab === 'requests' ? 'connection requests' : activeTab === 'activity' ? 'activity' : 'notifications'} yet
+                    </Text>
+                </View>
             ) : (
-                <ScrollView contentContainerStyle={styles.listContent}>
-                    {displayData.length === 0 ? (
-                        <View style={styles.centerContainer}>
-                            <Ionicons name="notifications-off-outline" size={64} color={colors.border} />
-                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                                No notifications yet
-                            </Text>
-                        </View>
-                    ) : (
-                        displayData.map(renderItem)
-                    )}
+                <ScrollView
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {displayData.map(item => (
+                        <NotificationCard
+                            key={item.id}
+                            item={item as any}
+                            colors={colors}
+                            isDark={isDark}
+                            onAccept={handleAccept}
+                            onReject={handleReject}
+                            onPress={() => router.push({
+                                pathname: '/public-profile',
+                                params: { userId: item.actorId }
+                            })}
+                        />
+                    ))}
                 </ScrollView>
             )}
         </SafeAreaView>
@@ -261,73 +359,83 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingTop: 0,
-        paddingBottom: 6,
+        paddingVertical: 12,
         borderBottomWidth: 1,
     },
-    backButton: {
-        padding: 4,
-    },
-    menuButton: {
-        padding: 4,
-    },
+    headerBack: { padding: 4 },
     headerTitle: {
         flex: 1,
         fontSize: 20,
-        fontWeight: 'bold',
+        fontWeight: '700',
         marginLeft: 16,
     },
-    tabsContainer: {
+    tabsRow: {
         flexDirection: 'row',
-        paddingHorizontal: 16,
+        paddingHorizontal: 8,
         borderBottomWidth: 1,
     },
-    tab: {
-        marginRight: 24,
+    tabBtn: {
+        flex: 1,
+        alignItems: 'center',
         paddingVertical: 12,
-        borderBottomWidth: 2,
-        borderBottomColor: 'transparent',
+        position: 'relative',
     },
     tabText: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 15,
+    },
+    tabUnderline: {
+        position: 'absolute',
+        bottom: 0,
+        left: 16,
+        right: 16,
+        height: 3,
+        borderRadius: 2,
     },
     listContent: {
-        paddingBottom: 20,
+        padding: 12,
+        gap: 8,
     },
-    itemContainer: {
+    card: {
+        borderRadius: 16,
+        marginBottom: 4,
+        overflow: 'hidden',
+    },
+    accentBar: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 4,
+        borderTopLeftRadius: 16,
+        borderBottomLeftRadius: 16,
+    },
+    cardInner: {
         flexDirection: 'row',
-        padding: 16,
-        borderBottomWidth: 1,
+        padding: 14,
+        paddingLeft: 18,
         alignItems: 'flex-start',
     },
-    avatarContainer: {
+    avatarWrap: {
         position: 'relative',
         marginRight: 12,
     },
     avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 50,
+        height: 50,
+        borderRadius: 25,
     },
-    avatarPlaceholder: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+    avatarFallback: {
         justifyContent: 'center',
         alignItems: 'center',
     },
     avatarLetter: {
-        color: '#FFF',
         fontSize: 20,
-        fontWeight: 'bold',
+        fontWeight: '700',
     },
     iconBadge: {
         position: 'absolute',
@@ -341,47 +449,45 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: '#FFF',
     },
-    contentContainer: {
-        flex: 1,
-    },
-    messageText: {
-        fontSize: 15,
+    textWrap: { flex: 1 },
+    msgText: {
+        fontSize: 14,
         lineHeight: 20,
     },
+    boldName: { fontWeight: '700' },
     timeText: {
-        fontSize: 13,
-        marginTop: 4,
+        fontSize: 12,
+        marginTop: 3,
     },
     actionRow: {
         flexDirection: 'row',
         marginTop: 10,
-        gap: 8,
     },
-    actionButton: {
-        paddingVertical: 6,
+    actionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 7,
         paddingHorizontal: 16,
-        borderRadius: 6,
+        borderRadius: 20,
     },
-    actionButtonText: {
+    actionBtnText: {
         color: '#FFF',
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '600',
     },
-    unreadDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginLeft: 8,
-        marginTop: 6,
-    },
-    centerContainer: {
+    center: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingTop: 100,
+        gap: 12,
     },
-    emptyText: {
-        marginTop: 16,
-        fontSize: 16,
-    }
+    emptyTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        marginTop: 12,
+    },
+    emptySubtitle: {
+        fontSize: 14,
+        textAlign: 'center',
+    },
 });

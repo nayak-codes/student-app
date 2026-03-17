@@ -35,9 +35,9 @@ export default function SelectMembersScreen() {
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
             const filtered = users.filter(user =>
-                user.name.toLowerCase().includes(query) ||
-                user.email.toLowerCase().includes(query) ||
-                user.headline?.toLowerCase().includes(query)
+                (user.name || 'Unknown User').toLowerCase().includes(query) ||
+                (user.email || '').toLowerCase().includes(query) ||
+                (user.headline || '').toLowerCase().includes(query)
             );
             setFilteredUsers(filtered);
         } else {
@@ -75,6 +75,7 @@ export default function SelectMembersScreen() {
     const handleDone = async () => {
         const isAddingToGroup = params.isAddingToGroup === 'true';
         const conversationId = params.conversationId as string;
+        const returnTo = params.returnTo as string;
 
         if (isAddingToGroup && conversationId) {
             // Adding members to existing group
@@ -91,12 +92,16 @@ export default function SelectMembersScreen() {
                 console.error('Error adding members:', error);
                 alert('Failed to add members');
             }
-        } else {
-            // Creating new group
-            router.navigate({
+        } else if (returnTo === 'create-group') {
+            // Return to create-group screen with selected members using replace
+            // so we don't stack another create-group on top
+            router.replace({
                 pathname: '/create-group',
                 params: { selectedMemberIds: selectedMembers.join(',') }
             });
+        } else {
+            // Creating new group (legacy path)
+            router.back();
         }
     };
 
@@ -127,14 +132,14 @@ export default function SelectMembersScreen() {
                     ) : (
                         <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
                             <Text style={styles.avatarText}>
-                                {item.name.charAt(0).toUpperCase()}
+                                {(item.name || item.email || '?').charAt(0).toUpperCase()}
                             </Text>
                         </View>
                     )}
 
                     <View style={styles.userInfo}>
                         <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
-                            {item.name}
+                            {item.name || 'Unknown User'}
                         </Text>
                         <Text style={[styles.userDetail, { color: colors.textSecondary }]} numberOfLines={1}>
                             {item.headline || item.exam || 'Student'}

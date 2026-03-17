@@ -20,17 +20,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { deleteDownload, downloadDocument, DownloadedDocument, getDownloadedDocuments, renameDownload } from '../src/services/downloadService';
 import {
-    addToPlaylist,
+    addItemToPlaylist,
     createPlaylist,
     deletePlaylist,
-    getPlaylists,
+    getUserPlaylists,
     Playlist
 } from '../src/services/playlistService';
 import { getSavedResources, SavedResource } from '../src/services/savedService';
 
+import { useAuth } from '../src/contexts/AuthContext';
+
 const DownloadsScreen = () => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
+    const { user } = useAuth();
 
     // Tab State
     const [activeTab, setActiveTab] = useState<'files' | 'playlists'>('files');
@@ -70,8 +73,10 @@ const DownloadsScreen = () => {
             await fetchDownloads();
 
             // 2. Fetch Playlists
-            const playlistData = await getPlaylists();
-            setPlaylists(playlistData);
+            if (user) {
+                const playlistData = await getUserPlaylists(user.uid);
+                setPlaylists(playlistData);
+            }
 
         } catch (error) {
             console.error("Failed to load data:", error);
@@ -162,8 +167,15 @@ const DownloadsScreen = () => {
             Alert.alert('Error', 'Please enter a playlist name');
             return;
         }
+        if (!user) {
+            Alert.alert('Error', 'You must be logged in to create a folder');
+            return;
+        }
         try {
-            await createPlaylist(newPlaylistName);
+            await createPlaylist(user.uid, {
+                title: newPlaylistName.trim(),
+                privacy: 'private'
+            });
             setNewPlaylistName('');
             setCreateModalVisible(false);
             loadData(); // Refresh playlists
@@ -176,7 +188,7 @@ const DownloadsScreen = () => {
     const handleDeletePlaylist = async (playlist: Playlist) => {
         Alert.alert(
             'Delete Playlist',
-            `Are you sure you want to delete "${playlist.name}" ? Files will not be deleted from device.`,
+            `Are you sure you want to delete "${playlist.title}" ? Files will not be deleted from device.`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -199,7 +211,12 @@ const DownloadsScreen = () => {
     const handleAddToPlaylist = async (playlistId: string) => {
         if (!selectedResourceForPlaylist) return;
         try {
-            await addToPlaylist(playlistId, selectedResourceForPlaylist.id);
+            await addItemToPlaylist(playlistId, {
+                type: 'document',
+                itemId: selectedResourceForPlaylist.id,
+                title: selectedResourceForPlaylist.title,
+                thumbnail: selectedResourceForPlaylist.customCoverUrl || undefined
+            });
             setAddToPlaylistModalVisible(false);
             Alert.alert('Success', 'Added to playlist!');
         } catch (error) {
@@ -383,16 +400,16 @@ const DownloadsScreen = () => {
     const renderPlaylistItem = ({ item }: { item: Playlist }) => (
         <TouchableOpacity
             style={[styles.card, { backgroundColor: colors.card, shadowColor: isDark ? '#000' : '#64748B' }]}
-            onPress={() => router.push({ pathname: '/screens/playlist-detail' as any, params: { id: item.id, name: item.name } })}
+            onPress={() => router.push({ pathname: '/screens/playlist-detail' as any, params: { id: item.id, name: item.title } })}
             onLongPress={() => handleDeletePlaylist(item)}
         >
             <View style={[styles.iconContainer, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : '#FEF3C7' }]}>
                 <Ionicons name="folder" size={28} color="#F59E0B" />
             </View>
             <View style={styles.cardContent}>
-                <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
                 <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                    {item.resourceIds.length} items • Created {new Date(item.createdAt).toLocaleDateString()}
+                    {item.itemCount} items • Created {new Date(item.createdAt).toLocaleDateString()}
                 </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -613,7 +630,7 @@ const DownloadsScreen = () => {
                                         onPress={() => handleAddToPlaylist(playlist.id)}
                                     >
                                         <Ionicons name="folder" size={20} color={colors.primary} />
-                                        <Text style={[styles.playlistOptionText, { color: colors.text }]}>{playlist.name}</Text>
+                                        <Text style={[styles.playlistOptionText, { color: colors.text }]}>{playlist.title}</Text>
                                     </TouchableOpacity>
                                 ))
                             )}

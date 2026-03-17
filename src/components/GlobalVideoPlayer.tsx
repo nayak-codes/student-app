@@ -130,8 +130,8 @@ const GlobalVideoPlayerContent = ({ currentVideo }: { currentVideo: any }) => {
             });
         }
 
-        getAllPosts().then(all => {
-            const filtered = all.filter(p => p.type === 'video' && p.id !== currentVideo.id).slice(0, 10);
+        getAllPosts().then(res => {
+            const filtered = res.posts.filter(p => p.type === 'video' && p.id !== currentVideo.id).slice(0, 10);
             setRelatedVideos(filtered);
         });
     }, [currentVideo.id, user]);

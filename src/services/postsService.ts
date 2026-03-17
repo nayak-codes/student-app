@@ -6,15 +6,18 @@ import {
     collection,
     deleteDoc,
     doc,
+    DocumentData,
     getDoc,
     getDocs,
     increment,
     limit,
     orderBy,
     query,
+    QueryDocumentSnapshot,
+    startAfter,
     Timestamp,
     updateDoc,
-    where,
+    where
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -147,16 +150,32 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt' | 'like
 /**
  * Get all posts (ordered by newest first)
  */
-export const getAllPosts = async (limitCount: number = 50): Promise<Post[]> => {
+export const getAllPosts = async (
+    limitCount: number = 20,
+    lastVisibleDoc: QueryDocumentSnapshot<DocumentData> | null = null
+): Promise<{ posts: Post[], lastVisible: QueryDocumentSnapshot<DocumentData> | null }> => {
     try {
-        const q = query(
-            collection(db, POSTS_COLLECTION),
-            orderBy('createdAt', 'desc'),
-            limit(limitCount)
-        );
+        let q;
+        if (lastVisibleDoc) {
+            q = query(
+                collection(db, POSTS_COLLECTION),
+                orderBy('createdAt', 'desc'),
+                startAfter(lastVisibleDoc),
+                limit(limitCount)
+            );
+        } else {
+            q = query(
+                collection(db, POSTS_COLLECTION),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
+            );
+        }
 
         const querySnapshot = await getDocs(q);
         const posts: Post[] = [];
+        const lastVisible = querySnapshot.docs.length > 0
+            ? querySnapshot.docs[querySnapshot.docs.length - 1]
+            : null;
 
         querySnapshot.forEach((doc) => {
             const data = doc.data();
@@ -200,11 +219,11 @@ export const getAllPosts = async (limitCount: number = 50): Promise<Post[]> => {
             });
         });
 
-        return posts;
+        return { posts, lastVisible };
     } catch (error: any) {
         if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
             console.warn('⚠️ Fetch posts permission denied (likely auth race condition). Returning empty list.');
-            return [];
+            return { posts: [], lastVisible: null };
         }
         console.error('Error getting posts:', error);
         throw error;
@@ -291,8 +310,8 @@ export const likePost = async (postId: string, userId: string): Promise<void> =>
                 await sendNotification(
                     postData.userId, // recipient
                     userId, // sender
-                    userData.displayName || 'User',
-                    userData.photoURL,
+                    userData.displayName || userData.name || 'User',
+                    userData.photoURL || userData.profilePhoto, // Ensure we check both standard and custom picture fields
                     'like',
                     'liked your post',
                     { postId }
@@ -894,8 +913,8 @@ export const addReaction = async (postId: string, userId: string, reactionType: 
             await sendNotification(
                 data.userId, // recipient
                 userId, // sender
-                userData.displayName || 'User',
-                userData.photoURL,
+                userData.displayName || userData.name || 'User',
+                userData.photoURL || userData.profilePhoto,
                 'like', // Use 'like' generic type or map reactionType to specific notification types if supported
                 `reacted with ${reactionType} to your post`,
                 { postId, reactionType }

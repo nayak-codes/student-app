@@ -19,7 +19,7 @@ import { Platform } from 'react-native';
 import { db } from '../config/firebase';
 
 // Notification Types
-export type NotificationType = 'friend_request' | 'follow_request' | 'like' | 'comment' | 'system' | 'message';
+export type NotificationType = 'friend_request' | 'follow_request' | 'like' | 'comment' | 'system' | 'message' | 'group_invite';
 
 export interface NotificationItem {
     id: string;
@@ -31,107 +31,111 @@ export interface NotificationItem {
     message: string;
     timestamp: number;
     read: boolean;
-    data?: any; // Extra data like postId, commentId, requestId
+    data?: any;
 }
 
 // Collection Name
 const NOTIFICATIONS_COLLECTION = 'notifications';
 
-// Expo Push Notification setup
-// Safe wrapper for setNotificationHandler
-try {
-    if (Constants.appOwnership !== 'expo' && Constants.executionEnvironment !== 'storeClient') {
-        Notifications.setNotificationHandler({
-            handleNotification: async () => ({
-                shouldShowAlert: true,
-                shouldPlaySound: true,
-                shouldSetBadge: false,
-                shouldShowBanner: true,
-                shouldShowList: true,
-            }),
-        });
-    }
-} catch (e) {
-    console.log("Skipped Notification Handler setup (likely Expo Go)");
-}
+// ─── CRITICAL FIX: setNotificationHandler MUST run unconditionally ───────────
+// The previous version had a guard that BLOCKED this from running in standalone
+// APK builds (executionEnvironment === 'storeClient'), causing all foreground
+// notifications to be silently dropped.
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+    }),
+});
 
 /**
  * Registers the device for Push Notifications and saves the token to Firestore.
+ * Call this once after the user logs in.
  */
-export async function registerForPushNotificationsAsync(userId?: string) {
-    let token;
+export async function registerForPushNotificationsAsync(userId?: string): Promise<string | undefined> {
+    // MUST be a real physical device
+    if (!Device.isDevice) {
+        console.log('Push Notifications: Must use a physical device');
+        return;
+    }
 
-    // 1. TIMING & ENV CHECK: Removed strict Expo Go blockage
-    // Constants.appOwnership === 'expo' OR Constants.executionEnvironment === 'storeClient' usually detects Expo Go
-    // We will attempt to run it anyway and let the try/catch handle it if it fails.
-    // if (isExpoGo) {
-    //     console.log("Push Notifications: Skipped in Expo Go (Functionality removed in SDK 53). strict mode: off");
-    //     return null;
-    // }
-
+    // Set Android notification channel FIRST (required before requesting permissions)
     if (Platform.OS === 'android') {
         try {
             await Notifications.setNotificationChannelAsync('default', {
-                name: 'default',
+                name: 'Vidhyardhi Notifications',
                 importance: Notifications.AndroidImportance.MAX,
                 vibrationPattern: [0, 250, 250, 250],
-                lightColor: '#FF231F7C',
+                lightColor: '#4F46E5',
+                sound: 'default',
+                showBadge: true,
             });
+            console.log('Android notification channel set');
         } catch (e) {
-            console.log("Error setting notification channel (ignored):", e);
+            console.error('Error setting notification channel:', e);
         }
     }
 
-    if (Device.isDevice) {
-        try {
-            const { status: existingStatus } = await Notifications.getPermissionsAsync();
-            let finalStatus = existingStatus;
-            if (existingStatus !== 'granted') {
-                const { status } = await Notifications.requestPermissionsAsync();
-                finalStatus = status;
-            }
-            if (finalStatus !== 'granted') {
-                console.log('Failed to get push token for push notification!');
-                return;
-            }
-
-            // Get the token
-            const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
-            token = (await Notifications.getExpoPushTokenAsync({
-                projectId,
-            })).data;
-            console.log("Expo Push Token:", token);
-
-            // Save token to user profile if userId is provided
-            if (userId && token) {
-                await setDoc(doc(db, 'users', userId), {
-                    pushToken: token
-                }, { merge: true });
-                console.log("Push Token saved to Firestore for user:", userId);
-            }
-
-        } catch (e: any) {
-            // Enhanced error handling
-            if (e?.message?.includes('removed from Expo Go') || e?.message?.includes('Development Build')) {
-                console.log("Push Notifications: Skipped in Expo Go (Functionality removed in SDK 53)");
-            } else {
-                console.error("⚠️ Error getting push token:", e);
-                // Optionally alert user here if this is a standalone build and fails
-                if (!Constants.appOwnership || Constants.appOwnership !== 'expo') {
-                    console.error("Critical push token failure in standalone build.", e);
-                }
-            }
+    // Request permissions
+    let finalStatus: Notifications.PermissionStatus;
+    try {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+            const { status } = await Notifications.requestPermissionsAsync();
+            finalStatus = status;
         }
-    } else {
-        console.log('Must use physical device for Push Notifications');
+    } catch (e) {
+        console.error('Error requesting notification permissions:', e);
+        return;
+    }
+
+    if (finalStatus !== 'granted') {
+        console.log('❌ Push notification permission DENIED');
+        return;
+    }
+
+    // Get the Expo Push Token
+    let token: string | undefined;
+    try {
+        // The projectId MUST match app.json extra.eas.projectId
+        const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
+        if (!projectId) {
+            console.error('❌ No projectId found. Check app.json extra.eas.projectId');
+            return;
+        }
+        const pushTokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+        token = pushTokenData.data;
+        console.log('✅ Expo Push Token obtained:', token);
+    } catch (e: any) {
+        // In Expo Go (SDK 53+), push tokens are not supported — that's okay
+        if (e?.message?.includes('Expo Go') || e?.message?.includes('Development Build') || e?.message?.includes('expo-dev-client')) {
+            console.log('ℹ️ Push tokens not supported in Expo Go. This will work in the real APK.');
+        } else {
+            console.error('❌ Error getting push token:', e);
+        }
+        return;
+    }
+
+    // Save the token to Firestore so we can send pushes later
+    if (userId && token) {
+        try {
+            await setDoc(doc(db, 'users', userId), { pushToken: token }, { merge: true });
+            console.log('✅ Push token saved to Firestore for user:', userId);
+        } catch (e) {
+            console.error('❌ Error saving push token to Firestore:', e);
+        }
     }
 
     return token;
 }
 
-
 /**
- * Sends a notification to a user (Firestore + Push).
+ * Sends a notification to a user — saves to Firestore AND sends a real push.
+ * The push title will be the sender's name (Instagram/YouTube style).
  */
 export const sendNotification = async (
     recipientId: string,
@@ -143,9 +147,9 @@ export const sendNotification = async (
     data: any = {}
 ) => {
     try {
-        if (recipientId === senderId) return; // Don't notify self
+        if (recipientId === senderId) return; // Never notify yourself
 
-        // 1. Save to Firestore (In-App Notification)
+        // 1. Save to Firestore (shows in the in-app notifications tab)
         await addDoc(collection(db, NOTIFICATIONS_COLLECTION), {
             recipientId,
             actorId: senderId,
@@ -157,10 +161,10 @@ export const sendNotification = async (
             data,
             createdAt: serverTimestamp()
         });
-        console.log('Notification saved to Firestore for', recipientId);
+        console.log(`✅ Notification [${type}] saved to Firestore for`, recipientId);
 
-        // 2. Send Push Notification
-        await sendPushNotificationToUser(recipientId, message, data);
+        // 2. Send real OS Push Notification using sender's name as the title
+        await sendPushNotificationToUser(recipientId, senderName || 'Vidhyardhi', message, data);
 
     } catch (error) {
         console.error('Error sending notification:', error);
@@ -168,55 +172,66 @@ export const sendNotification = async (
 };
 
 /**
- * Helper: Fetches user's push token and sends the push notification.
+ * Fetches recipient's push token from Firestore and sends the push.
  */
-async function sendPushNotificationToUser(userId: string, body: string, data: any) {
+async function sendPushNotificationToUser(userId: string, title: string, body: string, data: any) {
     try {
         const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-            const userData = userDoc.data();
-            const pushToken = userData?.pushToken;
-
-            if (pushToken) {
-                await sendPushNotification(pushToken, "Vidhyardhi", body, data);
-            } else {
-                console.log("User has no push token:", userId);
-            }
+        if (!userDoc.exists()) {
+            console.log('User not found for push notification:', userId);
+            return;
         }
+
+        const userData = userDoc.data();
+        const pushToken = userData?.pushToken;
+
+        if (!pushToken) {
+            console.log('ℹ️ Recipient has no push token saved:', userId);
+            return;
+        }
+
+        await sendExpoPush(pushToken, title, body, data);
     } catch (error) {
-        console.error("Error fetching user token for push:", error);
+        console.error('Error fetching user token for push:', error);
     }
 }
 
 /**
- * Sends the actual HTTP request to Expo Push API.
+ * Makes the HTTP call to Expo's Push API.
+ * This is what actually delivers the notification to the phone.
  */
-async function sendPushNotification(expoPushToken: string, title: string, body: string, data: any) {
-    const message = {
+async function sendExpoPush(expoPushToken: string, title: string, body: string, data: any) {
+    const payload = {
         to: expoPushToken,
         sound: 'default',
         title: title,
         body: body,
         data: data,
+        channelId: 'default', // Must match the Android channel we registered
+        priority: 'high',
     };
 
     try {
         const response = await fetch('https://exp.host/--/api/v2/push/send', {
             method: 'POST',
             headers: {
-                Accept: 'application/json',
+                'Accept': 'application/json',
                 'Accept-encoding': 'gzip, deflate',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(message),
+            body: JSON.stringify(payload),
         });
         const result = await response.json();
-        console.log("Push Send Result:", result);
-        if (result.errors) {
-            console.error("Expo Push Error Details:", result.errors);
+
+        if (result?.data?.status === 'ok') {
+            console.log('✅ Push notification delivered successfully');
+        } else if (result?.data?.status === 'error') {
+            console.error('❌ Expo Push Error:', result.data.message, '| Details:', result.data.details);
+        } else {
+            console.log('Push API response:', JSON.stringify(result));
         }
     } catch (error) {
-        console.error("Error sending push to Expo API:", error);
+        console.error('Error calling Expo Push API:', error);
     }
 }
 
@@ -235,10 +250,10 @@ export const subscribeToNotifications = (
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        const notifications: NotificationItem[] = snapshot.docs.map(doc => {
-            const data = doc.data();
+        const notifications: NotificationItem[] = snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
             return {
-                id: doc.id,
+                id: docSnap.id,
                 type: data.type,
                 actorId: data.actorId,
                 actorName: data.actorName,
@@ -252,14 +267,14 @@ export const subscribeToNotifications = (
         });
         onUpdate(notifications);
     }, (error) => {
-        console.error("Error listening to notifications:", error);
+        console.error('Error listening to notifications:', error);
     });
 
     return unsubscribe;
 };
 
 /**
- * Marks a notification as read.
+ * Marks a single notification as read.
  */
 export const markNotificationAsRead = async (notificationId: string) => {
     try {
@@ -270,7 +285,7 @@ export const markNotificationAsRead = async (notificationId: string) => {
     }
 };
 
-// Legacy support (optional, can be removed if not used elsewhere)
+// Legacy support
 export const getNotifications = async (userId: string): Promise<NotificationItem[]> => {
     return new Promise((resolve) => {
         const unsubscribe = subscribeToNotifications(userId, (data) => {

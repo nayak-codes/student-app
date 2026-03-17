@@ -107,6 +107,31 @@ service firebase.storage {
       allow delete: if isAuthenticated();
     }
     
+    // Group Icons
+    match /groups/{conversationId}/{fileName} {
+      // Anyone authenticated can view group icons
+      allow read: if isAuthenticated();
+
+      // Any authenticated user can upload/update group icons
+      allow write: if isAuthenticated() && isValidImage();
+
+      // Any authenticated user can delete group icons
+      allow delete: if isAuthenticated();
+    }
+
+    // Chat Images & Files
+    match /chat-images/{conversationId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidImage();
+      allow delete: if isAuthenticated();
+    }
+
+    match /chat-files/{conversationId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if isAuthenticated();
+    }
+
     // Default: deny all other access
     match /{document=**} {
       allow read, write: if false;

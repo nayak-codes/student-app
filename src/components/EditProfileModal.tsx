@@ -36,7 +36,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
     const [city, setCity] = useState(userProfile?.location?.city || '');
     const [state, setState] = useState(userProfile?.location?.state || '');
     const [country, setCountry] = useState(userProfile?.location?.country || 'India');
-    const [role, setRole] = useState<'student' | 'teacher' | 'creator'>(userProfile?.role || 'student');
+    const [role, setRole] = useState(userProfile?.role || 'student');
     const [studentStatus, setStudentStatus] = useState<string>(userProfile?.studentStatus || '');
 
     // Skills state
@@ -227,38 +227,51 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onClose, o
 
                         {/* Role Selection */}
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>I am a</Text>
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                {(['student', 'teacher', 'creator'] as const).map((r) => (
-                                    <TouchableOpacity
-                                        key={r}
-                                        onPress={() => setRole(r)}
-                                        style={{
-                                            paddingVertical: 8,
-                                            paddingHorizontal: 16,
-                                            borderRadius: 20,
-                                            backgroundColor: role === r ? '#EEF2FF' : '#F8FAFC',
-                                            borderWidth: 1,
-                                            borderColor: role === r ? '#4F46E5' : '#E2E8F0',
-                                        }}
-                                    >
-                                        <Text
-                                            style={{
-                                                fontSize: 14,
-                                                fontWeight: '600',
-                                                color: role === r ? '#4F46E5' : '#64748B',
-                                                textTransform: 'capitalize',
-                                            }}
-                                        >
-                                            {r}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                            <Text style={styles.label}>I am a / My Role is</Text>
+                            <TextInput
+                                style={[styles.input, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: isDark ? '#334155' : '#E2E8F0', color: colors.text, marginBottom: 8 }]}
+                                placeholder="E.g. Full Stack Developer, MBA Student..."
+                                placeholderTextColor={colors.textSecondary}
+                                value={role}
+                                onChangeText={setRole}
+                                maxLength={50}
+                            />
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    {['Student', 'Faculty', 'Developer', 'Creator', 'Alumni', 'Recruiter'].map((preset) => {
+                                        // Case-insensitive comparison
+                                        const isSelected = role.toLowerCase() === preset.toLowerCase();
+                                        return (
+                                            <TouchableOpacity
+                                                key={preset}
+                                                onPress={() => setRole(isSelected ? '' : preset)}
+                                                style={{
+                                                    paddingVertical: 6,
+                                                    paddingHorizontal: 16,
+                                                    borderRadius: 20,
+                                                    backgroundColor: isSelected ? (isDark ? '#4c1d95' : '#EEF2FF') : (isDark ? '#1E293B' : '#F8FAFC'),
+                                                    borderWidth: 1,
+                                                    borderColor: isSelected ? colors.primary : (isDark ? '#334155' : '#E2E8F0'),
+                                                }}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontSize: 13,
+                                                        fontWeight: '600',
+                                                        color: isSelected ? colors.primary : colors.textSecondary,
+                                                    }}
+                                                >
+                                                    {preset}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </ScrollView>
                         </View>
 
-                        {/* Student Status - Only show for students */}
-                        {role === 'student' && (
+                        {/* Student Status - Only show if role contains 'student' */}
+                        {role.toLowerCase().includes('student') && (
                             <View style={styles.inputGroup}>
                                 <Text style={[styles.label, { color: colors.text }]}>
                                     Student Status

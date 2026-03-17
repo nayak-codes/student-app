@@ -38,9 +38,9 @@ function handleCoursePress(course: string) {
 
 const localImages: { [key: string]: any } = {
   iitb: require('@/assets/images/IIT-Bombay-main-building.webp'),
-  
 
-  
+
+
 
 
   // future lo vere colleges vunte ikkad add cheyyi:
@@ -77,330 +77,330 @@ export default function CollegeProfile() {
       </View>
     );
   }
-const renderAbout = () => (
-  <View style={styles.aboutContainer}>
-    {/* Header - Pulls from college.name/location */}
-   <View>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="photo-library" size={20} color="#159895" /> Gallery
-    </Text>
-    <ScrollView horizontal>
-      {(college.gallery || []).map((img, idx) => {
-        const isUrl = img.startsWith?.("http");
-        const source = isUrl ? { uri: img } : localImages[img];
+  const renderAbout = () => (
+    <View style={styles.aboutContainer}>
+      {/* Header - Pulls from college.name/location */}
+      <View>
+        <Text style={styles.sectionHeaderWithIcon}>
+          <MaterialIcons name="photo-library" size={20} color="#159895" /> Gallery
+        </Text>
+        <ScrollView horizontal>
+          {(college.gallery || []).map((img, idx) => {
+            const isUrl = img.startsWith?.("http");
+            const source = isUrl ? { uri: img } : localImages[img];
 
-        return (
-          <Image
-            key={idx}
-            source={source}
-            style={{
-              width: 200,
-              height: 120,
-              marginRight: 10,
-              borderRadius: 8,
-              backgroundColor: "#ddd"
-            }}
-          />
-        );
-      })}
-    </ScrollView>
-  </View>
+            return (
+              <Image
+                key={idx}
+                source={source}
+                style={{
+                  width: 200,
+                  height: 120,
+                  marginRight: 10,
+                  borderRadius: 8,
+                  backgroundColor: "#ddd"
+                }}
+              />
+            );
+          })}
+        </ScrollView>
+      </View>
 
-    {/* Key Facts - Dynamic */}
-   <View style={styles.factsContainer}>
-   
-
-  <View style={styles.factCard}>
-    <MaterialIcons name="calendar-today" size={20} color="#4CAF50" />
-    <Text style={styles.factText}>Est: {college.established}</Text>
-  </View>
+      {/* Key Facts - Dynamic */}
+      <View style={styles.factsContainer}>
 
 
-  
-  <View style={styles.factCard}>
-    <MaterialIcons name="school" size={20} color="#1976D2" />
-    <Text style={styles.factText}>NIRF: #{college.rank}</Text>
-  </View>
-
-   
-  <View style={styles.factCard}>
-    <MaterialIcons name="star" size={20} color="#FFD700" />
-    <Text style={styles.factText}>Type : {college.type}</Text>
-  </View>
-
-  
-
-  
-  <View style={styles.factCard}>
-    <MaterialIcons name="apartment" size={20} color="#9C27B0" />
-    <Text style={styles.factText}>City: {college.city}</Text>
-  </View>
-</View>
-
-
-    {/* Introduction - From JSON */}
-    <Text style={styles.sectionTitle}>About:</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.introduction || 'No description available.'}
-    </Text>
+        <View style={styles.factCard}>
+          <MaterialIcons name="calendar-today" size={20} color="#4CAF50" />
+          <Text style={styles.factText}>Est: {college.established}</Text>
+        </View>
 
 
 
-    <Text style={styles.sectionTitle}>Student life:</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.student_life || 'No description available.'}
-    </Text>
-
-    <Text style={styles.sectionTitle}>RANKS:</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.accreditation_affiliation || 'No description available.'}
-    </Text>
+        <View style={styles.factCard}>
+          <MaterialIcons name="school" size={20} color="#1976D2" />
+          <Text style={styles.factText}>NIRF: #{college.rank}</Text>
+        </View>
 
 
-    <Text style={styles.sectionTitle}>Infrastucture:</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.campus_infrastructure || 'No description available.'}
-    </Text>
-
-    <Text style={styles.sectionTitle}>excellence:</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.excellence || 'No description available.'}
-    </Text>
+        <View style={styles.factCard}>
+          <MaterialIcons name="star" size={20} color="#FFD700" />
+          <Text style={styles.factText}>Type : {college.type}</Text>
+        </View>
 
 
-    <Text style={styles.sectionTitle}>mission:</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.mission || 'No description available.'}
-    </Text>
-
-    <Text style={styles.sectionTitle}>location:</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.location || 'No description available.'}
-    </Text>
-
-        {/* History - From JSON */}
-    <Text style={styles.sectionTitle}>History</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.history || 'No history available.'}
-    </Text>
-
-    <Text style={styles.sectionTitle}>website:</Text>
-    <Text style={styles.sectionText}>
-      {college.about?.website || 'No description available.'}
-    </Text>
 
 
-  </View>
-);
+        <View style={styles.factCard}>
+          <MaterialIcons name="apartment" size={20} color="#9C27B0" />
+          <Text style={styles.factText}>City: {college.city}</Text>
+        </View>
+      </View>
 
 
-const renderAdmissions = () => (
-  <View style={styles.admissionContainer}>
-    {/* Admission Process Section */}
-    <View style={styles.sectionContainer}>
-      <Text style={styles.sectionHeaderWithIcon}>
-        <MaterialIcons name="school" size={20} color="#159895" /> Admission Process
+      {/* Introduction - From JSON */}
+      <Text style={styles.sectionTitle}>About:</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.introduction || 'No description available.'}
       </Text>
-      <View style={styles.admissionCard}>
-        <Text style={styles.admissionSubheader}>Undergraduate (UG):</Text>
-        <Text style={styles.admissionContent}>
-          • JEE Advanced rank + JoSAA counseling
+
+
+
+      <Text style={styles.sectionTitle}>Student life:</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.student_life || 'No description available.'}
+      </Text>
+
+      <Text style={styles.sectionTitle}>RANKS:</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.accreditation_affiliation || 'No description available.'}
+      </Text>
+
+
+      <Text style={styles.sectionTitle}>Infrastucture:</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.campus_infrastructure || 'No description available.'}
+      </Text>
+
+      <Text style={styles.sectionTitle}>excellence:</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.excellence || 'No description available.'}
+      </Text>
+
+
+      <Text style={styles.sectionTitle}>mission:</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.mission || 'No description available.'}
+      </Text>
+
+      <Text style={styles.sectionTitle}>location:</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.location || 'No description available.'}
+      </Text>
+
+      {/* History - From JSON */}
+      <Text style={styles.sectionTitle}>History</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.history || 'No history available.'}
+      </Text>
+
+      <Text style={styles.sectionTitle}>website:</Text>
+      <Text style={styles.sectionText}>
+        {college.about?.website || 'No description available.'}
+      </Text>
+
+
+    </View>
+  );
+
+
+  const renderAdmissions = () => (
+    <View style={styles.admissionContainer}>
+      {/* Admission Process Section */}
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionHeaderWithIcon}>
+          <MaterialIcons name="school" size={20} color="#159895" /> Admission Process
         </Text>
-        
-        <Text style={styles.admissionSubheader}>Postgraduate (PG):</Text>
-        <Text style={styles.admissionContent}>
-          • GATE/CAT/IIT JAM + interview
+        <View style={styles.admissionCard}>
+          <Text style={styles.admissionSubheader}>Undergraduate (UG):</Text>
+          <Text style={styles.admissionContent}>
+            • JEE Advanced rank + JoSAA counseling
+          </Text>
+
+          <Text style={styles.admissionSubheader}>Postgraduate (PG):</Text>
+          <Text style={styles.admissionContent}>
+            • GATE/CAT/IIT JAM + interview
+          </Text>
+        </View>
+      </View>
+
+      {/* Important Dates Section */}
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionHeaderWithIcon}>
+          <MaterialIcons name="date-range" size={20} color="#159895" /> Important Dates
         </Text>
+        <View style={styles.admissionCard}>
+          <Text style={styles.admissionSubheader}>Undergraduate (UG):</Text>
+          <Text style={styles.admissionContent}>
+            • JEE Advanced: April-May{"\n"}
+            • JoSAA counseling: June-July
+          </Text>
+
+          <Text style={styles.admissionSubheader}>Postgraduate (PG):</Text>
+          <Text style={styles.admissionContent}>
+            • Applications: December-January{"\n"}
+            • Interviews: March-April
+          </Text>
+        </View>
       </View>
     </View>
+  );
 
-    {/* Important Dates Section */}
-    <View style={styles.sectionContainer}>
+  const renderCourses = () => (
+    <View>
       <Text style={styles.sectionHeaderWithIcon}>
-        <MaterialIcons name="date-range" size={20} color="#159895" /> Important Dates
+        <MaterialIcons name="school" size={20} color="#159895" /> Undergraduate Programs
       </Text>
-      <View style={styles.admissionCard}>
-        <Text style={styles.admissionSubheader}>Undergraduate (UG):</Text>
-        <Text style={styles.admissionContent}>
-          • JEE Advanced: April-May{"\n"}
-          • JoSAA counseling: June-July
-        </Text>
-        
-        <Text style={styles.admissionSubheader}>Postgraduate (PG):</Text>
-        <Text style={styles.admissionContent}>
-          • Applications: December-January{"\n"}
-          • Interviews: March-April
-        </Text>
-      </View>
+      <Text style={styles.sectionDescription}>
+        Explore 4-year B.Tech and integrated dual degree programs.
+      </Text>
+      {(college.courses?.undergraduate || []).length === 0 ? (
+        <Text style={styles.emptyState}>No undergraduate programs listed.</Text>
+      ) : (
+        (college.courses?.undergraduate || []).map((course, idx) => (
+          <TouchableOpacity key={idx} style={styles.courseCard} onPress={() => handleCoursePress(course)}>
+            <View style={styles.courseIcon}>{getCourseIcon(course)}</View>
+            <Text style={styles.courseTitle}>{course}</Text>
+          </TouchableOpacity>
+        ))
+      )}
+
+      <Text style={styles.sectionHeaderWithIcon}>
+        <MaterialIcons name="history-edu" size={20} color="#159895" /> Postgraduate Programs
+      </Text>
+      <Text style={styles.sectionDescription}>
+        Advanced M.Tech, MBA, and research programs for graduates.
+      </Text>
+      {(college.courses?.postgraduate || []).length === 0 ? (
+        <Text style={styles.emptyState}>No postgraduate programs listed.</Text>
+      ) : (
+        (college.courses?.postgraduate || []).map((course, idx) => (
+          <TouchableOpacity key={idx} style={styles.courseCard} onPress={() => handleCoursePress(course)}>
+            <View style={styles.courseIcon}>{getCourseIcon(course)}</View>
+            <Text style={styles.courseTitle}>{course}</Text>
+          </TouchableOpacity>
+        ))
+      )}
     </View>
-  </View>
-);
+  );
 
-const renderCourses = () => (
-  <View>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="school" size={20} color="#159895" /> Undergraduate Programs
-    </Text>
-    <Text style={styles.sectionDescription}>
-      Explore 4-year B.Tech and integrated dual degree programs.
-    </Text>
-    {(college.courses?.undergraduate || []).length === 0 ? (
-      <Text style={styles.emptyState}>No undergraduate programs listed.</Text>
-    ) : (
-      (college.courses?.undergraduate || []).map((course, idx) => (
-        <TouchableOpacity key={idx} style={styles.courseCard} onPress={() => handleCoursePress(course)}>
-          <View style={styles.courseIcon}>{getCourseIcon(course)}</View>
-          <Text style={styles.courseTitle}>{course}</Text>
-        </TouchableOpacity>
-      ))
-    )}
+  const renderRankings = () => (
+    <View style={styles.rankingContainer}>
+      <Text style={styles.sectionHeaderWithIcon}>
+        <MaterialIcons name="star" size={20} color="#159895" /> Rankings & Excellence
+      </Text>
 
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="history-edu" size={20} color="#159895" /> Postgraduate Programs
-    </Text>
-    <Text style={styles.sectionDescription}>
-      Advanced M.Tech, MBA, and research programs for graduates.
-    </Text>
-    {(college.courses?.postgraduate || []).length === 0 ? (
-      <Text style={styles.emptyState}>No postgraduate programs listed.</Text>
-    ) : (
-      (college.courses?.postgraduate || []).map((course, idx) => (
-        <TouchableOpacity key={idx} style={styles.courseCard} onPress={() => handleCoursePress(course)}>
-          <View style={styles.courseIcon}>{getCourseIcon(course)}</View>
-          <Text style={styles.courseTitle}>{course}</Text>
-        </TouchableOpacity>
-      ))
-    )}
-  </View>
-);
+      <View style={styles.rankingCard}>
+        <View style={styles.rankingBadge}>
+          <Text style={styles.rankingPosition}>
+            {college.rankings?.position || 'Rank'}
+          </Text>
+          <Text style={styles.rankingSource}>
+            {college.rankings?.source || 'Source'}
+          </Text>
+        </View>
 
-const renderRankings = () => (
-  <View style={styles.rankingContainer}>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="star" size={20} color="#159895" /> Rankings & Excellence
-    </Text>
-    
-    <View style={styles.rankingCard}>
-      <View style={styles.rankingBadge}>
-        <Text style={styles.rankingPosition}>
-          {college.rankings?.position || 'Rank'}
-        </Text>
-        <Text style={styles.rankingSource}>
-          {college.rankings?.source || 'Source'}
-        </Text>
-      </View>
-      
-      <View style={styles.rankingContent}>
-        <Text style={styles.rankingDescription}>
-          {college.rankings?.description || 'Ranking description not available'}
-        </Text>
-        
-        {college.rankings?.excellence_areas && (
-          <View style={styles.excellenceSection}>
-            <Text style={styles.excellenceTitle}>Centers of Excellence:</Text>
-            <View style={styles.excellencePills}>
-              {college.rankings.excellence_areas.map((area, index) => (
-                <View style={styles.pill} key={index}>
-                  <Text style={styles.pillText}>{area}</Text>
-                </View>
-              ))}
+        <View style={styles.rankingContent}>
+          <Text style={styles.rankingDescription}>
+            {college.rankings?.description || 'Ranking description not available'}
+          </Text>
+
+          {college.rankings?.excellence_areas && (
+            <View style={styles.excellenceSection}>
+              <Text style={styles.excellenceTitle}>Centers of Excellence:</Text>
+              <View style={styles.excellencePills}>
+                {college.rankings.excellence_areas.map((area, index) => (
+                  <View style={styles.pill} key={index}>
+                    <Text style={styles.pillText}>{area}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
-        )}
+          )}
+        </View>
       </View>
     </View>
-  </View>
-);
+  );
 
-const renderPlacements = () => (
-  <View>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="work" size={20} color="#159895" /> Placements
-    </Text>
-    <Text style={styles.aboutCardContent}>
-      Highest Package: {college.placement?.highest_package || 'N/A'}
-    </Text>
-    <Text style={styles.aboutCardContent}>
-      Average Package: {college.placement?.average_package || 'N/A'}
-    </Text>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="business" size={20} color="#159895" /> Top Recruiters
-    </Text>
-    {(college.placement?.top_recruiters || []).map((recruiter, idx) => (
-      <Text key={idx} style={styles.aboutCardContent}>{recruiter}</Text>
-    ))}
-  </View>
-);
+  const renderPlacements = () => (
+    <View>
+      <Text style={styles.sectionHeaderWithIcon}>
+        <MaterialIcons name="work" size={20} color="#159895" /> Placements
+      </Text>
+      <Text style={styles.aboutCardContent}>
+        Highest Package: {college.placement?.highest_package || 'N/A'}
+      </Text>
+      <Text style={styles.aboutCardContent}>
+        Average Package: {college.placement?.average_package || 'N/A'}
+      </Text>
+      <Text style={styles.sectionHeaderWithIcon}>
+        <MaterialIcons name="business" size={20} color="#159895" /> Top Recruiters
+      </Text>
+      {(college.placement?.top_recruiters || []).map((recruiter, idx) => (
+        <Text key={idx} style={styles.aboutCardContent}>{recruiter}</Text>
+      ))}
+    </View>
+  );
 
-const renderFacilities = () => (
-  <View>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="apartment" size={20} color="#159895" /> Facilities
-    </Text>
-    {(college.facilities || []).map((facility, idx) => (
-      <Text key={idx} style={styles.aboutCardContent}>{facility}</Text>
-    ))}
-  </View>
-);
+  const renderFacilities = () => (
+    <View>
+      <Text style={styles.sectionHeaderWithIcon}>
+        <MaterialIcons name="apartment" size={20} color="#159895" /> Facilities
+      </Text>
+      {(college.facilities || []).map((facility, idx) => (
+        <Text key={idx} style={styles.aboutCardContent}>{facility}</Text>
+      ))}
+    </View>
+  );
 
-const renderGallery = () => (
-  <View>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="photo-library" size={20} color="#159895" /> Gallery
-    </Text>
-    <ScrollView horizontal>
-      {(college.gallery || []).map((img, idx) => {
-        const isUrl = img.startsWith?.("http");
-        const source = isUrl ? { uri: img } : localImages[img];
+  const renderGallery = () => (
+    <View>
+      <Text style={styles.sectionHeaderWithIcon}>
+        <MaterialIcons name="photo-library" size={20} color="#159895" /> Gallery
+      </Text>
+      <ScrollView horizontal>
+        {(college.gallery || []).map((img, idx) => {
+          const isUrl = img.startsWith?.("http");
+          const source = isUrl ? { uri: img } : localImages[img];
 
-        return (
-          <Image
-            key={idx}
-            source={source}
-            style={{
-              width: 200,
-              height: 120,
-              marginRight: 10,
-              borderRadius: 8,
-              backgroundColor: "#ddd"
-            }}
-          />
-        );
-      })}
-    </ScrollView>
-  </View>
-);
-
+          return (
+            <Image
+              key={idx}
+              source={source}
+              style={{
+                width: 200,
+                height: 120,
+                marginRight: 10,
+                borderRadius: 8,
+                backgroundColor: "#ddd"
+              }}
+            />
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 
 
 
 
-const renderContact = () => (
-  <View>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="contact-mail" size={20} color="#159895" /> Contact
-    </Text>
-    <Text style={styles.aboutCardContent}>Email: {college.contact?.email || 'N/A'}</Text>
-    <Text style={styles.aboutCardContent}>Phone: {college.contact?.phone || 'N/A'}</Text>
-    <Text style={styles.aboutCardContent}>Website: {college.contact?.website || 'N/A'}</Text>
-    <Text style={styles.aboutCardContent}>Address: {college.contact?.address || 'N/A'}</Text>
-  </View>
-);
+
+  const renderContact = () => (
+    <View>
+      <Text style={styles.sectionHeaderWithIcon}>
+        <MaterialIcons name="contact-mail" size={20} color="#159895" /> Contact
+      </Text>
+      <Text style={styles.aboutCardContent}>Email: {college.contact?.email || 'N/A'}</Text>
+      <Text style={styles.aboutCardContent}>Phone: {college.contact?.phone || 'N/A'}</Text>
+      <Text style={styles.aboutCardContent}>Website: {college.contact?.website || 'N/A'}</Text>
+      <Text style={styles.aboutCardContent}>Address: {college.contact?.address || 'N/A'}</Text>
+    </View>
+  );
 
 
-const renderFAQs = () => (
-  <View>
-    <Text style={styles.sectionHeaderWithIcon}>
-      <MaterialIcons name="help-outline" size={20} color="#159895" /> FAQs
-    </Text>
-    {(college.faqs || []).map((faq, idx) => (
-      <View key={idx} style={styles.faqCard}>
-        <Text style={styles.faqQuestion}>Q: {faq.question}</Text>
-        <Text style={styles.faqAnswer}>A: {faq.answer}</Text>
-      </View>
-    ))}
-  </View>
-);
+  const renderFAQs = () => (
+    <View>
+      <Text style={styles.sectionHeaderWithIcon}>
+        <MaterialIcons name="help-outline" size={20} color="#159895" /> FAQs
+      </Text>
+      {(college.faqs || []).map((faq, idx) => (
+        <View key={idx} style={styles.faqCard}>
+          <Text style={styles.faqQuestion}>Q: {faq.question}</Text>
+          <Text style={styles.faqAnswer}>A: {faq.answer}</Text>
+        </View>
+      ))}
+    </View>
+  );
 
   // ... Implement renderAdmissions, renderRankings, renderPlacements, renderFacilities, renderGallery, renderContact similarly ...
 
@@ -429,23 +429,23 @@ const renderFAQs = () => (
                 onPress={() => setSelectedTab(tab.name)}
                 activeOpacity={0.7}
               >
-                <MaterialIcons name={tab.icon} size={18} color={selectedTab === tab.name ? '#fff' : '#1a5f7a'} style={{ marginRight: 6 }} />
+                <MaterialIcons name={tab.icon as any} size={18} color={selectedTab === tab.name ? '#fff' : '#1a5f7a'} style={{ marginRight: 6 }} />
                 <Text style={[styles.tabText, selectedTab === tab.name && styles.tabTextActive]}>{tab.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </ScrollView>
-       <View style={styles.sectionBox}>
-  {selectedTab === 'About' && renderAbout()}
-  {selectedTab === 'Courses' && renderCourses()}
-  {selectedTab === 'Admissions' && renderAdmissions()}
-  {selectedTab === 'Rankings' && renderRankings()}
-  {selectedTab === 'Placements' && renderPlacements()}
-  {selectedTab === 'Facilities' && renderFacilities()}
-  {selectedTab === 'Gallery' && renderGallery()}
-  {selectedTab === 'Contact' && renderContact()}
-  {selectedTab === 'FAQs' && renderFAQs()}
-</View>
+        <View style={styles.sectionBox}>
+          {selectedTab === 'About' && renderAbout()}
+          {selectedTab === 'Courses' && renderCourses()}
+          {selectedTab === 'Admissions' && renderAdmissions()}
+          {selectedTab === 'Rankings' && renderRankings()}
+          {selectedTab === 'Placements' && renderPlacements()}
+          {selectedTab === 'Facilities' && renderFacilities()}
+          {selectedTab === 'Gallery' && renderGallery()}
+          {selectedTab === 'Contact' && renderContact()}
+          {selectedTab === 'FAQs' && renderFAQs()}
+        </View>
       </ScrollView>
       <View style={styles.bottomBar}>
         <Text style={styles.bottomBarText}>StudentVerse - Your Complete College Guide</Text>
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
   },
- 
+
   admissionCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -780,83 +780,83 @@ const styles = StyleSheet.create({
   },
 
   aboutMainCard: {
-  backgroundColor: '#fff',
-  borderRadius: 16,
-  padding: 20,
-  marginBottom: 16,
-  alignItems: 'center',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.08,
-  shadowRadius: 6,
-  elevation: 3,
-},
-establishedRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginBottom: 8,
-},
-establishedText: {
-  marginLeft: 8,
-  color: '#1976d2',
-  fontWeight: '600',
-},
-collegeTitle: {
-  fontSize: 22,
-  fontWeight: 'bold',
-  color: '#1a5f7a',
-  textAlign: 'center',
-  marginVertical: 8,
-},
-affiliationRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginTop: 8,
-},
-affiliationText: {
-  marginLeft: 8,
-  color: '#388e3c',
-  fontSize: 15,
-},
-accreditationCard: {
-  backgroundColor: '#e8f5e9',
-  borderRadius: 12,
-  padding: 16,
-  marginBottom: 16,
-  alignItems: 'center',
-  flexDirection: 'row',
-  gap: 10,
-},
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  establishedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  establishedText: {
+    marginLeft: 8,
+    color: '#1976d2',
+    fontWeight: '600',
+  },
+  collegeTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a5f7a',
+    textAlign: 'center',
+    marginVertical: 8,
+  },
+  affiliationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  affiliationText: {
+    marginLeft: 8,
+    color: '#388e3c',
+    fontSize: 15,
+  },
+  accreditationCard: {
+    backgroundColor: '#e8f5e9',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
 
 
-sectionCard: {
-  backgroundColor: '#f5f7fa',
-  borderRadius: 12,
-  padding: 16,
-  marginBottom: 16,
-},
+  sectionCard: {
+    backgroundColor: '#f5f7fa',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
 
-sectionContent: {
-  color: '#444',
-  fontSize: 15,
-},
+  sectionContent: {
+    color: '#444',
+    fontSize: 15,
+  },
 
 
 
   aboutContainer: { padding: 16 },
   collegeHeader: { marginBottom: 20, alignItems: 'center' },
-  collegeName: { 
-    fontSize: 22, 
-    fontWeight: 'bold', 
-    color: '#1a5f7a', 
-    textAlign: 'center' 
+  collegeName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a5f7a',
+    textAlign: 'center'
   },
-  collegeLocation: { 
-    fontSize: 16, 
-    color: '#666', 
-    marginTop: 4 
+  collegeLocation: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 4
   },
- factsContainer: {
+  factsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
@@ -867,17 +867,17 @@ sectionContent: {
     fontSize: 14,
     color: '#333',
   },
-  sectionTitle: { 
-    fontSize: 18, 
-    fontWeight: '600', 
-    color: '#1a5f7a', 
-    marginBottom: 12 
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a5f7a',
+    marginBottom: 12
   },
-  sectionText: { 
-    fontSize: 15, 
-    lineHeight: 22, 
-    color: '#444', 
-    marginBottom: 20 
+  sectionText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#444',
+    marginBottom: 20
   },
 
 
@@ -899,13 +899,13 @@ sectionContent: {
     marginBottom: 8,
   },
   courseCard: {
-  backgroundColor: '#f9f9f9',
-  borderRadius: 8,
-  padding: 15,
-  marginBottom: 12,
-  flexDirection: 'row',      // <-- Add this
-  alignItems: 'center',      // <-- Add this
-},
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 12,
+    flexDirection: 'row',      // <-- Add this
+    alignItems: 'center',      // <-- Add this
+  },
 
   // ... existing code ...
 
@@ -978,7 +978,7 @@ sectionContent: {
     fontFamily: 'Inter', // or your preferred font
   },
 
-    admissionContainer: {
+  admissionContainer: {
     marginBottom: 20,
   },
   sectionContainer: {
@@ -1017,7 +1017,7 @@ sectionContent: {
   },
 
 
-   rankingContainer: {
+  rankingContainer: {
     marginBottom: 20,
   },
   rankingCard: {
@@ -1087,18 +1087,18 @@ sectionContent: {
   },
 
   faqCard: {
-  marginVertical: 8,
-  padding: 10,
-  backgroundColor: '#f5f5f5',
-  borderRadius: 8,
-},
-faqQuestion: {
-  fontWeight: 'bold',
-  marginBottom: 4,
-},
-faqAnswer: {
-  color: '#333',
-},
+    marginVertical: 8,
+    padding: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  faqQuestion: {
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  faqAnswer: {
+    color: '#333',
+  },
 
 
 

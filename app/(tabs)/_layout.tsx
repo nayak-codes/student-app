@@ -1,8 +1,25 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/contexts/ThemeContext';
+
+function CreatePostButton() {
+  const router = useRouter();
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      style={styles.createButtonWrapper}
+      activeOpacity={0.85}
+      onPress={() => router.push('/create-post' as any)}
+    >
+      <View style={[styles.createButton, { backgroundColor: colors.primary }]}>
+        <Ionicons name="add" size={22} color="#FFFFFF" />
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function TabLayout() {
   const { colors, isDark } = useTheme();
@@ -15,7 +32,7 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.textSecondary,
         headerShown: false,
         tabBarStyle: {
-          height: 60 + Math.max(insets.bottom, 4), // Ensure at least 4px padding if no insets
+          height: 60 + Math.max(insets.bottom, 4),
           paddingBottom: Math.max(insets.bottom, 4),
           backgroundColor: isDark ? colors.card : '#FFFFFF',
           borderTopColor: colors.border,
@@ -49,19 +66,16 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Clips Tab - DISABLED FOR V1 LAUNCH */}
+      {/* ➕ Create Post — center "+" button */}
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Clips',
-          href: null, // Hide from navigation for V1
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="explore" size={size} color={color} />
-          ),
+          title: '',
+          tabBarButton: () => <CreatePostButton />,
         }}
       />
 
-      {/* Library Tab - Guaranteed to work */}
+      {/* Library Tab */}
       <Tabs.Screen
         name="library"
         options={{
@@ -85,3 +99,26 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  createButtonWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Lift the button above the tab bar
+    marginTop: -10,
+  },
+  createButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Shadow for the raised effect
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+});

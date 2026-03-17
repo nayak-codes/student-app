@@ -52,8 +52,8 @@ export default function PlaylistsIndexScreen() {
                 <Ionicons name="musical-notes" size={24} color={colors.primary} />
             </View>
             <View style={styles.info}>
-                <Text style={[styles.title, { color: colors.text }]}>{item.name}</Text>
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{item.items.length} items • {item.isPublic ? 'Public' : 'Private'}</Text>
+                <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{item.itemCount} items • {item.privacy === 'public' ? 'Public' : 'Private'}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>

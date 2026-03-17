@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { addDoc, collection, getDocs, orderBy, query, Timestamp, where } from 'firebase/firestore';
+import { addDoc, collection, getDocs, limit, orderBy, query, QueryDocumentSnapshot, startAfter, Timestamp, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const USER_EVENT_PREFERENCES_KEY = '@user_event_preferences';
@@ -233,6 +233,82 @@ export const toggleEventSave = async (userId: string, eventId: string): Promise<
         }
     } catch (error) {
         console.error('Error toggling event save:', error);
+        throw error;
+    }
+};
+
+// ─── Pagination Result Type ──────────────────────────────────────────────────
+export interface PaginatedEventsResult {
+    events: EventItem[];
+    lastDoc: QueryDocumentSnapshot | null;
+    hasMore: boolean;
+}
+
+const PAGE_SIZE = 12;
+
+// Get paginated events (all categories)
+export const getEventsPaginated = async (
+    lastDocument?: QueryDocumentSnapshot | null,
+    pageSize: number = PAGE_SIZE
+): Promise<PaginatedEventsResult> => {
+    try {
+        const constraints: any[] = [orderBy('createdAt', 'desc'), limit(pageSize + 1)];
+        if (lastDocument) constraints.push(startAfter(lastDocument));
+
+        const q = query(collection(db, 'events'), ...constraints);
+        const snapshot = await getDocs(q);
+        const docs = snapshot.docs;
+        const hasMore = docs.length > pageSize;
+        const pageDocs = hasMore ? docs.slice(0, pageSize) : docs;
+
+        return {
+            events: pageDocs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: convertTimestamp(doc.data().createdAt)
+            })) as EventItem[],
+            lastDoc: pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null,
+            hasMore,
+        };
+    } catch (error) {
+        console.error('Error fetching paginated events:', error);
+        throw error;
+    }
+};
+
+// Get paginated events filtered by preferences
+export const getRecommendedEventsPaginated = async (
+    preferences: EventCategory[],
+    lastDocument?: QueryDocumentSnapshot | null,
+    pageSize: number = PAGE_SIZE
+): Promise<PaginatedEventsResult> => {
+    try {
+        if (preferences.length === 0) return { events: [], lastDoc: null, hasMore: false };
+
+        const constraints: any[] = [
+            where('category', 'in', preferences.slice(0, 10)),
+            orderBy('createdAt', 'desc'),
+            limit(pageSize + 1)
+        ];
+        if (lastDocument) constraints.push(startAfter(lastDocument));
+
+        const q = query(collection(db, 'events'), ...constraints);
+        const snapshot = await getDocs(q);
+        const docs = snapshot.docs;
+        const hasMore = docs.length > pageSize;
+        const pageDocs = hasMore ? docs.slice(0, pageSize) : docs;
+
+        return {
+            events: pageDocs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: convertTimestamp(doc.data().createdAt)
+            })) as EventItem[],
+            lastDoc: pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null,
+            hasMore,
+        };
+    } catch (error) {
+        console.error('Error fetching paginated recommended events:', error);
         throw error;
     }
 };

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from 'firebase/auth';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { getUserProfile, logout as logoutUser, onAuthChange, UserProfile } from '../services/authService';
@@ -44,26 +45,54 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUser(authUser);
 
             if (authUser) {
-                // Fetch user profile from Firestore
+                const CACHE_KEY = `userProfile_${authUser.uid}`;
+
+                // ⚡ 1. Try loading from cache FIRST to unblock UI instantly
+                try {
+                    const cachedStr = await AsyncStorage.getItem(CACHE_KEY);
+                    if (cachedStr) {
+                        const cachedProfile = JSON.parse(cachedStr);
+                        // Restore dates if any
+                        if (cachedProfile.createdAt) cachedProfile.createdAt = new Date(cachedProfile.createdAt);
+                        if (cachedProfile.updatedAt) cachedProfile.updatedAt = new Date(cachedProfile.updatedAt);
+
+                        setUserProfile(cachedProfile);
+                        setLoading(false); // 🔥 UNBLOCK THE UI INSTANTLY
+                    }
+                } catch (e) {
+                    console.error('Failed to load cached profile', e);
+                }
+
+                // ☁️ 2. Fetch fresh user profile from Firestore silently in background
                 try {
                     const profile = await getUserProfile(authUser.uid);
                     setUserProfile(profile);
+
+                    // Save fresh profile to cache
+                    if (profile) {
+                        AsyncStorage.setItem(CACHE_KEY, JSON.stringify(profile)).catch(console.error);
+                    }
                 } catch (error: any) {
                     console.error('Error fetching user profile:', error);
-                    setUserProfile(null);
+
+                    // If we didn't have a cached profile, we clear it
+                    if (loading) setUserProfile(null);
 
                     // If permission denied, likely stale auth or banned - logout to reset
                     if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
                         console.warn('Permission error detected. Logging out to refresh session.');
                         await logoutUser();
                         setUser(null);
+                        AsyncStorage.removeItem(CACHE_KEY).catch(() => { });
                     }
+                } finally {
+                    // Ensure loading is set to false even if cache check failed
+                    setLoading(false);
                 }
             } else {
                 setUserProfile(null);
+                setLoading(false);
             }
-
-            setLoading(false);
         });
 
         // Cleanup subscription

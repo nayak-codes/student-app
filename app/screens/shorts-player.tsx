@@ -42,7 +42,7 @@ export default function ShortsPlayerScreen() {
 
     const loadShorts = async () => {
         try {
-            const posts = await getAllPosts();
+            const { posts } = await getAllPosts();
             const shorts = posts.filter(p => p.type === 'clip');
             setAllShorts(shorts);
 

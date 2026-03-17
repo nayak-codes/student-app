@@ -16,15 +16,17 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { DownloadedDocument, getDownloadedDocuments, renameDownload } from '../../src/services/downloadService';
-import { addToPlaylist, getPlaylists, Playlist, removeFromPlaylist } from '../../src/services/playlistService';
+import { addItemToPlaylist, getUserPlaylists, Playlist, removeItemFromPlaylist } from '../../src/services/playlistService';
 import { SavedResource } from '../../src/services/savedService';
 
 const PlaylistDetailScreen = () => {
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { id, name } = params;
+    const { id, name } = params; // Keep name alias so router push doesn't break, though we know it's title
+    const { user } = useAuth();
 
     // We need to fetch fresh data to ensure we have current list
     const [playlist, setPlaylist] = useState<Playlist | null>(null);
@@ -52,7 +54,8 @@ const PlaylistDetailScreen = () => {
             if (!refreshing) setLoading(true);
 
             // 1. Get Playlist Fresh
-            const playlists = await getPlaylists();
+            if (!user) return;
+            const playlists = await getUserPlaylists(user.uid);
             const current = playlists.find(p => p.id === id);
 
             if (!current) {
@@ -90,14 +93,15 @@ const PlaylistDetailScreen = () => {
                 approved: true,
                 createdAt: new Date(doc.downloadedAt),
                 updatedAt: new Date(doc.downloadedAt),
+                accessLevel: 'public', // Default for offline resources
             }));
 
             // 4. Filter for current playlist
-            const playlistDocs = allResources.filter(res => current.resourceIds.includes(res.id));
+            const playlistDocs = allResources.filter(res => current.items.some(i => i.itemId === res.id));
             setResources(playlistDocs);
 
             // 5. Filter for available (not in playlist)
-            const available = allResources.filter(res => !current.resourceIds.includes(res.id));
+            const available = allResources.filter(res => !current.items.some(i => i.itemId === res.id));
             setAvailableDownloads(available);
 
         } catch (error) {
@@ -124,8 +128,12 @@ const PlaylistDetailScreen = () => {
                     text: 'Remove',
                     style: 'destructive',
                     onPress: async () => {
-                        await removeFromPlaylist(id as string, item.id);
-                        loadData(); // Refresh list
+                        // find the internal id of the item in the playlist
+                        const playlistItem = playlist?.items.find(i => i.itemId === item.id);
+                        if (playlistItem) {
+                            await removeItemFromPlaylist(id as string, playlistItem.id);
+                            loadData(); // Refresh list
+                        }
                     }
                 }
             ]
@@ -134,7 +142,12 @@ const PlaylistDetailScreen = () => {
 
     const handleAddFile = async (item: SavedResource) => {
         try {
-            await addToPlaylist(id as string, item.id);
+            await addItemToPlaylist(id as string, {
+                type: 'document',
+                itemId: item.id,
+                title: item.title,
+                thumbnail: item.customCoverUrl || undefined
+            });
             // Don't close modal immediately, allow multiple adds? Or close?
             // User likely wants to add multiple. Let's keep open but update lists.
             // But for simplicity, let's close or show toast. 

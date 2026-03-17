@@ -23,6 +23,23 @@ import {
     Conversation,
     subscribeToConversations
 } from '../src/services/chatService';
+import * as presenceService from '../src/services/presenceService';
+
+const UserOnlineBadge = ({ userId, cardColor }: { userId: string | undefined, cardColor: string }) => {
+    const [isOnline, setIsOnline] = useState(false);
+
+    useEffect(() => {
+        if (!userId) return;
+        const unsubscribe = presenceService.subscribeToUserPresence(userId, (presence) => {
+            setIsOnline(!!presence?.isOnline);
+        });
+        return () => unsubscribe();
+    }, [userId]);
+
+    if (!isOnline) return null;
+
+    return <View style={[styles.onlineBadge, { borderColor: cardColor }]} />;
+};
 
 const ConversationsScreen = () => {
     const router = useRouter();
@@ -170,9 +187,8 @@ const ConversationsScreen = () => {
                                 </Text>
                             </View>
                         )}
-                        {unreadCount > 0 && (
-                            <View style={[styles.onlineBadge, { borderColor: colors.card }]} />
-                        )}
+                        {/* Status based green indicator dot */}
+                        <UserOnlineBadge userId={otherUserId} cardColor={colors.card} />
                     </View>
 
                     {/* Right Content */}
@@ -266,7 +282,19 @@ const ConversationsScreen = () => {
                                 ]}
                                 numberOfLines={1}
                             >
-                                {item.participants.length} members • {item.lastMessage?.text || 'No messages yet'}
+                                {item.lastMessage
+                                    ? (() => {
+                                        // Show sender name prefix for group last message
+                                        const senderId = item.lastMessage.senderId;
+                                        const currentUser = auth.currentUser;
+                                        if (senderId === currentUser?.uid) {
+                                            return `You: ${item.lastMessage.text}`;
+                                        }
+                                        const senderDetail = item.participantDetails?.[senderId];
+                                        const senderFirstName = senderDetail?.name?.split(' ')[0] || 'Someone';
+                                        return `${senderFirstName}: ${item.lastMessage.text}`;
+                                    })()
+                                    : 'No messages yet'}
                             </Text>
                             {unreadCount > 0 && (
                                 <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
@@ -546,19 +574,47 @@ const ConversationsScreen = () => {
                             />
                         }
                         ListEmptyComponent={
-                            <View style={styles.emptyState}>
-                                <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
-                                <Text style={[styles.emptyTitle, { color: colors.text }]}>No conversations yet</Text>
-                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                                    Start chatting by visiting a user's profile
-                                </Text>
-                            </View>
+                            activeTab === 'groups' ? (
+                                <View style={styles.emptyState}>
+                                    <Text style={{ fontSize: 52, marginBottom: 12 }}>🎓</Text>
+                                    <Text style={[styles.emptyTitle, { color: colors.text }]}>No Groups Yet</Text>
+                                    <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                                        Create your college group and invite classmates. When your group comes, students follow!
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={[styles.emptyAction, { backgroundColor: '#10B981' }]}
+                                        onPress={() => router.push('/create-group')}
+                                    >
+                                        <Ionicons name="add" size={18} color="#FFF" />
+                                        <Text style={styles.emptyActionText}>Create a Group</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <View style={styles.emptyState}>
+                                    <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
+                                    <Text style={[styles.emptyTitle, { color: colors.text }]}>No conversations yet</Text>
+                                    <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                                        Start chatting by visiting a user's profile
+                                    </Text>
+                                </View>
+                            )
                         }
                     />
                 </TabSwipeNavigator>
             )}
 
             {/* Floating Action Buttons - Show based on active tab */}
+            {activeTab === 'chats' && (
+                <TouchableOpacity
+                    style={[styles.fab, { backgroundColor: colors.primary }]}
+                    onPress={() => router.push('/(tabs)')}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="chatbubble-ellipses" size={22} color="#FFF" />
+                    <Text style={styles.fabText}>New Chat</Text>
+                </TouchableOpacity>
+            )}
+
             {activeTab === 'groups' && (
                 <TouchableOpacity
                     style={[styles.fab, { backgroundColor: '#10B981' }]}
@@ -797,20 +853,36 @@ const styles = StyleSheet.create({
     emptyState: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingTop: 100,
-        paddingHorizontal: 40,
+        paddingTop: 80,
+        paddingHorizontal: 32,
     },
     emptyTitle: {
-        marginTop: 16,
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: '700',
-        color: '#1E293B',
+        marginTop: 12,
+        marginBottom: 8,
+        textAlign: 'center',
     },
     emptySubtitle: {
         marginTop: 8,
         fontSize: 14,
         color: '#64748B',
         textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    emptyAction: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 12,
+    },
+    emptyActionText: {
+        color: '#FFF',
+        fontWeight: '700',
+        fontSize: 15,
     },
     fab: {
         position: 'absolute',

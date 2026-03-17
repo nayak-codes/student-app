@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { arrayRemove, arrayUnion, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -45,6 +45,13 @@ export default function GroupInfoScreen() {
     useEffect(() => {
         fetchGroupInfo();
     }, [conversationId]);
+
+    // Re-fetch when screen regains focus (e.g., after adding members)
+    useFocusEffect(
+        useCallback(() => {
+            fetchGroupInfo();
+        }, [conversationId])
+    );
 
     const fetchGroupInfo = async () => {
         try {
@@ -351,22 +358,33 @@ export default function GroupInfoScreen() {
     const handleSaveChanges = async () => {
         setSaving(true);
         try {
-            let imageUrl = editImage;
+            let imageUrl = groupData?.groupIcon;
             if (editImage && editImage !== groupData?.groupIcon && !editImage.startsWith('http')) {
                 const response = await fetch(editImage);
                 const blob = await response.blob();
-                const storageRef = ref(storage, `groups/${conversationId}/icon_${Date.now()}`);
-                await uploadBytes(storageRef, blob);
+                const storageRef = ref(storage, `groups/${conversationId}/icon_${Date.now()}.jpg`);
+                // Explicitly set content type so Firebase Storage rules can validate it
+                await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
                 imageUrl = await getDownloadURL(storageRef);
+            } else if (editImage && editImage.startsWith('http')) {
+                imageUrl = editImage;
+            } else if (!editImage) {
+                imageUrl = undefined;
             }
 
-            await updateDoc(doc(db, 'conversations', conversationId), {
+            const updateData: any = {
                 groupName: editName,
                 groupDescription: editDescription,
-                groupIcon: imageUrl
-            });
+            };
+            if (imageUrl !== undefined) {
+                updateData.groupIcon = imageUrl;
+            } else {
+                updateData.groupIcon = null; // Or whatever signifies 'deleted' in your DB
+            }
 
-            setGroupData(prev => prev ? ({ ...prev, groupName: editName, groupDescription: editDescription, groupIcon: imageUrl || undefined }) : null);
+            await updateDoc(doc(db, 'conversations', conversationId), updateData);
+
+            setGroupData(prev => prev ? ({ ...prev, groupName: editName, groupDescription: editDescription, groupIcon: imageUrl }) : null);
             setIsEditing(false);
             Alert.alert('Success', 'Group updated');
         } catch (error) {

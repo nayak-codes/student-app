@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useRouter } from 'expo-router';
+import { QueryDocumentSnapshot } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -29,8 +30,9 @@ import { getUserProfile } from '../../src/services/authService';
 import {
     EventCategory,
     EventItem,
-    getAllEvents,
-    getRecommendedEvents,
+    PaginatedEventsResult,
+    getEventsPaginated,
+    getRecommendedEventsPaginated,
     getSavedEventIds,
     getUserEventPreferences,
     toggleEventSave,
@@ -126,6 +128,80 @@ const CATEGORY_FILTERS: Record<string, FilterGroup[]> = {
     ],
 };
 
+// ─── YouTube-style Skeleton Card ─────────────────────────────────────────────
+const EventSkeletonCard: React.FC<{ shimmer: Animated.Value; isDark: boolean }> = ({ shimmer, isDark }) => {
+    const bg = isDark ? '#1E293B' : '#FFFFFF';
+    const line = isDark ? '#2D3D52' : '#E8ECF0';
+    return (
+        <View style={{
+            backgroundColor: bg,
+            borderRadius: 24,
+            marginBottom: 20,
+            padding: 20,
+            marginHorizontal: 16,
+        }}>
+            {/* Top: logo + title lines */}
+            <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center', marginBottom: 16 }}>
+                <Animated.View style={{ width: 52, height: 52, borderRadius: 12, backgroundColor: line, opacity: shimmer }} />
+                <View style={{ flex: 1, gap: 8 }}>
+                    <Animated.View style={{ height: 14, borderRadius: 7, backgroundColor: line, width: '80%', opacity: shimmer }} />
+                    <Animated.View style={{ height: 11, borderRadius: 6, backgroundColor: line, width: '50%', opacity: shimmer }} />
+                    <Animated.View style={{ height: 10, borderRadius: 5, backgroundColor: line, width: '40%', opacity: shimmer }} />
+                </View>
+            </View>
+            {/* Location line */}
+            <Animated.View style={{ height: 10, borderRadius: 5, backgroundColor: line, width: '60%', marginBottom: 16, opacity: shimmer }} />
+            {/* Grid cells */}
+            <View style={{ gap: 8, marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Animated.View style={{ flex: 1, height: 36, borderRadius: 10, backgroundColor: line, opacity: shimmer }} />
+                    <Animated.View style={{ flex: 1, height: 36, borderRadius: 10, backgroundColor: line, opacity: shimmer }} />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Animated.View style={{ flex: 1, height: 36, borderRadius: 10, backgroundColor: line, opacity: shimmer }} />
+                    <Animated.View style={{ flex: 1, height: 36, borderRadius: 10, backgroundColor: line, opacity: shimmer }} />
+                </View>
+            </View>
+            {/* Footer */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : '#F0F0F0' }}>
+                <Animated.View style={{ height: 12, borderRadius: 6, backgroundColor: line, width: '30%', opacity: shimmer }} />
+                <Animated.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: line, opacity: shimmer }} />
+            </View>
+        </View>
+    );
+};
+
+const EventsSkeletonList: React.FC<{ isDark: boolean; colors: any }> = ({ isDark, colors }) => {
+    const shimmer = useRef(new Animated.Value(0.4)).current;
+
+    useEffect(() => {
+        const anim = Animated.loop(
+            Animated.sequence([
+                Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
+                Animated.timing(shimmer, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+            ])
+        );
+        anim.start();
+        return () => anim.stop();
+    }, []);
+
+    return (
+        <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 170 }}>
+            {/* Filter chips skeleton */}
+            <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 20 }}>
+                {[80, 60, 90, 70].map((w, i) => (
+                    <Animated.View key={i} style={{ width: w, height: 34, borderRadius: 17, backgroundColor: isDark ? '#1E293B' : '#E8ECF0', opacity: shimmer }} />
+                ))}
+            </View>
+            {[1, 2, 3, 4].map(i => (
+                <EventSkeletonCard key={i} shimmer={shimmer} isDark={isDark} />
+            ))}
+        </View>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const EventsScreen = () => {
     const router = useRouter();
     const { colors, isDark } = useTheme();
@@ -141,6 +217,11 @@ const EventsScreen = () => {
     const [recommendedEvents, setRecommendedEvents] = useState<EventItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Pagination State
+    const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     // Preferences State
     const [userPreferences, setUserPreferences] = useState<EventCategory[]>([]);
@@ -326,6 +407,8 @@ const EventsScreen = () => {
 
     const loadInitialData = async () => {
         setLoading(true);
+        setLastDoc(null);
+        setHasMore(true);
         try {
             const user = auth.currentUser;
             const [prefs, userProfile, savedIds] = await Promise.all([
@@ -335,27 +418,28 @@ const EventsScreen = () => {
             ]);
 
             setSavedEventIds(new Set(savedIds));
-
             setUserPreferences(prefs);
 
-            // Fetch events based on preferences
+            // Fetch first page of events based on preferences
             if (prefs.length > 0) {
-                const myEvents = await getRecommendedEvents(prefs);
-                setEvents(myEvents);
-                setFilteredEvents(myEvents);
+                const result = await getRecommendedEventsPaginated(prefs, null);
+                setEvents(result.events);
+                setFilteredEvents(result.events);
+                setLastDoc(result.lastDoc);
+                setHasMore(result.hasMore);
 
-                // Fetch Recommended
+                // Recommended horizontal strip - just first batch
                 if (userProfile) {
-                    const recs = await getRecommendedEvents(prefs);
-                    setRecommendedEvents(recs);
+                    setRecommendedEvents(result.events.slice(0, 5));
                 }
             } else {
-                // No preferences yet - show all events
                 setTempPreferences([]);
                 setShowOnboarding(true);
-                const allEvents = await getAllEvents();
-                setEvents(allEvents);
-                setFilteredEvents(allEvents);
+                const result = await getEventsPaginated(null);
+                setEvents(result.events);
+                setFilteredEvents(result.events);
+                setLastDoc(result.lastDoc);
+                setHasMore(result.hasMore);
             }
         } catch (error) {
             console.error("Failed to load events/preferences", error);
@@ -370,28 +454,52 @@ const EventsScreen = () => {
             return;
         }
         setRefreshing(true);
+        setLastDoc(null);
+        setHasMore(true);
         try {
             const user = auth.currentUser;
             const prefs = await getUserEventPreferences();
             setUserPreferences(prefs);
 
             if (prefs.length > 0) {
-                const myEvents = await getRecommendedEvents(prefs);
-                setEvents(myEvents);
-
-                const userProfile = user ? await getUserProfile(user.uid) : null;
-                if (userProfile) {
-                    const recs = await getRecommendedEvents(prefs);
-                    setRecommendedEvents(recs);
-                }
+                const result = await getRecommendedEventsPaginated(prefs, null);
+                setEvents(result.events);
+                setLastDoc(result.lastDoc);
+                setHasMore(result.hasMore);
+                setRecommendedEvents(result.events.slice(0, 5));
             } else {
-                const allEvents = await getAllEvents();
-                setEvents(allEvents);
+                const result = await getEventsPaginated(null);
+                setEvents(result.events);
+                setLastDoc(result.lastDoc);
+                setHasMore(result.hasMore);
             }
         } catch (error) {
             console.error(error);
         } finally {
             setRefreshing(false);
+        }
+    };
+
+    const loadMoreEvents = async () => {
+        if (loadingMore || !hasMore) return;
+        // Don't paginate when a filter/search is active (all data already loaded)
+        if (activeSubFilter !== 'All' || searchQuery.trim() || Object.keys(activeFilters).length > 0) return;
+        setLoadingMore(true);
+        try {
+            const prefs = userPreferences;
+            let result: PaginatedEventsResult;
+            if (prefs.length > 0) {
+                result = await getRecommendedEventsPaginated(prefs, lastDoc);
+            } else {
+                result = await getEventsPaginated(lastDoc);
+            }
+            setEvents(prev => [...prev, ...result.events]);
+            setLastDoc(result.lastDoc);
+            setHasMore(result.hasMore);
+        } catch (error) {
+            console.error('Error loading more events:', error);
+        } finally {
+            setLoadingMore(false);
         }
     };
 
@@ -415,17 +523,18 @@ const EventsScreen = () => {
 
             setActiveSubFilter('All');
             if (tempPreferences.length > 0) {
-                const myEvents = await getRecommendedEvents(tempPreferences);
-                setEvents(myEvents);
-                setFilteredEvents(myEvents);
-
-                // Reload recommendations
-                const recs = await getRecommendedEvents(tempPreferences);
-                setRecommendedEvents(recs);
+                const result = await getRecommendedEventsPaginated(tempPreferences, null);
+                setEvents(result.events);
+                setFilteredEvents(result.events);
+                setLastDoc(result.lastDoc);
+                setHasMore(result.hasMore);
+                setRecommendedEvents(result.events.slice(0, 5));
             } else {
-                const allEvents = await getAllEvents();
-                setEvents(allEvents);
-                setFilteredEvents(allEvents);
+                const result = await getEventsPaginated(null);
+                setEvents(result.events);
+                setFilteredEvents(result.events);
+                setLastDoc(result.lastDoc);
+                setHasMore(result.hasMore);
             }
         } catch (error) {
             console.error("Failed to save prefs", error);
@@ -736,9 +845,7 @@ const EventsScreen = () => {
 
             {/* Main Feed */}
             {loading ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
+                <EventsSkeletonList isDark={isDark} colors={colors} />
             ) : (
                 <FlatList
                     data={filteredEvents}
@@ -767,6 +874,15 @@ const EventsScreen = () => {
                     )}
                     ListHeaderComponent={renderListHeader}
                     showsVerticalScrollIndicator={false}
+                    onEndReached={loadMoreEvents}
+                    onEndReachedThreshold={0.4}
+                    ListFooterComponent={
+                        loadingMore ? (
+                            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            </View>
+                        ) : null
+                    }
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}

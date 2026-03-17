@@ -63,10 +63,11 @@ export const sendFriendRequest = async (targetUserId: string): Promise<void> => 
         if (!currentUser) throw new Error('User not authenticated');
         if (currentUser.uid === targetUserId) throw new Error('Cannot send friend request to yourself');
 
-        // Check if friendship already exists
+        // Check if friendship already exists — return silently if so
         const existingFriendship = await checkExistingFriendship(currentUser.uid, targetUserId);
         if (existingFriendship) {
-            throw new Error('Friend request already exists or you are already friends');
+            console.log('Connection already exists, status:', existingFriendship.status);
+            return; // silently do nothing — UI should reflect this via connectionStatus
         }
 
         // Create friend request
@@ -90,8 +91,8 @@ export const sendFriendRequest = async (targetUserId: string): Promise<void> => 
             await sendNotification(
                 targetUserId,
                 currentUser.uid,
-                userData.displayName || currentUser.displayName || 'User',
-                userData.photoURL || currentUser.photoURL,
+                userData.displayName || userData.name || currentUser.displayName || 'User',
+                userData.photoURL || userData.profilePhoto || currentUser.photoURL,
                 'friend_request', // We use this type to link to the request
                 'sent you a connection request',
                 { requestId: requestRef.id }
@@ -124,7 +125,7 @@ export const acceptFriendRequest = async (friendshipId: string): Promise<void> =
         const friendshipData = friendshipDoc.data();
 
         // Verify this user is the recipient
-        if (friendshipData.friendId !== currentUser.uid) {
+        if (friendshipData.friendId !== currentUser.uid && friendshipData.userId !== currentUser.uid) {
             throw new Error('You are not authorized to accept this request');
         }
 
@@ -161,8 +162,8 @@ export const rejectFriendRequest = async (friendshipId: string): Promise<void> =
 
         const friendshipData = friendshipDoc.data();
 
-        // Verify this user is the recipient
-        if (friendshipData.friendId !== currentUser.uid) {
+        // Verify this user is the recipient (either friendId or userId must match, but they shouldn't be the requestedBy user)
+        if (friendshipData.friendId !== currentUser.uid && friendshipData.userId !== currentUser.uid) {
             throw new Error('You are not authorized to reject this request');
         }
 
@@ -354,8 +355,8 @@ export const followUser = async (targetUserId: string): Promise<void> => {
             await sendNotification(
                 targetUserId,
                 currentUser.uid,
-                userData.displayName || currentUser.displayName || 'User',
-                userData.photoURL || currentUser.photoURL,
+                userData.displayName || userData.name || currentUser.displayName || 'User',
+                userData.photoURL || userData.profilePhoto || currentUser.photoURL,
                 'follow_request',
                 'started following you',
                 { followerId: currentUser.uid }
@@ -583,18 +584,31 @@ export const checkCreatorEligibility = async (userId: string): Promise<boolean> 
  * Check if friendship exists
  */
 const checkExistingFriendship = async (userId: string, targetUserId: string): Promise<any> => {
-    const friendshipsQuery = query(collection(db, 'friends'));
-    const friendshipsSnapshot = await getDocs(friendshipsQuery);
+    // Query direction 1: userId sent to targetUserId
+    const q1 = query(
+        collection(db, 'friends'),
+        where('userId', '==', userId),
+        where('friendId', '==', targetUserId)
+    );
+    const snap1 = await getDocs(q1);
+    if (!snap1.empty) {
+        const d = snap1.docs[0];
+        return { id: d.id, ...d.data() };
+    }
 
-    const friendship = friendshipsSnapshot.docs.find(doc => {
-        const data = doc.data();
-        return (
-            (data.userId === userId && data.friendId === targetUserId) ||
-            (data.userId === targetUserId && data.friendId === userId)
-        );
-    });
+    // Query direction 2: targetUserId sent to userId
+    const q2 = query(
+        collection(db, 'friends'),
+        where('userId', '==', targetUserId),
+        where('friendId', '==', userId)
+    );
+    const snap2 = await getDocs(q2);
+    if (!snap2.empty) {
+        const d = snap2.docs[0];
+        return { id: d.id, ...d.data() };
+    }
 
-    return friendship ? { id: friendship.id, ...friendship.data() } : null;
+    return null;
 };
 
 /**

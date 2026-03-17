@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { deletePlaylist, getPlaylistDetails, Playlist } from '../../src/services/playlistService';
+import { deletePlaylist, getPlaylist, Playlist } from '../../src/services/playlistService';
 
 // Note: To show actual posts, we would need to fetch them by IDs. 
 // For now, listing the playlist meta and providing a placeholder list or basic item count.
@@ -34,7 +34,7 @@ export default function PlaylistDetailScreen() {
     const loadPlaylist = async (playlistId: string) => {
         setLoading(true);
         try {
-            const data = await getPlaylistDetails(playlistId);
+            const data = await getPlaylist(playlistId);
             setPlaylist(data);
         } catch (error) {
             console.error('Error loading playlist:', error);
@@ -92,7 +92,7 @@ export default function PlaylistDetailScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#0F172A" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle} numberOfLines={1}>{playlist.name}</Text>
+                <Text style={styles.headerTitle} numberOfLines={1}>{playlist.title}</Text>
                 {user?.uid === playlist.userId && (
                     <TouchableOpacity onPress={handleDelete}>
                         <Ionicons name="trash-outline" size={24} color="#EF4444" />
@@ -105,9 +105,9 @@ export default function PlaylistDetailScreen() {
                     <View style={styles.iconBox}>
                         <Ionicons name="musical-notes" size={40} color="#4F46E5" />
                     </View>
-                    <Text style={styles.title}>{playlist.name}</Text>
+                    <Text style={styles.title}>{playlist.title}</Text>
                     {playlist.description ? <Text style={styles.description}>{playlist.description}</Text> : null}
-                    <Text style={styles.stats}>{playlist.items.length} items • {playlist.isPublic ? 'Public' : 'Private'}</Text>
+                    <Text style={styles.stats}>{playlist.itemCount} items • {playlist.privacy === 'public' ? 'Public' : 'Private'}</Text>
                 </View>
 
                 {/* Placeholder for items list */}

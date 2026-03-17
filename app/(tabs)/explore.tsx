@@ -126,7 +126,7 @@ const ExploreScreen: React.FC = () => {
   const loadPosts = async () => {
     try {
       setIsLoading(true);
-      const posts = await getAllPosts();
+      const { posts } = await getAllPosts();
       const feedItems = posts
         .map(convertToFeedItem)
         .filter((item): item is FeedItem => item !== null);

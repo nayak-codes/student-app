@@ -418,11 +418,13 @@ const ProfileScreen = () => {
             }
 
             // B. Fetch Posts & Resources
-            const [allPosts, userResources, userEvents] = await Promise.all([
+            const [allPostsRes, userResources, userEvents] = await Promise.all([
                 getAllPosts(),
                 getUserResources(targetUserId),
                 import('../src/services/eventService').then(m => m.getUserEvents(targetUserId))
             ]);
+
+            const allPosts = allPostsRes.posts;
 
             // Filter posts for this user
             const userPosts = allPosts.filter(p => p.userId === targetUserId);
@@ -511,17 +513,23 @@ const ProfileScreen = () => {
 
     // Handle connection actions
     const handleConnect = async () => {
-        if (!authUser || !targetUserId) return;
+        if (!authUser || !targetUserId || loadingConnection) return;
+        setLoadingConnection(true);
         try {
             await sendFriendRequest(targetUserId);
-            // Alert.alert('Success', 'Friend request sent!'); // REPLACED
-            showToast('Network request sent');
-            loadConnectionData(); // Refresh status
-        } catch (error) {
+            showToast('Connection request sent! 🎉');
+            await loadConnectionData(); // Refresh status so button becomes "Pending"
+        } catch (error: any) {
             console.error('Error sending friend request:', error);
-            Alert.alert('Error', 'Failed to send friend request');
+            const msg = error?.message || '';
+            if (!msg.includes('already')) {
+                Alert.alert('Error', 'Failed to send connection request. Please try again.');
+            }
+        } finally {
+            setLoadingConnection(false);
         }
     };
+
 
     const handleFollow = async () => {
         if (!authUser || !targetUserId) return;
@@ -915,7 +923,7 @@ const ProfileScreen = () => {
                         <View style={styles.ytHandleRow}>
                             <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>@{username}</Text>
                             <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
-                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Followers</Text>
+                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Network</Text>
                             <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
                             <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.posts} Posts</Text>
                         </View>
@@ -948,38 +956,54 @@ const ProfileScreen = () => {
                                 {/* 1. CREATOR ACCOUNT: Show Follow + Connect + Message */}
                                 {role === 'creator' ? (
                                     <>
-                                        {/* Main Action Button - Subscribe */}
-                                        {role === 'creator' && !isOwnProfile && (
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.actionButton,
-                                                    styles.primaryButton,
-                                                    connectionStatus.isFollowing && styles.followingButton
-                                                ]}
-                                                onPress={handleFollow}
-                                                activeOpacity={0.8}
-                                            >
-                                                {loadingConnection ? (
-                                                    <ActivityIndicator color="#FFF" size="small" />
-                                                ) : (
-                                                    <>
-                                                        <Ionicons
-                                                            name={connectionStatus.isFollowing ? "notifications" : "notifications-outline"}
-                                                            size={20}
-                                                            color={connectionStatus.isFollowing ? "#FFF" : "#FFF"}
-                                                            style={{ marginRight: 8 }}
-                                                        />
-                                                        <Text style={[
-                                                            styles.actionButtonText,
-                                                            styles.primaryButtonText,
-                                                            connectionStatus.isFollowing && styles.followingButtonText
-                                                        ]}>
-                                                            {connectionStatus.isFollowing ? 'Following' : 'Follow'}
-                                                        </Text>
-                                                    </>
-                                                )}
-                                            </TouchableOpacity>
-                                        )}
+                                        {/* Connection Button */}
+                                        <TouchableOpacity
+                                            style={[styles.ytPrimaryButton, { flex: 1, marginRight: 8 }]}
+                                            onPress={connectionStatus.isFriend ? undefined : handleConnect}
+                                            disabled={loadingConnection || connectionStatus.isFriend || connectionStatus.pendingRequestSentByMe}
+                                        >
+                                            {loadingConnection ? (
+                                                <ActivityIndicator size="small" color="#FFF" />
+                                            ) : (
+                                                <Text style={styles.ytPrimaryButtonText}>
+                                                    {connectionStatus.isFriend
+                                                        ? '✓ Connected'
+                                                        : connectionStatus.pendingRequestSentByMe
+                                                            ? 'Request Sent'
+                                                            : 'Connect'}
+                                                </Text>
+                                            )}
+                                        </TouchableOpacity>
+
+                                        {/* Message Button */}
+                                        <TouchableOpacity
+                                            style={[styles.ytSecondaryButton, { backgroundColor: isDark ? '#334155' : '#F1F5F9', flex: 1 }]}
+                                            onPress={async () => {
+                                                if (!targetUserId || !authUser) return;
+                                                try {
+                                                    const { getOrCreateConversation } = await import('../src/services/chatService');
+                                                    const conversationId = await getOrCreateConversation(
+                                                        authUser.uid,
+                                                        targetUserId,
+                                                        {
+                                                            name: displayName,
+                                                            photoURL: photoURL || '',
+                                                            email: (displayProfile as any)?.email || '',
+                                                        }
+                                                    );
+                                                    router.push({
+                                                        pathname: '/chat-screen',
+                                                        params: { conversationId, otherUserId: targetUserId, otherUserName: displayName, otherUserPhoto: photoURL || '' },
+                                                    });
+                                                } catch (error) {
+                                                    console.error('Error starting conversation:', error);
+                                                    Alert.alert('Error', 'Failed to start conversation');
+                                                }
+                                            }}
+                                        >
+                                            <Ionicons name="chatbubble-ellipses" size={20} color={colors.text} />
+                                            <Text style={[styles.ytSecondaryButtonText, { color: colors.text, marginLeft: 4, fontSize: 13 }]}>Message</Text>
+                                        </TouchableOpacity>
                                         {/* Three Dots Button for Connect/Options */}
                                         <TouchableOpacity
                                             style={[

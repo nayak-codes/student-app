@@ -212,7 +212,10 @@ export default function CreateGroupScreen() {
                                 }
                             ]}
                             onPress={() => {
-                                router.push('/select-members');
+                                router.replace({
+                                    pathname: '/select-members',
+                                    params: { returnTo: 'create-group' }
+                                });
                             }}
                         >
                             <Ionicons name="people-outline" size={24} color={colors.primary} />

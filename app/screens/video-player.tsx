@@ -123,7 +123,8 @@ const VideoPlayerScreen = () => {
 
     const loadRelatedContent = async () => {
         try {
-            const allPosts = await getAllPosts();
+            const allPostsData = await getAllPosts();
+            const allPosts = allPostsData.posts;
             // Filter: Video type + Not the current video + (Optional: same author or purely random)
             const filtered = allPosts
                 .filter(p => p.type === 'video' && p.id !== postId)

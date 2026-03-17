@@ -1,19 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
-import {
-  Alert,
-  Animated,
-  DeviceEventEmitter,
-  RefreshControl,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from 'react-native';
+import { QueryDocumentSnapshot } from 'firebase/firestore';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, RefreshControl, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DocumentViewer from '../../src/components/DocumentViewer';
 import BookShelf from '../../src/components/library/BookShelf';
@@ -23,7 +13,7 @@ import OfflineState from '../../src/components/OfflineState';
 import UploadResourceModal from '../../src/components/UploadResourceModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
-import { getAllResources, incrementViews, LibraryResource } from '../../src/services/libraryService';
+import { getResourcesPaginated, incrementViews, LibraryResource } from '../../src/services/libraryService';
 
 type FilterType = 'all' | 'pdf' | 'notes' | 'formula';
 type ExamFilter = 'ALL' | 'JEE' | 'NEET' | 'EAPCET';
@@ -43,6 +33,11 @@ const LibraryScreen = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
+  // Pagination State
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   // Viewer State
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedResource, setSelectedResource] = useState<LibraryResource | null>(null);
@@ -56,12 +51,31 @@ const LibraryScreen = () => {
   const loadResources = async () => {
     try {
       if (resources.length === 0) setIsLoading(true);
-      const data = await getAllResources();
-      setResources(data);
+      setLastDoc(null);
+      setHasMore(true);
+      const result = await getResourcesPaginated(null);
+      setResources(result.resources);
+      setLastDoc(result.lastDoc);
+      setHasMore(result.hasMore);
     } catch (error) {
       console.error('Error loading resources:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMoreResources = async () => {
+    if (loadingMore || !hasMore || searchQuery || activeCategory !== 'All') return;
+    setLoadingMore(true);
+    try {
+      const result = await getResourcesPaginated(lastDoc);
+      setResources(prev => [...prev, ...result.resources]);
+      setLastDoc(result.lastDoc);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error('Error loading more resources:', error);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -241,41 +255,101 @@ const LibraryScreen = () => {
     outputRange: [0, -140],
   });
 
+  // Build sections for FlatList
+  const sections: Array<{ type: string; data?: any; shelf?: { title: string; data: LibraryResource[] } }> = [];
+  if (!searchQuery) {
+    sections.push({ type: 'hero', data: heroData });
+  }
+  if (shelvesData.length > 0) {
+    shelvesData.forEach(shelf => sections.push({ type: 'shelf', shelf }));
+  } else if (!isLoading) {
+    sections.push({ type: 'empty' });
+  }
+
+  const renderSection = ({ item }: { item: typeof sections[0] }) => {
+    if (item.type === 'hero') {
+      return <HeroCarousel data={item.data} onItemPress={handlePressInfo} />;
+    }
+    if (item.type === 'shelf' && item.shelf) {
+      return (
+        <BookShelf
+          title={item.shelf.title}
+          data={item.shelf.data}
+          onPressCover={handlePressCover}
+          onPressInfo={handlePressInfo}
+          onViewAll={() => {
+            setActiveCategory('All');
+            setSearchQuery(item.shelf!.title.replace('Results for ', '').replace('"', '').replace('"', ''));
+          }}
+        />
+      );
+    }
+    if (item.type === 'empty') {
+      return isConnected === false ? (
+        <OfflineState onRetry={handleRefresh} />
+      ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="library-outline" size={64} color={colors.textSecondary} />
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No resources found here.</Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
+  // Skeleton card for loading state
+  const LibrarySkeleton = () => {
+    const shimmer = useRef(new Animated.Value(0.4)).current;
+    useEffect(() => {
+      const anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(shimmer, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+        ])
+      );
+      anim.start();
+      return () => anim.stop();
+    }, []);
+    const bg = isDark ? '#1E293B' : '#FFFFFF';
+    const line = isDark ? '#2D3D52' : '#E8ECF0';
+    const SkeletonShelf = () => (
+      <View style={{ marginBottom: 28, paddingHorizontal: 16 }}>
+        {/* Shelf title */}
+        <Animated.View style={{ height: 16, borderRadius: 8, backgroundColor: line, width: 160, marginBottom: 16, opacity: shimmer }} />
+        {/* Book cards row */}
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {[1, 2, 3].map(i => (
+            <View key={i} style={{ width: 120, borderRadius: 12, overflow: 'hidden', backgroundColor: bg }}>
+              <Animated.View style={{ width: 120, height: 160, backgroundColor: line, opacity: shimmer }} />
+              <View style={{ padding: 8, gap: 6 }}>
+                <Animated.View style={{ height: 11, borderRadius: 6, backgroundColor: line, width: '90%', opacity: shimmer }} />
+                <Animated.View style={{ height: 10, borderRadius: 5, backgroundColor: line, width: '60%', opacity: shimmer }} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 140 }}>
+        {/* Hero skeleton */}
+        <Animated.View style={{ height: 180, marginHorizontal: 16, borderRadius: 16, backgroundColor: line, marginBottom: 28, opacity: shimmer }} />
+        <SkeletonShelf />
+        <SkeletonShelf />
+        <SkeletonShelf />
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Header Area (Collapsible) */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1005,
-          backgroundColor: colors.background,
-          transform: [{ translateY }],
-          elevation: 4,
-        }}
-      >
+      {/* Collapsible Header */}
+      <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1005, backgroundColor: colors.background, transform: [{ translateY }], elevation: 4 }}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }}>
           <View style={[styles.header, { backgroundColor: colors.background }]}>
-            {/* Search Bar - Professional Pill Style */}
-            <View style={[
-              styles.searchBar,
-              {
-                backgroundColor: isDark ? '#1E293B' : '#FFF',
-                borderColor: isDark ? '#334155' : '#E2E8F0',
-                borderWidth: 1,
-                // Shadow for light mode
-                shadowColor: isDark ? '#000' : '#64748B',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: isDark ? 0 : 0.08,
-                shadowRadius: 8,
-                elevation: isDark ? 0 : 2,
-                marginRight: 0, // Removed margin as profile button is gone
-              }
-            ]}>
+            <View style={[styles.searchBar, { backgroundColor: isDark ? '#1E293B' : '#FFF', borderColor: isDark ? '#334155' : '#E2E8F0', borderWidth: 1, shadowColor: isDark ? '#000' : '#64748B', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0 : 0.08, shadowRadius: 8, elevation: isDark ? 0 : 2, marginRight: 0 }]}>
               <Ionicons name="search" size={20} color={isDark ? '#94A3B8' : '#64748B'} style={{ marginLeft: 16 }} />
               <TextInput
                 style={[styles.searchInput, { color: colors.text }]}
@@ -284,7 +358,6 @@ const LibraryScreen = () => {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
-              {/* Clear Button */}
               {searchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 8 }}>
                   <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
@@ -292,87 +365,59 @@ const LibraryScreen = () => {
               )}
             </View>
           </View>
-
-          {/* Search Suggestions */}
           {searchQuery.length > 0 && (
             <View style={[styles.suggestionsContainer, { backgroundColor: isDark ? '#1E293B' : '#FFF' }]}>
               {resources
                 .filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .slice(0, 5)
                 .map(r => (
-                  <TouchableOpacity
-                    key={r.id}
-                    style={[styles.suggestionItem, { borderBottomColor: isDark ? '#334155' : '#F1F5F9' }]}
-                    onPress={() => handlePressInfo(r)}
-                  >
+                  <TouchableOpacity key={r.id} style={[styles.suggestionItem, { borderBottomColor: isDark ? '#334155' : '#F1F5F9' }]} onPress={() => handlePressInfo(r)}>
                     <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
                     <Text style={[styles.suggestionText, { color: colors.text }]} numberOfLines={1}>{r.title}</Text>
                   </TouchableOpacity>
-                ))
-              }
+                ))}
             </View>
           )}
-
-          {/* Category Pills */}
-          <CategoryPills
-            activeCategory={activeCategory}
-            onSelectCategory={setActiveCategory}
-          />
+          <CategoryPills activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
         </SafeAreaView>
       </Animated.View>
 
       {/* Main Content */}
-      <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: 100, paddingTop: 140 }}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} />
-        }
-      >
-        {!searchQuery && <HeroCarousel data={heroData} onItemPress={handlePressInfo} />}
-        {shelvesData.length > 0 ? (
-          shelvesData.map((shelf, index) => (
-            <BookShelf
-              key={index}
-              title={shelf.title}
-              data={shelf.data}
-              onPressCover={handlePressCover}
-              onPressInfo={handlePressInfo}
-              onViewAll={() => {
-                // Handle view all (navigate to full list filtered)
-                setActiveCategory('All');
-                setSearchQuery(shelf.title.replace("Results for ", "").replace('"', '').replace('"', '')); // Hacky for now
-                // Ideally, navigate to a 'ShelfDetail' screen
-              }}
-            />
-          ))
-        ) : (
-          isConnected === false ? (
-            <OfflineState onRetry={handleRefresh} />
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="library-outline" size={64} color={colors.textSecondary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No resources found here.</Text>
-            </View>
-          )
-        )}
-      </Animated.ScrollView>
-
-      {/* Floating Upload Button - Bottom Right */}
-
+      {isLoading ? (
+        <LibrarySkeleton />
+      ) : (
+        <Animated.FlatList
+          data={sections}
+          keyExtractor={(item, index) => item.type + index}
+          renderItem={renderSection}
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: 100, paddingTop: 140 }}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
+          onEndReached={loadMoreResources}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            ) : null
+          }
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[colors.primary]} />
+          }
+        />
+      )}
 
       <UploadResourceModal
         visible={showUploadModal}
         onClose={() => setShowUploadModal(false)}
         onUploadComplete={loadResources}
       />
-
       {selectedResource && (
         <DocumentViewer
           visible={viewerVisible}
@@ -382,8 +427,6 @@ const LibraryScreen = () => {
           documentType={selectedResource.type}
         />
       )}
-
-      {/* Static Top Black Card */}
       <View style={[styles.topBlackCard, { backgroundColor: colors.background }]} />
     </View>
   );

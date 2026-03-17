@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetInfo } from '@react-native-community/netinfo';
+import { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, DeviceEventEmitter, FlatList, NativeScrollEvent, NativeSyntheticEvent, RefreshControl, StyleProp, StyleSheet, Text, View, ViewStyle, ViewToken } from 'react-native';
 import ShareModal from '../../components/ShareModal';
@@ -9,6 +10,7 @@ import { shouldShowPost } from '../../services/hypeService';
 import { addReaction, deletePost, getAllPosts, likePost, Post, ReactionType, removeReaction, savePost, unlikePost, unsavePost } from '../../services/postsService';
 import CommentsBottomSheet from '../CommentsBottomSheet';
 import OfflineState from '../OfflineState';
+import { FeedSkeletonList } from './FeedSkeleton';
 import FeedPost from './FeedPost';
 
 interface FeedListProps {
@@ -29,6 +31,9 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
     const [clips, setClips] = useState<Post[]>([]); // Clips only
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
+    const [lastVisibleDoc, setLastVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [shareModalVisible, setShareModalVisible] = useState(false);
     const [shareData, setShareData] = useState<any>(null);
     const [commentsModalVisible, setCommentsModalVisible] = useState(false);
@@ -46,53 +51,70 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
         }
     }));
 
+    const FEED_CACHE_KEY = 'cachedFeedPosts_v2';
+
     const fetchPosts = async (isManualRefresh = false) => {
         try {
-            // 1. Load seen posts first to use in scoring
+            // ⚡ PERFORMANCE: Load cache + seenPostIds IN PARALLEL with Firestore fetch
+            const [seenStr, cachedStr, fetchResult] = await Promise.all([
+                AsyncStorage.getItem('seenPostIds').catch(() => null),
+                AsyncStorage.getItem(FEED_CACHE_KEY).catch(() => null),
+                getAllPosts(20, null), // Initial fetch, no cursor
+            ]);
+
+            const fetchedPosts = fetchResult.posts;
+            setLastVisibleDoc(fetchResult.lastVisible);
+            setHasMore(fetchedPosts.length === 20);
+
+            // Parse seenPostIds
             let currentSeenIds = new Set<string>();
-            try {
-                const seenStr = await AsyncStorage.getItem('seenPostIds');
-                if (seenStr) {
+            if (seenStr) {
+                try {
                     currentSeenIds = new Set(JSON.parse(seenStr));
                     setHistoricalSeenIds(currentSeenIds);
-                }
-            } catch (e) {
-                console.error("Error loading seen posts:", e);
+                } catch (e) { /* ignore parse errors */ }
             }
 
-            const fetchedPosts = await getAllPosts(100);
+            // ⚡ Show cached posts INSTANTLY on first open (before network resolves)
+            if (!isManualRefresh && cachedStr && posts.length === 0) {
+                try {
+                    const cached = JSON.parse(cachedStr);
+                    if (Array.isArray(cached) && cached.length > 0) {
+                        // Restore Date objects (JSON stringifies them as strings)
+                        const restored = cached.map((p: any) => ({
+                            ...p,
+                            createdAt: new Date(p.createdAt),
+                            updatedAt: p.updatedAt ? new Date(p.updatedAt) : undefined,
+                        }));
+                        setPosts(restored);
+                        setLoading(false); // Hide spinner immediately
+                    }
+                } catch (e) { /* ignore cache parse errors */ }
+            }
+
             setAllPosts(fetchedPosts);
 
             // Get current user's role to access studentStatus
             const userStudentStatus = userProfile?.studentStatus;
             const userRole = userProfile?.role || 'student';
-            const followingIds = userProfile?.following || [];
 
             // SMART HYPE ALGORITHM: Filter posts based on tier visibility
             const visiblePosts = fetchedPosts.filter(post =>
                 shouldShowPost(post, userStudentStatus, userRole)
             );
 
-            // Separate clips from regular posts (from visible posts only)
-            const clipPosts = visiblePosts.filter(p => p.type === 'clip');
-            // Filter out 'clip' AND 'video' from main feed (LinkedIn style text/image focus)
+            // Filter out 'clip' AND 'video' from main feed
             const regularPosts = visiblePosts.filter(p => p.type !== 'clip' && p.type !== 'video');
 
             const now = new Date().getTime();
 
             const sortedPosts = regularPosts.sort((a, b) => {
-                const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
-                const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
-                const timeA = dateA.getTime();
-                const timeB = dateB.getTime();
+                const timeA = (a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)).getTime();
+                const timeB = (b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt)).getTime();
 
-                // Dynamic Score
-                // Score = Engagement (likes + comments) + Recency Weight + Random Factor
-                // On refresh, random factor is HUGE to guarantee a shuffle. On initial load, it's smaller and recency matters more.
                 const randomMultiplier = isManualRefresh ? 40 : 5;
                 const recencyMultiplier = isManualRefresh ? 2 : 15;
 
-                // Penalty: If a post has already been seen, its 'recency' power is reset so it isn't stuck at the top every load.
                 const appliedRecencyMultiplierA = currentSeenIds.has(a.id) ? 1 : recencyMultiplier;
                 const appliedRecencyMultiplierB = currentSeenIds.has(b.id) ? 1 : recencyMultiplier;
 
@@ -109,8 +131,10 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
                 return scoreB - scoreA;
             });
 
-            // Set the posts directly
             setPosts(sortedPosts);
+
+            // ⚡ Save fresh sorted results to cache for next launch
+            AsyncStorage.setItem(FEED_CACHE_KEY, JSON.stringify(sortedPosts)).catch(() => { });
 
         } catch (error: any) {
             console.error('Error fetching posts:', error);
@@ -146,6 +170,44 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
         setRefreshing(true);
         fetchPosts(true);
     }, [isConnected]);
+
+    // INFINITE SCROLL: Load more posts when reaching bottom
+    const loadMorePosts = async () => {
+        if (loadingMore || !hasMore || isConnected === false) return;
+
+        try {
+            setLoadingMore(true);
+            const fetchResult = await getAllPosts(20, lastVisibleDoc);
+            const newPosts = fetchResult.posts;
+
+            if (newPosts.length === 0) {
+                setHasMore(false);
+                return;
+            }
+
+            // Get current user's role to access studentStatus
+            const userStudentStatus = userProfile?.studentStatus;
+            const userRole = userProfile?.role || 'student';
+
+            // Filter
+            const visiblePosts = newPosts.filter(post =>
+                shouldShowPost(post, userStudentStatus, userRole) &&
+                post.type !== 'clip' && post.type !== 'video'
+            );
+
+            // Append to existing posts (no re-sorting needed for older posts, just append timeline-wise)
+            setPosts(prev => [...prev, ...visiblePosts]);
+            setAllPosts(prev => [...prev, ...newPosts]);
+            setLastVisibleDoc(fetchResult.lastVisible);
+
+            // If we got exactly 20, there might be more
+            setHasMore(newPosts.length === 20);
+        } catch (error) {
+            console.error('Error loading more posts:', error);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
 
     const handleLike = async (postId: string) => {
         if (!user) return;
@@ -348,8 +410,8 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
 
     if (loading) {
         return (
-            <View style={styles.center}>
-                <ActivityIndicator size="large" color="#3F51B5" />
+            <View style={[styles.container, { backgroundColor: 'transparent' }]}>
+                <FeedSkeletonList />
             </View>
         );
     }
@@ -409,6 +471,15 @@ const FeedList = React.forwardRef<FeedListRef, FeedListProps>(({ onScroll, conte
                             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No posts yet. Be the first to share!</Text>
                         </View>
                     )
+                }
+                onEndReached={loadMorePosts}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                    loadingMore ? (
+                        <View style={styles.footerLoader}>
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        </View>
+                    ) : null
                 }
                 initialNumToRender={3}
                 maxToRenderPerBatch={3}
@@ -477,6 +548,11 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         color: '#FFF',
+    },
+    footerLoader: {
+        paddingVertical: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });
 

@@ -7,12 +7,15 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Clipboard,
+    Dimensions,
     FlatList,
     Image,
     ImageBackground,
     Keyboard,
     KeyboardAvoidingView,
     Linking,
+    Modal,
     Platform,
     StatusBar,
     StyleSheet,
@@ -27,17 +30,25 @@ import DocumentViewer from '../src/components/DocumentViewer';
 import GroupOptionsSheet from '../src/components/GroupOptionsSheet';
 import ImportantMembersCard from '../src/components/ImportantMembersCard';
 import MediaPreviewModal, { AttachmentPreview } from '../src/components/MediaPreviewModal';
+import { EmojiTray, ReactionChips } from '../src/components/MessageReactions';
 import PollCreator from '../src/components/PollCreator';
 import PollMessage from '../src/components/PollMessage';
+import ReplyPreview, { QuotedMessageBubble } from '../src/components/ReplyPreview';
 import { auth, db } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { UserProfile } from '../src/services/authService';
 import {
+    addReaction,
     Conversation,
+    deleteMessage,
     markMessagesAsRead,
     Message,
+    pinMessage,
     sendMessage,
+    setMessagePriority,
+    setTypingStatus,
     subscribeToMessages,
+    subscribeToTyping,
     voteOnPoll
 } from '../src/services/chatService';
 import { incrementViews, LibraryResource } from '../src/services/libraryService';
@@ -83,6 +94,15 @@ export default function GroupChatScreen() {
     const [showPreview, setShowPreview] = useState(false);
     const [filteredMediaType, setFilteredMediaType] = useState<'all' | 'image' | 'pdf' | 'other'>('all');
     const [importantMembers, setImportantMembers] = useState<UserProfile[]>([]);
+
+    // ── New Polish State ──
+    const [replyTo, setReplyTo] = useState<{ messageId: string; text: string; senderName: string; messageType?: string } | null>(null);
+    const [emojiTrayVisible, setEmojiTrayVisible] = useState(false);
+    const [emojiTrayMessage, setEmojiTrayMessage] = useState<Message | null>(null);
+    const [emojiTrayPosition, setEmojiTrayPosition] = useState({ x: 0, y: 0 });
+    const [typingNames, setTypingNames] = useState<string[]>([]);
+    const [contextMenuMessage, setContextMenuMessage] = useState<Message | null>(null);
+    const typingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Initialize with persisted state
     const [showImportantMembersCard, setShowImportantMembersCard] = useState(() => {
@@ -162,6 +182,13 @@ export default function GroupChatScreen() {
             unsubscribe();
             unsubscribeGroup();
         };
+    }, [conversationId]);
+
+    // Typing subscription
+    useEffect(() => {
+        if (!conversationId || !auth.currentUser) return;
+        const unsubTyping = subscribeToTyping(conversationId, auth.currentUser.uid, setTypingNames);
+        return () => unsubTyping();
     }, [conversationId]);
 
     // Document Viewer State
@@ -281,21 +308,64 @@ export default function GroupChatScreen() {
     };
 
     const handleSend = async () => {
-        if (!inputText.trim() || !conversationId) return;
-
         const textToSend = inputText.trim();
-        setInputText(''); // Clear input immediately
+        if (!textToSend || !conversationId) return;
+
+        const currentReplyTo = replyTo;
+        setInputText('');
+        setReplyTo(null);
         setSending(true);
+        // Clear typing
+        if (auth.currentUser) {
+            setTypingStatus(conversationId, auth.currentUser.uid, auth.currentUser.displayName || 'User', false);
+        }
 
         try {
-            await sendMessage(conversationId, textToSend, auth.currentUser?.uid || '', auth.currentUser?.displayName || 'User');
+            await sendMessage(
+                conversationId,
+                textToSend,
+                auth.currentUser?.uid || '',
+                auth.currentUser?.displayName || 'User',
+                'text',
+                undefined,
+                undefined,
+                undefined,
+                currentReplyTo || undefined
+            );
         } catch (error) {
             console.error("Error sending message:", error);
-            Alert.alert('Error', 'Failed to send message');
-            setInputText(textToSend); // Restore text on error
+            setInputText(textToSend);
+            Alert.alert('Delivery Failed', 'Message could not be sent. Please check your connection.');
         } finally {
             setSending(false);
         }
+    };
+
+    // Typing detection
+    const handleInputChange = (text: string) => {
+        setInputText(text);
+        if (!conversationId || !auth.currentUser) return;
+        setTypingStatus(conversationId, auth.currentUser.uid, auth.currentUser.displayName || 'User', true);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            if (auth.currentUser) {
+                setTypingStatus(conversationId, auth.currentUser.uid, auth.currentUser.displayName || 'User', false);
+            }
+        }, 3000);
+    };
+
+    // Reaction handler
+    const handleReaction = async (emoji: string) => {
+        if (!emojiTrayMessage || !conversationId || !auth.currentUser) return;
+        await addReaction(conversationId, emojiTrayMessage.id, emoji, auth.currentUser.uid);
+    };
+
+    // Sender color palette (consistent, per name)
+    const SENDER_COLORS = ['#EF4444', '#F97316', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6', '#F59E0B'];
+    const getSenderColor = (name: string) => {
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return SENDER_COLORS[Math.abs(hash) % SENDER_COLORS.length];
     };
 
     const formatMessageTime = (timestamp: any) => {
@@ -345,228 +415,260 @@ export default function GroupChatScreen() {
         // Show sender name for group messages (for others' messages)
         const showSenderName = !isOwnMessage && (item.messageType !== 'text' || item.text.length > 0);
         const senderName = item.senderName || 'Unknown';
+        const senderColor = getSenderColor(senderName);
 
         return (
             <View>
                 {showDateHeader && renderDateHeader(messageDate)}
-                <View style={[
-                    styles.messageContainer,
-                    isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
-                ]}>
-                    {/* Avatar for other users */}
-                    {!isOwnMessage && (
-                        <TouchableOpacity
-                            style={styles.avatarContainer}
-                            onPress={() => router.push({ pathname: '/public-profile', params: { userId: item.senderId } })}
-                        >
-                            {item.senderPhoto ? (
-                                <Image source={{ uri: item.senderPhoto }} style={styles.avatar} />
-                            ) : (
-                                <View style={styles.avatarPlaceholder}>
-                                    <Text style={styles.avatarText}>
-                                        {senderName.charAt(0).toUpperCase()}
-                                    </Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
-                    )}
-
-                    <View>
-                        {/* Sender Name (for group chats) */}
-                        {showSenderName && (
-                            <Text style={[styles.senderName, { color: colors.textSecondary }]}>
-                                {senderName}
-                            </Text>
-                        )}
-
-                        {/* POLL MESSAGE */}
-                        {item.messageType === 'poll' && item.poll ? (
-                            <PollMessage
-                                message={item}
-                                currentUserId={auth.currentUser?.uid || ''}
-                                onVote={(optionId) => handleVote(item.id, optionId)}
-                            />
-                        ) : (
-                            /* STANDARD MESSAGE BUBBLE */
-                            <View style={[
-                                styles.messageBubble,
-                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
-                                (item.messageType === 'image') && {
-                                    paddingHorizontal: 0,
-                                    paddingTop: 0,
-                                    paddingBottom: item.text ? 10 : 0,
-                                    overflow: 'hidden'
-                                }
-                            ]}>
-                                {/* Image Attachment */}
-                                {item.messageType === 'image' && item.mediaUrl && (
-                                    <TouchableOpacity onPress={() => router.push({
-                                        pathname: '/image-viewer',
-                                        params: { images: item.mediaUrl }
-                                    })}>
-                                        <Image
-                                            source={{ uri: item.mediaUrl }}
-                                            style={styles.mediaImage}
-                                            resizeMode="cover"
-                                        />
-                                    </TouchableOpacity>
-                                )}
-
-                                {/* File Attachment */}
-                                {item.messageType === 'file' && item.mediaUrl && (
-                                    <TouchableOpacity
-                                        style={styles.fileContainer}
-                                        onPress={() => Linking.openURL(item.mediaUrl!)}
-                                    >
-                                        <Ionicons name="document-text" size={32} color="#FFF" />
-                                        <View style={styles.fileInfo}>
-                                            <Text style={styles.fileName} numberOfLines={1}>{item.text || 'Document'}</Text>
-                                            <Text style={styles.fileType}>Tap to view</Text>
+                <View style={{ flexDirection: 'row', justifyContent: isOwnMessage ? 'flex-end' : 'flex-start', marginBottom: 2 }}>
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={{ maxWidth: '80%' }}
+                        onLongPress={() => {
+                            setContextMenuMessage(item);
+                        }}
+                    >
+                        <View style={[
+                            styles.messageContainer,
+                            isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
+                        ]}>
+                            {/* Avatar for other users */}
+                            {!isOwnMessage && (
+                                <TouchableOpacity
+                                    style={styles.avatarContainer}
+                                    onPress={() => router.push({ pathname: '/public-profile', params: { userId: item.senderId } })}
+                                >
+                                    {item.senderPhoto ? (
+                                        <Image source={{ uri: item.senderPhoto }} style={styles.avatar} />
+                                    ) : (
+                                        <View style={[styles.avatarPlaceholder, { backgroundColor: senderColor }]}>
+                                            <Text style={styles.avatarText}>
+                                                {senderName.charAt(0).toUpperCase()}
+                                            </Text>
                                         </View>
-                                    </TouchableOpacity>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+
+                            <View style={{ maxWidth: Dimensions.get('window').width * 0.72 }}>
+                                {/* Sender Name with unique color */}
+                                {showSenderName && (
+                                    <Text style={[styles.senderName, { color: senderColor }]}>
+                                        {senderName}
+                                    </Text>
                                 )}
 
-                                {/* Text Content (if any, or if strictly text message) */}
-                                {(item.text && item.messageType !== 'file') ? (
-                                    <Text style={[
-                                        styles.messageText,
-                                        isOwnMessage ? styles.ownMessageText : { color: '#F8FAFC' },
-                                        (item.messageType === 'image') && { marginHorizontal: 12, marginTop: 8 }
+                                {/* POLL MESSAGE */}
+                                {item.messageType === 'poll' && item.poll ? (
+                                    <PollMessage
+                                        message={item}
+                                        currentUserId={auth.currentUser?.uid || ''}
+                                        onVote={(optionId) => handleVote(item.id, optionId)}
+                                    />
+                                ) : (
+                                    /* Reply context + STANDARD MESSAGE BUBBLE */
+                                    /* STANDARD MESSAGE BUBBLE */
+                                    <View style={[
+                                        styles.messageBubble,
+                                        isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+                                        (item.priority === 'important') && { borderWidth: 1.5, borderColor: '#EF4444' },
+                                        (item.priority === 'medium') && { borderWidth: 1.5, borderColor: '#EAB308' },
+                                        (item.messageType === 'image') && {
+                                            paddingHorizontal: 0,
+                                            paddingTop: 0,
+                                            paddingBottom: item.text ? 10 : 0,
+                                            overflow: 'hidden'
+                                        }
                                     ]}>
-                                        {item.text}
-                                    </Text>
-                                ) : null}
-
-                                <Text style={[styles.messageTimeInline, isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline]}>
-                                    {formatMessageTime(item.timestamp)}
-                                </Text>
-
-                                {/* Shared Content Placeholders (Legacy) */}
-                                {item.messageType === 'sharedPost' && <Text style={{ color: '#FFF', fontStyle: 'italic' }}>[Shared Post]</Text>}
-                                {item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
-                                    <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#1E293B' : '#FFF', overflow: 'hidden', borderRadius: 12, marginTop: 4 }}>
-                                        <TouchableOpacity
-                                            activeOpacity={0.8}
-                                            onPress={() => handleOpenDocument(item.sharedContent!.contentData)}
-                                            style={{ width: 80, height: 110, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}
-                                        >
-                                            {item.sharedContent!.contentData.coverImage ? (
+                                        {/* Priority Header */}
+                                        {item.priority === 'important' && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: item.replyTo ? 4 : 6, marginTop: (item.messageType === 'image') ? 8 : 0, marginHorizontal: (item.messageType === 'image') ? 12 : 0 }}>
+                                                <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                                                <Text style={{ fontSize: 11, color: '#EF4444', fontWeight: 'bold', marginLeft: 4, textTransform: 'uppercase' }}>Important</Text>
+                                            </View>
+                                        )}
+                                        {item.priority === 'medium' && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: item.replyTo ? 4 : 6, marginTop: (item.messageType === 'image') ? 8 : 0, marginHorizontal: (item.messageType === 'image') ? 12 : 0 }}>
+                                                <Ionicons name="warning" size={14} color="#EAB308" />
+                                                <Text style={{ fontSize: 11, color: '#EAB308', fontWeight: 'bold', marginLeft: 4, textTransform: 'uppercase' }}>Attention</Text>
+                                            </View>
+                                        )}
+                                        {/* Quoted / Reply preview inside bubble */}
+                                        {item.replyTo && (
+                                            <QuotedMessageBubble replyTo={item.replyTo} isOwnMessage={isOwnMessage} />
+                                        )}
+                                        {/* Image Attachment */}
+                                        {item.messageType === 'image' && item.mediaUrl && (
+                                            <TouchableOpacity onPress={() => router.push({
+                                                pathname: '/image-viewer',
+                                                params: { images: item.mediaUrl }
+                                            })}>
                                                 <Image
-                                                    source={{ uri: item.sharedContent!.contentData.coverImage }}
-                                                    style={{ width: '100%', height: '100%' }}
+                                                    source={{ uri: item.mediaUrl }}
+                                                    style={styles.mediaImage}
                                                     resizeMode="cover"
                                                 />
-                                            ) : (
-                                                <View style={{ width: '100%', height: '100%' }}>
-                                                    {item.sharedContent!.contentData.fileUrl &&
-                                                        item.sharedContent!.contentData.fileUrl.includes('cloudinary') &&
-                                                        item.sharedContent!.contentData.fileUrl.toLowerCase().endsWith('.pdf') && (
-                                                            <Image
-                                                                source={{ uri: item.sharedContent!.contentData.fileUrl.replace('/upload/', '/upload/w_400,q_auto,f_jpg/').replace(/\.pdf$/i, '.jpg') }}
-                                                                style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 2 }}
-                                                                resizeMode="cover"
-                                                            />
-                                                        )}
+                                            </TouchableOpacity>
+                                        )}
 
-                                                    <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: 4, zIndex: 1 }}>
-                                                        <LinearGradient
-                                                            colors={['#4F46E5', '#312E81']}
-                                                            style={StyleSheet.absoluteFill}
-                                                        />
-                                                        <Ionicons name="book" size={24} color="#FFF" style={{ opacity: 0.9 }} />
-                                                        <Text style={{ color: '#FFF', fontSize: 8, marginTop: 4, textAlign: 'center', fontWeight: '700' }} numberOfLines={2}>
-                                                            {item.sharedContent!.contentData.type === 'notes' ? 'NOTES' : 'PDF'}
-                                                        </Text>
-                                                    </View>
+                                        {/* File Attachment */}
+                                        {item.messageType === 'file' && item.mediaUrl && (
+                                            <TouchableOpacity
+                                                style={styles.fileContainer}
+                                                onPress={() => Linking.openURL(item.mediaUrl!)}
+                                            >
+                                                <Ionicons name="document-text" size={32} color="#FFF" />
+                                                <View style={styles.fileInfo}>
+                                                    <Text style={styles.fileName} numberOfLines={1}>{item.text || 'Document'}</Text>
+                                                    <Text style={styles.fileType}>Tap to view</Text>
                                                 </View>
-                                            )}
-                                        </TouchableOpacity>
+                                            </TouchableOpacity>
+                                        )}
 
-                                        <TouchableOpacity
-                                            activeOpacity={0.7}
-                                            onPress={() => router.push({ pathname: '/document-detail', params: { id: item.sharedContent!.contentData.id } })}
-                                            style={{ flex: 1, padding: 10, paddingTop: 14, minWidth: 140 }}
-                                        >
-                                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4, lineHeight: 18 }} numberOfLines={2}>
-                                                {item.sharedContent!.contentData.title || 'Untitled Book'}
+                                        {/* Text Content (if any, or if strictly text message) */}
+                                        {(item.text && item.messageType !== 'file') ? (
+                                            <Text style={[
+                                                styles.messageText,
+                                                isOwnMessage ? styles.ownMessageText : { color: '#F8FAFC' },
+                                                (item.messageType === 'image') && { marginHorizontal: 12, marginTop: 8 }
+                                            ]}>
+                                                {item.text}
                                             </Text>
-                                            {item.sharedContent!.contentData.uploaderName ? (
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                                    {item.sharedContent!.contentData.uploaderAvatar ? (
+                                        ) : null}
+
+                                        <Text style={[styles.messageTimeInline, isOwnMessage ? styles.ownMessageTimeInline : styles.otherMessageTimeInline]}>
+                                            {formatMessageTime(item.timestamp)}
+                                        </Text>
+
+                                        {/* Shared Content Placeholders (Legacy) */}
+                                        {item.messageType === 'sharedPost' && <Text style={{ color: '#FFF', fontStyle: 'italic' }}>[Shared Post]</Text>}
+                                        {item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
+                                            <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#1E293B' : '#FFF', overflow: 'hidden', borderRadius: 12, marginTop: 4 }}>
+                                                <TouchableOpacity
+                                                    activeOpacity={0.8}
+                                                    onPress={() => handleOpenDocument(item.sharedContent!.contentData)}
+                                                    style={{ width: 80, height: 110, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}
+                                                >
+                                                    {item.sharedContent!.contentData.coverImage ? (
                                                         <Image
-                                                            source={{ uri: item.sharedContent!.contentData.uploaderAvatar }}
-                                                            style={{ width: 16, height: 16, borderRadius: 8, marginRight: 4 }}
+                                                            source={{ uri: item.sharedContent!.contentData.coverImage }}
+                                                            style={{ width: '100%', height: '100%' }}
+                                                            resizeMode="cover"
                                                         />
                                                     ) : (
-                                                        <View style={{
-                                                            width: 16, height: 16, borderRadius: 8,
-                                                            backgroundColor: colors.primary,
-                                                            alignItems: 'center', justifyContent: 'center',
-                                                            marginRight: 4
-                                                        }}>
-                                                            <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '700' }}>
-                                                                {item.sharedContent!.contentData.uploaderName.charAt(0).toUpperCase()}
-                                                            </Text>
+                                                        <View style={{ width: '100%', height: '100%' }}>
+                                                            {item.sharedContent!.contentData.fileUrl &&
+                                                                item.sharedContent!.contentData.fileUrl.includes('cloudinary') &&
+                                                                item.sharedContent!.contentData.fileUrl.toLowerCase().endsWith('.pdf') && (
+                                                                    <Image
+                                                                        source={{ uri: item.sharedContent!.contentData.fileUrl.replace('/upload/', '/upload/w_400,q_auto,f_jpg/').replace(/\.pdf$/i, '.jpg') }}
+                                                                        style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 2 }}
+                                                                        resizeMode="cover"
+                                                                    />
+                                                                )}
+
+                                                            <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: 4, zIndex: 1 }}>
+                                                                <LinearGradient
+                                                                    colors={['#4F46E5', '#312E81']}
+                                                                    style={StyleSheet.absoluteFill}
+                                                                />
+                                                                <Ionicons name="book" size={24} color="#FFF" style={{ opacity: 0.9 }} />
+                                                                <Text style={{ color: '#FFF', fontSize: 8, marginTop: 4, textAlign: 'center', fontWeight: '700' }} numberOfLines={2}>
+                                                                    {item.sharedContent!.contentData.type === 'notes' ? 'NOTES' : 'PDF'}
+                                                                </Text>
+                                                            </View>
                                                         </View>
                                                     )}
-                                                    <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '500' }} numberOfLines={1}>
-                                                        {item.sharedContent!.contentData.uploaderName}
-                                                    </Text>
-                                                </View>
-                                            ) : (!item.sharedContent!.contentData.author || item.sharedContent!.contentData.author === 'Unknown Author') ? (
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                                    {item.senderPhoto ? (
-                                                        <Image
-                                                            source={{ uri: item.senderPhoto }}
-                                                            style={{ width: 14, height: 14, borderRadius: 7, marginRight: 4 }}
-                                                        />
-                                                    ) : (
-                                                        <Ionicons name="person-circle" size={14} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                                                    )}
-                                                    <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={1}>
-                                                        {isOwnMessage ? 'Shared by You' : (item.senderName ? `Shared by ${item.senderName}` : 'Shared Document')}
-                                                    </Text>
-                                                </View>
-                                            ) : (
-                                                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 8 }} numberOfLines={1}>
-                                                    {item.sharedContent!.contentData.author}
-                                                </Text>
-                                            )}
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                {item.sharedContent!.contentData.rating ? (
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
-                                                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#B45309' }}>
-                                                            {item.sharedContent!.contentData.rating}
-                                                        </Text>
-                                                        <Ionicons name="star" size={10} color="#B45309" style={{ marginLeft: 2 }} />
-                                                    </View>
-                                                ) : (
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
-                                                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>New</Text>
-                                                    </View>
-                                                )}
-                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                    <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
-                                                    <Text style={{ fontSize: 10, color: colors.textSecondary, marginLeft: 2 }}>
-                                                        {item.sharedContent!.contentData.views || '0'}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : null}
-                            </View>
-                        )}
+                                                </TouchableOpacity>
 
-                        {/* Interactive Message Gradient for Own Text Messages Only currently overridden to plain view above for simplicity in mixed types. 
-                           If we want gradient specifically for text-only own messages, we can conditionally wrap. 
-                           For now, the style ownMessageBubble has background color or we can re-add LinearGradient if desired.
-                           To keep it simple and consistent with attachments, I used View. 
-                           If you want Gradient back for text, we can check. 
-                           Let's re-add Gradient for own text messages specifically if requested, but View is safer for mixed content.
-                           The original code had LinearGradient. Let's try to preserve it for text-only own messages.
-                        */}
-                    </View>
+                                                <TouchableOpacity
+                                                    activeOpacity={0.7}
+                                                    onPress={() => router.push({ pathname: '/document-detail', params: { id: item.sharedContent!.contentData.id } })}
+                                                    style={{ flex: 1, padding: 10, paddingTop: 14, minWidth: 140 }}
+                                                >
+                                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4, lineHeight: 18 }} numberOfLines={2}>
+                                                        {item.sharedContent!.contentData.title || 'Untitled Book'}
+                                                    </Text>
+                                                    {item.sharedContent!.contentData.uploaderName ? (
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                                            {item.sharedContent!.contentData.uploaderAvatar ? (
+                                                                <Image
+                                                                    source={{ uri: item.sharedContent!.contentData.uploaderAvatar }}
+                                                                    style={{ width: 16, height: 16, borderRadius: 8, marginRight: 4 }}
+                                                                />
+                                                            ) : (
+                                                                <View style={{
+                                                                    width: 16, height: 16, borderRadius: 8,
+                                                                    backgroundColor: colors.primary,
+                                                                    alignItems: 'center', justifyContent: 'center',
+                                                                    marginRight: 4
+                                                                }}>
+                                                                    <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '700' }}>
+                                                                        {item.sharedContent!.contentData.uploaderName.charAt(0).toUpperCase()}
+                                                                    </Text>
+                                                                </View>
+                                                            )}
+                                                            <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '500' }} numberOfLines={1}>
+                                                                {item.sharedContent!.contentData.uploaderName}
+                                                            </Text>
+                                                        </View>
+                                                    ) : (!item.sharedContent!.contentData.author || item.sharedContent!.contentData.author === 'Unknown Author') ? (
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                                            {item.senderPhoto ? (
+                                                                <Image
+                                                                    source={{ uri: item.senderPhoto }}
+                                                                    style={{ width: 14, height: 14, borderRadius: 7, marginRight: 4 }}
+                                                                />
+                                                            ) : (
+                                                                <Ionicons name="person-circle" size={14} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                                                            )}
+                                                            <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={1}>
+                                                                {isOwnMessage ? 'Shared by You' : (item.senderName ? `Shared by ${item.senderName}` : 'Shared Document')}
+                                                            </Text>
+                                                        </View>
+                                                    ) : (
+                                                        <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 8 }} numberOfLines={1}>
+                                                            {item.sharedContent!.contentData.author}
+                                                        </Text>
+                                                    )}
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                        {item.sharedContent!.contentData.rating ? (
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
+                                                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#B45309' }}>
+                                                                    {item.sharedContent!.contentData.rating}
+                                                                </Text>
+                                                                <Ionicons name="star" size={10} color="#B45309" style={{ marginLeft: 2 }} />
+                                                            </View>
+                                                        ) : (
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
+                                                                <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>New</Text>
+                                                            </View>
+                                                        )}
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                            <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+                                                            <Text style={{ fontSize: 10, color: colors.textSecondary, marginLeft: 2 }}>
+                                                                {item.sharedContent!.contentData.views || '0'}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                </TouchableOpacity>
+                                            </View>
+                                        ) : null}
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Reaction chips below bubble */}
+                    {item.reactions && Object.keys(item.reactions).length > 0 && (
+                        <ReactionChips
+                            reactions={item.reactions}
+                            currentUserId={auth.currentUser?.uid || ''}
+                            onPress={(emoji) => addReaction(conversationId!, item.id, emoji, auth.currentUser?.uid || '')}
+                            isOwnMessage={isOwnMessage}
+                        />
+                    )}
                 </View>
             </View>
         );
@@ -596,6 +698,10 @@ export default function GroupChatScreen() {
         other: userMessages.filter(m => m.messageType === 'text').length
     };
 
+    // Find the most recently pinned message
+    const pinnedMessages = messages.filter(m => m.pinned);
+    const latestPinnedMessage = pinnedMessages.length > 0 ? pinnedMessages[pinnedMessages.length - 1] : null;
+
     const handleSelectMember = (userId: string) => {
         setFilteredUserId(userId);
         setFilteredMediaType('all'); // Reset media type when changing user
@@ -606,9 +712,145 @@ export default function GroupChatScreen() {
         setFilteredMediaType('all');
     };
 
+    const handleContextMenuAction = (action: string) => {
+        if (!contextMenuMessage) return;
+        const msg = contextMenuMessage;
+        setContextMenuMessage(null);
+        if (action === 'reply') {
+            setReplyTo({ messageId: msg.id, text: msg.text, senderName: msg.senderName || 'Unknown', messageType: msg.messageType });
+        } else if (action === 'copy') {
+            if (msg.text) Clipboard.setString(msg.text);
+        } else if (action === 'delete') {
+            Alert.alert('Delete Message', 'Are you sure you want to delete this message?', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteMessage(conversationId!, msg.id);
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to delete message');
+                        }
+                    }
+                },
+            ]);
+        } else if (action === 'mark-important') {
+            setMessagePriority(conversationId!, msg.id, 'important');
+        } else if (action === 'mark-medium') {
+            setMessagePriority(conversationId!, msg.id, 'medium');
+        } else if (action === 'mark-normal') {
+            setMessagePriority(conversationId!, msg.id, 'normal');
+        } else if (action === 'pin-message') {
+            pinMessage(conversationId!, msg.id, true);
+        } else if (action === 'unpin-message') {
+            pinMessage(conversationId!, msg.id, false);
+        }
+    };
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: '#000000' }]} edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#000000" />
+
+            {/* Emoji Tray Popup */}
+            <EmojiTray
+                visible={emojiTrayVisible}
+                onClose={() => setEmojiTrayVisible(false)}
+                onSelectEmoji={handleReaction}
+                position={emojiTrayPosition}
+            />
+
+            {/* ─── WhatsApp-style Message Context Menu ─── */}
+            <Modal
+                visible={!!contextMenuMessage}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setContextMenuMessage(null)}
+            >
+                <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' }}
+                    activeOpacity={1}
+                    onPress={() => setContextMenuMessage(null)}
+                >
+                    <View style={{
+                        backgroundColor: '#1E293B',
+                        borderRadius: 20,
+                        overflow: 'hidden',
+                        width: Dimensions.get('window').width * 0.82,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 8 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 16,
+                        elevation: 20,
+                    }}>
+                        {/* Emoji Quick-Reactions Row */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 14, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+                            {['❤️', '😂', '😮', '😢', '👍', '🙏'].map(emoji => (
+                                <TouchableOpacity
+                                    key={emoji}
+                                    onPress={() => {
+                                        if (contextMenuMessage) {
+                                            addReaction(conversationId!, contextMenuMessage.id, emoji, auth.currentUser?.uid || '');
+                                        }
+                                        setContextMenuMessage(null);
+                                    }}
+                                    style={{ padding: 4 }}
+                                >
+                                    <Text style={{ fontSize: 28 }}>{emoji}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* Message preview */}
+                        {contextMenuMessage?.text ? (
+                            <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }} numberOfLines={2}>{contextMenuMessage.text}</Text>
+                            </View>
+                        ) : null}
+
+                        {/* Action Buttons */}
+                        {[
+                            { icon: 'arrow-undo-outline', label: 'Reply', action: 'reply' },
+                            { icon: 'copy-outline', label: 'Copy', action: 'copy' },
+                            // Admin Only options: Message Priority
+                            ...((groupData?.admins?.includes(auth.currentUser?.uid || '') || groupData?.createdBy === auth.currentUser?.uid)
+                                ? [
+                                    { icon: contextMenuMessage?.pinned ? 'pin-off' : 'pin', label: contextMenuMessage?.pinned ? 'Unpin Message' : 'Pin Message', action: contextMenuMessage?.pinned ? 'unpin-message' : 'pin-message', color: '#10B981' },
+                                    { icon: 'alert-circle', label: 'Mark Important', action: 'mark-important', color: '#EF4444' },
+                                    { icon: 'warning', label: 'Mark Medium', action: 'mark-medium', color: '#EAB308' },
+                                    { icon: 'information-circle-outline', label: 'Mark Normal', action: 'mark-normal', color: '#A8B5C8' },
+                                ]
+                                : []),
+                            ...(contextMenuMessage?.senderId === auth.currentUser?.uid || groupData?.admins?.includes(auth.currentUser?.uid || '') || groupData?.createdBy === auth.currentUser?.uid
+                                ? [{ icon: 'trash-outline', label: 'Delete', action: 'delete', color: '#EF4444' }]
+                                : []),
+                        ].map((opt, i, arr) => (
+                            <TouchableOpacity
+                                key={opt.action}
+                                onPress={() => handleContextMenuAction(opt.action)}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    paddingVertical: 15,
+                                    paddingHorizontal: 20,
+                                    borderBottomWidth: i < arr.length - 1 ? 1 : 0,
+                                    borderBottomColor: 'rgba(255,255,255,0.06)',
+                                }}
+                            >
+                                <Ionicons
+                                    name={opt.icon as any}
+                                    size={20}
+                                    color={opt.color || '#A8B5C8'}
+                                    style={{ marginRight: 14 }}
+                                />
+                                <Text style={{ fontSize: 16, color: opt.color || '#F1F5F9', fontWeight: '500' }}>
+                                    {opt.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
 
             {/* Header */}
             <View style={styles.headerContainer}>
@@ -676,6 +918,45 @@ export default function GroupChatScreen() {
                     </View>
                 </View>
             </View>
+
+            {/* Group Announcement Banner */}
+            {groupData?.groupAnnouncement ? (
+                <View style={[styles.announcementBanner, { backgroundColor: isDark ? '#1E2D3D' : '#EFF6FF' }]}>
+                    <Ionicons name="megaphone" size={14} color="#6366F1" />
+                    <Text style={[styles.announcementText, { color: isDark ? '#E2E8F0' : '#1E293B' }]} numberOfLines={1}>
+                        {groupData.groupAnnouncement}
+                    </Text>
+                </View>
+            ) : null}
+
+            {/* Pinned Message Banner */}
+            {latestPinnedMessage && (
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={{
+                        backgroundColor: '#1E293B',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderBottomWidth: 1,
+                        borderBottomColor: 'rgba(255,255,255,0.05)',
+                        zIndex: 40
+                    }}
+                    onPress={() => {
+                        // In a real app, this would scroll to the message
+                        Alert.alert('Pinned Message', latestPinnedMessage.text || 'Media attachment');
+                    }}
+                >
+                    <Ionicons name="pin" size={16} color="#10B981" style={{ marginRight: 12, transform: [{ rotate: '45deg' }] }} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '600', marginBottom: 2 }}>Pinned Message</Text>
+                        <Text style={{ color: '#F8FAFC', fontSize: 13 }} numberOfLines={1}>
+                            {latestPinnedMessage.text || (latestPinnedMessage.messageType === 'image' ? '📸 Photo' : '📎 Document')}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+            )}
 
             {/* Custom Professional Background */}
             <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#E5E5E5' }}>
@@ -847,15 +1128,34 @@ export default function GroupChatScreen() {
                         )}
                         {messages.length === 0 && !loading && (
                             <View style={styles.emptyState}>
-                                <View style={[styles.emptyIconContainer, { backgroundColor: colors.card }]}>
-                                    <Ionicons name="people-outline" size={48} color={colors.primary} />
+                                <View style={[styles.groupEmptyIcon]}>
+                                    <Text style={{ fontSize: 56 }}>🎓</Text>
                                 </View>
-                                <Text style={[styles.emptyTitle, { color: colors.text }]}>Welcome to {groupName}!</Text>
-                                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                                    Start the conversation with your group members
+                                <Text style={[styles.emptyTitle, { color: '#FFF' }]}>Welcome to {groupName}!</Text>
+                                <Text style={[styles.emptySubtitle, { color: 'rgba(255,255,255,0.6)' }]}>
+                                    Break the ice! Share notes, ask doubts, or just say hi to your group 👋
                                 </Text>
                             </View>
                         )}
+                        {/* Typing Indicator */}
+                        {typingNames.length > 0 && (
+                            <View style={styles.typingRow}>
+                                <View style={styles.typingDots}>
+                                    <View style={[styles.typingDot, { backgroundColor: '#94A3B8' }]} />
+                                    <View style={[styles.typingDot, { backgroundColor: '#94A3B8', marginHorizontal: 3 }]} />
+                                    <View style={[styles.typingDot, { backgroundColor: '#94A3B8' }]} />
+                                </View>
+                                <Text style={styles.typingText}>
+                                    {typingNames.length === 1
+                                        ? `${typingNames[0]} is typing…`
+                                        : `${typingNames.slice(0, 2).join(', ')} are typing…`}
+                                </Text>
+                            </View>
+                        )}
+
+                        {/* Reply Preview */}
+                        <ReplyPreview replyTo={replyTo} onClear={() => setReplyTo(null)} />
+
                         {/* Input Area */}
                         <View style={[styles.inputContainer, { paddingBottom: 12, opacity: isConnected === false ? 0.5 : 1 }]}>
                             <TouchableOpacity
@@ -872,7 +1172,7 @@ export default function GroupChatScreen() {
                                     placeholder={isConnected === false ? "Offline" : "Message"}
                                     placeholderTextColor={isDark ? "#9CA3AF" : "#64748B"}
                                     value={inputText}
-                                    onChangeText={setInputText}
+                                    onChangeText={handleInputChange}
                                     multiline
                                     cursorColor={isDark ? "#FFFFFF" : "#0F172A"}
                                     editable={isConnected !== false}
@@ -1075,7 +1375,6 @@ const styles = StyleSheet.create({
     },
     messageContainer: {
         marginBottom: 4,
-        maxWidth: '75%',
         alignItems: 'flex-start',
     },
     ownMessageContainer: {
@@ -1128,8 +1427,8 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 1,
-        alignSelf: 'flex-start',
         overflow: 'hidden',
+        flexShrink: 1,
     },
     ownMessageBubble: {
         backgroundColor: '#6366F1', // Fallback if no gradient
@@ -1204,6 +1503,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 40,
     },
+    groupEmptyIcon: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
     emptyIconContainer: {
         width: 96,
         height: 96,
@@ -1221,6 +1529,46 @@ const styles = StyleSheet.create({
     emptySubtitle: {
         fontSize: 14,
         textAlign: 'center',
+    },
+    announcementBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        gap: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(99,102,241,0.2)',
+    },
+    announcementText: {
+        flex: 1,
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    typingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingBottom: 6,
+        gap: 8,
+    },
+    typingDots: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    typingDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    typingText: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.5)',
+        fontStyle: 'italic',
+    },
+    replyBtn: {
+        justifyContent: 'center',
+        alignSelf: 'center',
+        padding: 4,
     },
     inputContainer: {
         flexDirection: 'row',

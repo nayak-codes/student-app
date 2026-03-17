@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Clipboard,
     Dimensions,
     FlatList,
     Image,
@@ -12,6 +13,7 @@ import {
     Keyboard,
     KeyboardAvoidingView,
     Linking,
+    Modal,
     Platform,
     StatusBar,
     StyleSheet,
@@ -24,21 +26,28 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import ChatAttachmentMenu, { AttachmentType } from '../src/components/ChatAttachmentMenu';
 import DocumentViewer from '../src/components/DocumentViewer';
 import MediaPreviewModal, { MediaPreviewModalProps } from '../src/components/MediaPreviewModal';
+import { EmojiTray, ReactionChips } from '../src/components/MessageReactions';
 import PollCreator from '../src/components/PollCreator';
 import PollMessage from '../src/components/PollMessage';
 import PostDetailModal from '../src/components/PostDetailModal';
+import ReplyPreview, { QuotedMessageBubble } from '../src/components/ReplyPreview';
 import { auth } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import {
+    addReaction,
+    deleteMessage,
     markMessagesAsRead,
     Message,
     sendMessage,
+    setTypingStatus,
     subscribeToMessages,
+    subscribeToTyping,
     voteOnPoll
 } from '../src/services/chatService';
 import { incrementViews, LibraryResource } from '../src/services/libraryService';
 import { pickDocument, pickImage, takePhoto, uploadMedia } from '../src/services/mediaService';
 import { getPostById } from '../src/services/postsService';
+import * as presenceService from '../src/services/presenceService';
 
 const SharedPostCard = ({ itemData, onPress }: { itemData: any, onPress: () => void }) => {
     const [stats, setStats] = useState({
@@ -191,6 +200,7 @@ const ChatScreen = () => {
 
     // Document Viewer State
     const [viewerVisible, setViewerVisible] = useState(false);
+    const [otherUserPresence, setOtherUserPresence] = useState<presenceService.UserPresence | null>(null);
     const [selectedResource, setSelectedResource] = useState<LibraryResource | null>(null);
 
     const handleOpenDocument = async (resource: LibraryResource) => {
@@ -211,6 +221,15 @@ const ChatScreen = () => {
     const [previewAttachment, setPreviewAttachment] = useState<MediaPreviewModalProps['attachment'] | null>(null);
     const [showPreview, setShowPreview] = useState(false);
     const [showPollCreator, setShowPollCreator] = useState(false);
+
+    // Polish state
+    const [replyTo, setReplyTo] = useState<{ messageId: string; text: string; senderName: string; messageType?: string } | null>(null);
+    const [emojiTrayVisible, setEmojiTrayVisible] = useState(false);
+    const [emojiTrayMessage, setEmojiTrayMessage] = useState<Message | null>(null);
+    const [emojiTrayPosition, setEmojiTrayPosition] = useState({ x: 0, y: 0 });
+    const [typingNames, setTypingNames] = useState<string[]>([]);
+    const [contextMenuMessage, setContextMenuMessage] = useState<Message | null>(null);
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const flatListRef = useRef<FlatList>(null);
     const [showMenu, setShowMenu] = useState(false);
@@ -271,24 +290,70 @@ const ChatScreen = () => {
         return () => unsubscribe();
     }, [conversationId]);
 
-    const handleSend = async () => {
-        if (!inputText.trim() || !conversationId) return;
+    // Typing subscription
+    useEffect(() => {
+        if (!conversationId || !auth.currentUser) return;
+        const unsubTyping = subscribeToTyping(conversationId, auth.currentUser.uid, setTypingNames);
+        return () => unsubTyping();
+    }, [conversationId]);
 
+    // Presence subscription
+    useEffect(() => {
+        if (!otherUserId) return;
+        const unsubPresence = presenceService.subscribeToUserPresence(otherUserId, setOtherUserPresence);
+        return () => unsubPresence();
+    }, [otherUserId]);
+
+    const handleSend = async () => {
+        const textToSend = inputText.trim();
+        if (!textToSend || !conversationId) return;
+
+        const currentReplyTo = replyTo;
+        setInputText('');
+        setReplyTo(null);
         setSending(true);
+        if (auth.currentUser) {
+            setTypingStatus(conversationId, auth.currentUser.uid, auth.currentUser.displayName || 'User', false);
+        }
+
         try {
             await sendMessage(
                 conversationId,
-                inputText.trim(),
+                textToSend,
                 auth.currentUser?.uid || '',
                 auth.currentUser?.displayName || 'User',
-                'text'
+                'text',
+                undefined,
+                undefined,
+                undefined,
+                currentReplyTo || undefined
             );
-            setInputText('');
         } catch (error) {
             console.error('Error sending message:', error);
+            setInputText(textToSend);
+            Alert.alert('Delivery Failed', 'Message could not be sent. Please check your connection.');
         } finally {
             setSending(false);
         }
+    };
+
+    // Typing detection
+    const handleInputChange = (text: string) => {
+        setInputText(text);
+        if (!conversationId || !auth.currentUser) return;
+        setTypingStatus(conversationId, auth.currentUser.uid, auth.currentUser.displayName || 'User', true);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            if (auth.currentUser) {
+                setTypingStatus(conversationId, auth.currentUser.uid, auth.currentUser.displayName || 'User', false);
+            }
+        }, 3000);
+    };
+
+    // Reaction handler for DM
+    const handleDMReaction = async (emoji: string) => {
+        if (!emojiTrayMessage || !conversationId || !auth.currentUser) return;
+        await addReaction(conversationId, emojiTrayMessage.id, emoji, auth.currentUser.uid);
     };
 
     const handleAttachmentSelect = async (type: AttachmentType) => {
@@ -447,292 +512,315 @@ const ChatScreen = () => {
         return (
             <View>
                 {showDateHeader && renderDateHeader(messageDate)}
-                <View style={[
-                    styles.messageContainer,
-                    isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
-                ]}>
+                <TouchableOpacity
+                    activeOpacity={1}
+                    style={{ alignSelf: isOwnMessage ? 'flex-end' : 'flex-start', maxWidth: '82%' }}
+                    onLongPress={() => {
+                        setContextMenuMessage(item);
+                    }}
+                >
+                    <View style={[
+                        styles.messageContainer,
+                        isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer,
+                        { maxWidth: Dimensions.get('window').width * 0.72 }
+                    ]}>
 
 
-                    {/* Poll Message */}
-                    {item.messageType === 'poll' && item.poll ? (
-                        <PollMessage
-                            message={item}
-                            currentUserId={auth.currentUser?.uid || ''}
-                            onVote={(optionId) => handleVote(item.id, optionId)}
-                        />
-                    ) : (
-                        /* Standard Bubble or Shared Content */
-                        isSharedContent ? (
-                            <View
-                                style={[
-                                    styles.sharedContentCard,
-                                    isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard,
-                                    {
-                                        backgroundColor: isClip ? 'transparent' : colors.card,
-                                        borderColor: isClip ? 'transparent' : (isOwnMessage ? colors.primary : colors.border),
-                                        borderWidth: isClip ? 0 : 1,
-                                        elevation: isClip ? 0 : 2,
-                                        width: isClip ? (Dimensions.get('window').width / 2 - 20) : (Dimensions.get('window').width * 0.75),
-                                        borderRadius: isClip ? 20 : 12,
-                                    }
-                                ]}
-                            >
-                                {item.messageType === 'sharedPost' && item.sharedContent?.contentData ? (
-                                    <TouchableOpacity
-                                        activeOpacity={0.9}
-                                        onPress={() => {
-                                            const data = item.sharedContent!.contentData;
-                                            if (data.type === 'clip') {
-                                                router.push({
-                                                    pathname: '/screens/shorts-player' as any,
-                                                    params: { shortId: data.id },
-                                                });
-                                            } else if (isClip && data.videoLink) {
-                                                router.push({
-                                                    pathname: '/screens/video-player' as any,
-                                                    params: {
-                                                        videoUri: data.videoLink,
-                                                        postId: data.id,
-                                                        title: data.content || 'Untitled Video',
-                                                        description: data.content || '',
-                                                        authorName: data.userName,
-                                                        authorId: data.userId,
-                                                        likes: data.likes,
-                                                        views: data.viewCount || 0,
-                                                        date: data.createdAt ? new Date(data.createdAt).toISOString() : '',
-                                                        thumbnail: data.thumbnailUrl || data.imageUrl || data.userProfilePhoto,
-                                                        authorImage: data.userProfilePhoto
-                                                    },
-                                                });
-                                            } else {
-                                                setSelectedPost(data);
-                                                setPostModalVisible(true);
-                                            }
-                                        }}
-                                    >
-                                        {isClip ? (
-                                            <SharedPostCard itemData={item.sharedContent.contentData} onPress={() => { }} />
-                                        ) : (
-                                            <StandardSharedPostCard itemData={item.sharedContent.contentData} />
-                                        )}
-                                        <Text style={[styles.sharedContentTime, { color: isClip ? '#FFF' : colors.textSecondary }]}>
-                                            {formatMessageTime(item.timestamp)}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ) : item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
-                                    /* Unified Library Book Card (Always Card View) */
-                                    <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#1E293B' : '#FFF', overflow: 'hidden', borderRadius: 12 }}>
-                                        {/* Cover - Opens Viewer */}
+                        {/* Poll Message */}
+                        {item.messageType === 'poll' && item.poll ? (
+                            <PollMessage
+                                message={item}
+                                currentUserId={auth.currentUser?.uid || ''}
+                                onVote={(optionId) => handleVote(item.id, optionId)}
+                            />
+                        ) : (
+                            /* Standard Bubble or Shared Content */
+                            isSharedContent ? (
+                                <View
+                                    style={[
+                                        styles.sharedContentCard,
+                                        isOwnMessage ? styles.ownSharedCard : styles.otherSharedCard,
+                                        {
+                                            backgroundColor: isClip ? 'transparent' : colors.card,
+                                            borderColor: isClip ? 'transparent' : (isOwnMessage ? colors.primary : colors.border),
+                                            borderWidth: isClip ? 0 : 1,
+                                            elevation: isClip ? 0 : 2,
+                                            width: isClip ? (Dimensions.get('window').width / 2 - 20) : (Dimensions.get('window').width * 0.75),
+                                            borderRadius: isClip ? 20 : 12,
+                                        }
+                                    ]}
+                                >
+                                    {item.messageType === 'sharedPost' && item.sharedContent?.contentData ? (
                                         <TouchableOpacity
-                                            activeOpacity={0.8}
-                                            onPress={() => handleOpenDocument(item.sharedContent!.contentData)}
-                                            style={{ width: 90, height: 120, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}
+                                            activeOpacity={0.9}
+                                            onPress={() => {
+                                                const data = item.sharedContent!.contentData;
+                                                if (data.type === 'clip') {
+                                                    router.push({
+                                                        pathname: '/screens/shorts-player' as any,
+                                                        params: { shortId: data.id },
+                                                    });
+                                                } else if (isClip && data.videoLink) {
+                                                    router.push({
+                                                        pathname: '/screens/video-player' as any,
+                                                        params: {
+                                                            videoUri: data.videoLink,
+                                                            postId: data.id,
+                                                            title: data.content || 'Untitled Video',
+                                                            description: data.content || '',
+                                                            authorName: data.userName,
+                                                            authorId: data.userId,
+                                                            likes: data.likes,
+                                                            views: data.viewCount || 0,
+                                                            date: data.createdAt ? new Date(data.createdAt).toISOString() : '',
+                                                            thumbnail: data.thumbnailUrl || data.imageUrl || data.userProfilePhoto,
+                                                            authorImage: data.userProfilePhoto
+                                                        },
+                                                    });
+                                                } else {
+                                                    setSelectedPost(data);
+                                                    setPostModalVisible(true);
+                                                }
+                                            }}
                                         >
-                                            {item.sharedContent!.contentData.coverImage ? (
-                                                <Image
-                                                    source={{ uri: item.sharedContent!.contentData.coverImage }}
-                                                    style={{ width: '100%', height: '100%' }}
-                                                    resizeMode="cover"
-                                                />
+                                            {isClip ? (
+                                                <SharedPostCard itemData={item.sharedContent.contentData} onPress={() => { }} />
                                             ) : (
-                                                <View style={{ width: '100%', height: '100%' }}>
-                                                    {item.sharedContent!.contentData.fileUrl &&
-                                                        item.sharedContent!.contentData.fileUrl.includes('cloudinary') &&
-                                                        item.sharedContent!.contentData.fileUrl.toLowerCase().endsWith('.pdf') && (
-                                                            <Image
-                                                                source={{ uri: item.sharedContent!.contentData.fileUrl.replace('/upload/', '/upload/w_400,q_auto,f_jpg/').replace(/\.pdf$/i, '.jpg') }}
-                                                                style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 2 }}
-                                                                resizeMode="cover"
-                                                            />
-                                                        )}
-
-                                                    <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: 4, zIndex: 1 }}>
-                                                        <LinearGradient
-                                                            colors={['#4F46E5', '#312E81']}
-                                                            style={StyleSheet.absoluteFill}
-                                                        />
-                                                        <Ionicons name="book" size={32} color="#FFF" style={{ opacity: 0.9 }} />
-                                                        <Text style={{ color: '#FFF', fontSize: 8, marginTop: 4, textAlign: 'center', fontWeight: '700' }} numberOfLines={2}>
-                                                            {item.sharedContent!.contentData.type === 'notes' ? 'NOTES' : 'PDF'}
-                                                        </Text>
-                                                    </View>
-                                                </View>
+                                                <StandardSharedPostCard itemData={item.sharedContent.contentData} />
                                             )}
-                                        </TouchableOpacity>
-
-                                        {/* Details - Opens Detail Page */}
-                                        <TouchableOpacity
-                                            activeOpacity={0.7}
-                                            onPress={() => router.push({ pathname: '/document-detail', params: { id: item.sharedContent!.contentData.id } })}
-                                            style={{ flex: 1, padding: 12, paddingTop: 14 }}
-                                        >
-                                            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4, lineHeight: 20 }} numberOfLines={2}>
-                                                {item.sharedContent!.contentData.title || 'Untitled Book'}
+                                            <Text style={[styles.sharedContentTime, { color: isClip ? '#FFF' : colors.textSecondary }]}>
+                                                {formatMessageTime(item.timestamp)}
                                             </Text>
-                                            {/* Smart Author Display: Prioritize Resource Uploader -> Author -> Sender */}
-                                            {item.sharedContent!.contentData.uploaderName ? (
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                                    {item.sharedContent!.contentData.uploaderAvatar ? (
-                                                        <Image
-                                                            source={{ uri: item.sharedContent!.contentData.uploaderAvatar }}
-                                                            style={{ width: 18, height: 18, borderRadius: 9, marginRight: 6 }}
-                                                        />
-                                                    ) : (
-                                                        <View style={{
-                                                            width: 18, height: 18, borderRadius: 9,
-                                                            backgroundColor: colors.primary,
-                                                            alignItems: 'center', justifyContent: 'center',
-                                                            marginRight: 6
-                                                        }}>
-                                                            <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '700' }}>
-                                                                {item.sharedContent!.contentData.uploaderName.charAt(0).toUpperCase()}
+                                        </TouchableOpacity>
+                                    ) : item.messageType === 'sharedPDF' && item.sharedContent?.contentData ? (
+                                        /* Unified Library Book Card (Always Card View) */
+                                        <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#1E293B' : '#FFF', overflow: 'hidden', borderRadius: 12 }}>
+                                            {/* Cover - Opens Viewer */}
+                                            <TouchableOpacity
+                                                activeOpacity={0.8}
+                                                onPress={() => handleOpenDocument(item.sharedContent!.contentData)}
+                                                style={{ width: 90, height: 120, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}
+                                            >
+                                                {item.sharedContent!.contentData.coverImage ? (
+                                                    <Image
+                                                        source={{ uri: item.sharedContent!.contentData.coverImage }}
+                                                        style={{ width: '100%', height: '100%' }}
+                                                        resizeMode="cover"
+                                                    />
+                                                ) : (
+                                                    <View style={{ width: '100%', height: '100%' }}>
+                                                        {item.sharedContent!.contentData.fileUrl &&
+                                                            item.sharedContent!.contentData.fileUrl.includes('cloudinary') &&
+                                                            item.sharedContent!.contentData.fileUrl.toLowerCase().endsWith('.pdf') && (
+                                                                <Image
+                                                                    source={{ uri: item.sharedContent!.contentData.fileUrl.replace('/upload/', '/upload/w_400,q_auto,f_jpg/').replace(/\.pdf$/i, '.jpg') }}
+                                                                    style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 2 }}
+                                                                    resizeMode="cover"
+                                                                />
+                                                            )}
+
+                                                        <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: 4, zIndex: 1 }}>
+                                                            <LinearGradient
+                                                                colors={['#4F46E5', '#312E81']}
+                                                                style={StyleSheet.absoluteFill}
+                                                            />
+                                                            <Ionicons name="book" size={32} color="#FFF" style={{ opacity: 0.9 }} />
+                                                            <Text style={{ color: '#FFF', fontSize: 8, marginTop: 4, textAlign: 'center', fontWeight: '700' }} numberOfLines={2}>
+                                                                {item.sharedContent!.contentData.type === 'notes' ? 'NOTES' : 'PDF'}
                                                             </Text>
                                                         </View>
-                                                    )}
-                                                    <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '500' }} numberOfLines={1}>
-                                                        {item.sharedContent!.contentData.uploaderName}
-                                                    </Text>
-                                                </View>
-                                            ) : (!item.sharedContent!.contentData.author || item.sharedContent!.contentData.author === 'Unknown Author') ? (
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                                    {item.senderPhoto ? (
-                                                        <Image
-                                                            source={{ uri: item.senderPhoto }}
-                                                            style={{ width: 16, height: 16, borderRadius: 8, marginRight: 4 }}
-                                                        />
-                                                    ) : (
-                                                        <Ionicons name="person-circle" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                                                    )}
-                                                    <Text style={{ fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
-                                                        {isOwnMessage ? 'Shared by You' : (item.senderName ? `Shared by ${item.senderName}` : 'Shared Document')}
-                                                    </Text>
-                                                </View>
-                                            ) : (
-                                                <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }} numberOfLines={1}>
-                                                    {item.sharedContent!.contentData.author}
-                                                </Text>
-                                            )}
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                {item.sharedContent!.contentData.rating ? (
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#B45309' }}>
-                                                            {item.sharedContent!.contentData.rating}
-                                                        </Text>
-                                                        <Ionicons name="star" size={10} color="#B45309" style={{ marginLeft: 2 }} />
-                                                    </View>
-                                                ) : (
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>New</Text>
                                                     </View>
                                                 )}
-                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                    <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
-                                                    <Text style={{ fontSize: 10, color: colors.textSecondary, marginLeft: 2 }}>
-                                                        {item.sharedContent!.contentData.views || '0'}
+                                            </TouchableOpacity>
+
+                                            {/* Details - Opens Detail Page */}
+                                            <TouchableOpacity
+                                                activeOpacity={0.7}
+                                                onPress={() => router.push({ pathname: '/document-detail', params: { id: item.sharedContent!.contentData.id } })}
+                                                style={{ flex: 1, padding: 12, paddingTop: 14 }}
+                                            >
+                                                <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4, lineHeight: 20 }} numberOfLines={2}>
+                                                    {item.sharedContent!.contentData.title || 'Untitled Book'}
+                                                </Text>
+                                                {/* Smart Author Display: Prioritize Resource Uploader -> Author -> Sender */}
+                                                {item.sharedContent!.contentData.uploaderName ? (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                                        {item.sharedContent!.contentData.uploaderAvatar ? (
+                                                            <Image
+                                                                source={{ uri: item.sharedContent!.contentData.uploaderAvatar }}
+                                                                style={{ width: 18, height: 18, borderRadius: 9, marginRight: 6 }}
+                                                            />
+                                                        ) : (
+                                                            <View style={{
+                                                                width: 18, height: 18, borderRadius: 9,
+                                                                backgroundColor: colors.primary,
+                                                                alignItems: 'center', justifyContent: 'center',
+                                                                marginRight: 6
+                                                            }}>
+                                                                <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '700' }}>
+                                                                    {item.sharedContent!.contentData.uploaderName.charAt(0).toUpperCase()}
+                                                                </Text>
+                                                            </View>
+                                                        )}
+                                                        <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '500' }} numberOfLines={1}>
+                                                            {item.sharedContent!.contentData.uploaderName}
+                                                        </Text>
+                                                    </View>
+                                                ) : (!item.sharedContent!.contentData.author || item.sharedContent!.contentData.author === 'Unknown Author') ? (
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                                        {item.senderPhoto ? (
+                                                            <Image
+                                                                source={{ uri: item.senderPhoto }}
+                                                                style={{ width: 16, height: 16, borderRadius: 8, marginRight: 4 }}
+                                                            />
+                                                        ) : (
+                                                            <Ionicons name="person-circle" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                                                        )}
+                                                        <Text style={{ fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
+                                                            {isOwnMessage ? 'Shared by You' : (item.senderName ? `Shared by ${item.senderName}` : 'Shared Document')}
+                                                        </Text>
+                                                    </View>
+                                                ) : (
+                                                    <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }} numberOfLines={1}>
+                                                        {item.sharedContent!.contentData.author}
                                                     </Text>
+                                                )}
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    {item.sharedContent!.contentData.rating ? (
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#B45309' }}>
+                                                                {item.sharedContent!.contentData.rating}
+                                                            </Text>
+                                                            <Ionicons name="star" size={10} color="#B45309" style={{ marginLeft: 2 }} />
+                                                        </View>
+                                                    ) : (
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>New</Text>
+                                                        </View>
+                                                    )}
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                        <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+                                                        <Text style={{ fontSize: 10, color: colors.textSecondary, marginLeft: 2 }}>
+                                                            {item.sharedContent!.contentData.views || '0'}
+                                                        </Text>
+                                                    </View>
                                                 </View>
-                                            </View>
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : (
-                                    <View style={{ padding: 12 }}>
-                                        <Text style={{ color: colors.text }}>{item.text || 'Shared Content'}</Text>
-                                        <Text style={{ fontSize: 10, color: colors.textSecondary, alignSelf: 'flex-end', marginTop: 4 }}>
-                                            {formatMessageTime(item.timestamp)}
-                                        </Text>
-                                    </View>
-                                )}
-
-                                {/* Add Read Receipts inside the shared card container for own messages */}
-                                {isOwnMessage && (
-                                    <View style={{ position: 'absolute', bottom: 6, right: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 2 }}>
-                                        <Ionicons
-                                            name={item.read ? "checkmark-done" : (item.delivered ? "checkmark-done" : "checkmark")}
-                                            size={14}
-                                            color={item.read ? "#22c55e" : (item.delivered ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)")}
-                                        />
-                                    </View>
-                                )}
-                            </View>
-                        ) : (
-                            /* Regular Text / Image / File Bubble */
-                            <View style={[
-                                styles.messageBubble,
-                                isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
-                                (item.messageType === 'image') && {
-                                    paddingHorizontal: 0,
-                                    paddingTop: 0,
-                                    paddingBottom: item.text ? 10 : 0,
-                                    overflow: 'hidden'
-                                } // Full bleed for images
-                            ]}>
-                                {/* Image Attachment */}
-                                {item.messageType === 'image' && item.mediaUrl && (
-                                    <TouchableOpacity
-                                        activeOpacity={0.9}
-                                        onPress={() => router.push({
-                                            pathname: '/image-viewer',
-                                            params: { images: item.mediaUrl }
-                                        })}>
-                                        <Image
-                                            source={{ uri: item.mediaUrl }}
-                                            style={styles.mediaImage}
-                                            resizeMode="cover"
-                                        />
-                                    </TouchableOpacity>
-                                )}
-
-                                {/* File Attachment */}
-                                {item.messageType === 'file' && item.mediaUrl && (
-                                    <TouchableOpacity
-                                        style={styles.fileContainer}
-                                        onPress={() => Linking.openURL(item.mediaUrl!)}
-                                    >
-                                        <Ionicons name="document-text" size={32} color="#FFF" />
-                                        <View style={styles.fileInfo}>
-                                            <Text style={styles.fileName} numberOfLines={1}>{item.text || 'Document'}</Text>
-                                            <Text style={styles.fileType}>Tap to view</Text>
+                                            </TouchableOpacity>
                                         </View>
-                                    </TouchableOpacity>
-                                )}
+                                    ) : (
+                                        <View style={{ padding: 12 }}>
+                                            <Text style={{ color: colors.text }}>{item.text || 'Shared Content'}</Text>
+                                            <Text style={{ fontSize: 10, color: colors.textSecondary, alignSelf: 'flex-end', marginTop: 4 }}>
+                                                {formatMessageTime(item.timestamp)}
+                                            </Text>
+                                        </View>
+                                    )}
 
-                                {/* Text Content */}
-                                {(item.text && item.messageType !== 'file') && (
-                                    <Text style={[
-                                        styles.messageText,
-                                        isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
-                                        (item.messageType === 'image') && { marginHorizontal: 12, marginTop: 8 } // Add spacing for caption if image exists
-                                    ]}>
-                                        {item.text}
-                                    </Text>
-                                )}
-
-                                <View style={[
-                                    styles.messageTimeRow,
-                                    isOwnMessage ? styles.ownMessageTimeRow : styles.otherMessageTimeRow,
-                                    (item.messageType === 'image') && { marginRight: 12, marginBottom: 8 } // Add spacing for time overlay
-                                ]}>
-                                    <Text style={[
-                                        styles.messageTimeText,
-                                        isOwnMessage ? styles.ownMessageTimeText : { color: colors.textSecondary }
-                                    ]}>
-                                        {formatMessageTime(item.timestamp)}
-                                    </Text>
+                                    {/* Add Read Receipts inside the shared card container for own messages */}
                                     {isOwnMessage && (
-                                        <View style={{ marginLeft: 4, marginTop: 1 }}>
+                                        <View style={{ position: 'absolute', bottom: 6, right: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, paddingHorizontal: 4, paddingVertical: 2 }}>
                                             <Ionicons
                                                 name={item.read ? "checkmark-done" : (item.delivered ? "checkmark-done" : "checkmark")}
-                                                size={16}
-                                                color={item.read ? "#22c55e" : (item.delivered ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)")}
+                                                size={14}
+                                                color={item.read ? "#22c55e" : (item.delivered ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)")}
                                             />
                                         </View>
                                     )}
                                 </View>
-                            </View>
+                            ) : (
+                                /* Regular Text / Image / File Bubble */
+                                <View style={[
+                                    styles.messageBubble,
+                                    isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
+                                    (item.messageType === 'image') && {
+                                        paddingHorizontal: 0,
+                                        paddingTop: 0,
+                                        paddingBottom: item.text ? 10 : 0,
+                                        overflow: 'hidden'
+                                    } // Full bleed for images
+                                ]}>
+                                    {/* Reply context bubble */}
+                                    {item.replyTo && (
+                                        <QuotedMessageBubble replyTo={item.replyTo} isOwnMessage={isOwnMessage} />
+                                    )}
+                                    {/* Image Attachment */}
+                                    {item.messageType === 'image' && item.mediaUrl && (
+                                        <TouchableOpacity
+                                            activeOpacity={0.9}
+                                            onPress={() => router.push({
+                                                pathname: '/image-viewer',
+                                                params: { images: item.mediaUrl }
+                                            })}>
+                                            <Image
+                                                source={{ uri: item.mediaUrl }}
+                                                style={styles.mediaImage}
+                                                resizeMode="cover"
+                                            />
+                                        </TouchableOpacity>
+                                    )}
+
+                                    {/* File Attachment */}
+                                    {item.messageType === 'file' && item.mediaUrl && (
+                                        <TouchableOpacity
+                                            style={styles.fileContainer}
+                                            onPress={() => Linking.openURL(item.mediaUrl!)}
+                                        >
+                                            <Ionicons name="document-text" size={32} color="#FFF" />
+                                            <View style={styles.fileInfo}>
+                                                <Text style={styles.fileName} numberOfLines={1}>{item.text || 'Document'}</Text>
+                                                <Text style={styles.fileType}>Tap to view</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    )}
+
+                                    {/* Text Content */}
+                                    {(item.text && item.messageType !== 'file') && (
+                                        <Text style={[
+                                            styles.messageText,
+                                            isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                                            (item.messageType === 'image') && { marginHorizontal: 12, marginTop: 8 } // Add spacing for caption if image exists
+                                        ]}>
+                                            {item.text}
+                                        </Text>
+                                    )}
+
+                                    <View style={[
+                                        styles.messageTimeRow,
+                                        isOwnMessage ? styles.ownMessageTimeRow : styles.otherMessageTimeRow,
+                                        (item.messageType === 'image') && { marginRight: 12, marginBottom: 8 } // Add spacing for time overlay
+                                    ]}>
+                                        <Text style={[
+                                            styles.messageTimeText,
+                                            isOwnMessage ? styles.ownMessageTimeText : { color: colors.textSecondary }
+                                        ]}>
+                                            {formatMessageTime(item.timestamp)}
+                                        </Text>
+                                        {isOwnMessage && (
+                                            <View style={{ marginLeft: 4, marginTop: 1 }}>
+                                                <Ionicons
+                                                    name={item.read ? "checkmark-done" : (item.delivered ? "checkmark-done" : "checkmark")}
+                                                    size={16}
+                                                    color={item.read ? "#22c55e" : (item.delivered ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)")}
+                                                />
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                            )
                         )
-                    )
-                    }
-                </View >
+                        }
+                    </View >
+                </TouchableOpacity>
+
+                {/* Reaction chips below bubble */}
+                {item.reactions && Object.keys(item.reactions).length > 0 && (
+                    <ReactionChips
+                        reactions={item.reactions}
+                        currentUserId={auth.currentUser?.uid || ''}
+                        onPress={(emoji) => addReaction(conversationId!, item.id, emoji, auth.currentUser?.uid || '')}
+                        isOwnMessage={isOwnMessage}
+                    />
+                )}
             </View >
         );
     };
@@ -740,6 +828,121 @@ const ChatScreen = () => {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#000000" />
+
+            {/* Emoji Tray Popup */}
+            <EmojiTray
+                visible={emojiTrayVisible}
+                onClose={() => setEmojiTrayVisible(false)}
+                onSelectEmoji={handleDMReaction}
+                position={emojiTrayPosition}
+            />
+
+            {/* ─── WhatsApp-style Message Context Menu ─── */}
+            <Modal
+                visible={!!contextMenuMessage}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setContextMenuMessage(null)}
+            >
+                <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' }}
+                    activeOpacity={1}
+                    onPress={() => setContextMenuMessage(null)}
+                >
+                    <View style={{
+                        backgroundColor: '#1E293B',
+                        borderRadius: 20,
+                        overflow: 'hidden',
+                        width: Dimensions.get('window').width * 0.82,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 8 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 16,
+                        elevation: 20,
+                    }}>
+                        {/* Emoji Quick-Reactions Row */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 14, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+                            {['❤️', '😂', '😮', '😢', '👍', '🙏'].map(emoji => (
+                                <TouchableOpacity
+                                    key={emoji}
+                                    onPress={() => {
+                                        if (contextMenuMessage && conversationId) {
+                                            handleDMReaction(emoji);
+                                        }
+                                        setContextMenuMessage(null);
+                                    }}
+                                    style={{ padding: 4 }}
+                                >
+                                    <Text style={{ fontSize: 28 }}>{emoji}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* Message preview */}
+                        {contextMenuMessage?.text ? (
+                            <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }} numberOfLines={2}>{contextMenuMessage.text}</Text>
+                            </View>
+                        ) : null}
+
+                        {/* Action Buttons */}
+                        {[
+                            { icon: 'arrow-undo-outline', label: 'Reply', action: 'reply' },
+                            { icon: 'copy-outline', label: 'Copy', action: 'copy' },
+                            ...(contextMenuMessage?.senderId === auth.currentUser?.uid
+                                ? [{ icon: 'trash-outline', label: 'Delete', action: 'delete' }]
+                                : []),
+                        ].map((opt, i, arr) => (
+                            <TouchableOpacity
+                                key={opt.action}
+                                onPress={() => {
+                                    const msg = contextMenuMessage;
+                                    setContextMenuMessage(null);
+                                    if (!msg) return;
+                                    if (opt.action === 'reply') {
+                                        setReplyTo({ messageId: msg.id, text: msg.text, senderName: msg.senderName || otherUserName || 'User', messageType: msg.messageType });
+                                    } else if (opt.action === 'copy') {
+                                        if (msg.text) Clipboard.setString(msg.text);
+                                    } else if (opt.action === 'delete') {
+                                        Alert.alert('Delete Message', 'Are you sure you want to delete this message?', [
+                                            { text: 'Cancel', style: 'cancel' },
+                                            {
+                                                text: 'Delete', style: 'destructive', onPress: async () => {
+                                                    try {
+                                                        if (conversationId && msg.id) {
+                                                            await deleteMessage(conversationId, msg.id);
+                                                        }
+                                                    } catch (error) {
+                                                        Alert.alert('Error', 'Failed to delete message');
+                                                    }
+                                                }
+                                            },
+                                        ]);
+                                    }
+                                }}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    paddingVertical: 15,
+                                    paddingHorizontal: 20,
+                                    borderBottomWidth: i < arr.length - 1 ? 1 : 0,
+                                    borderBottomColor: 'rgba(255,255,255,0.06)',
+                                }}
+                            >
+                                <Ionicons
+                                    name={opt.icon as any}
+                                    size={20}
+                                    color={opt.action === 'delete' ? '#EF4444' : '#A8B5C8'}
+                                    style={{ marginRight: 14 }}
+                                />
+                                <Text style={{ fontSize: 16, color: opt.action === 'delete' ? '#EF4444' : '#F1F5F9', fontWeight: '500' }}>
+                                    {opt.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
 
             {/* Static Header without Animation */}
             <View style={styles.headerContainer}>
@@ -772,7 +975,11 @@ const ChatScreen = () => {
                         )}
                         <View style={styles.headerInfo}>
                             <Text style={styles.headerName}>{otherUserName}</Text>
-                            <Text style={styles.headerStatus}>Online</Text>
+                            {typingNames.length > 0 ? (
+                                <Text style={styles.headerStatus}>typing…</Text>
+                            ) : otherUserPresence?.isOnline ? (
+                                <Text style={styles.headerStatus}>Online</Text>
+                            ) : null}
                         </View>
                     </TouchableOpacity>
 
@@ -855,6 +1062,9 @@ const ChatScreen = () => {
                             </View>
                         )}
 
+                        {/* Reply Preview */}
+                        <ReplyPreview replyTo={replyTo} onClear={() => setReplyTo(null)} />
+
                         {/* Input Area */}
                         <View style={[styles.inputContainer, {
                             backgroundColor: isDark ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255,255,255,0.9)',
@@ -877,7 +1087,7 @@ const ChatScreen = () => {
                                     placeholder="Message"
                                     placeholderTextColor={isDark ? "rgba(255,255,255,0.5)" : "#64748B"}
                                     value={inputText}
-                                    onChangeText={setInputText}
+                                    onChangeText={handleInputChange}
                                     multiline
                                     cursorColor={isDark ? "#FFFFFF" : "#0F172A"}
                                 />
@@ -1044,8 +1254,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     messageContainer: {
-        marginBottom: 8, // Reduced from 16 to tighten spacing between messages
-        maxWidth: '80%',
+        marginBottom: 8,
     },
     // ... (intermediate styles skipped) ...
     // Input Styles matching GroupChat
@@ -1060,11 +1269,11 @@ const styles = StyleSheet.create({
     },
     ownMessageContainer: {
         alignSelf: 'flex-end',
-        flexDirection: 'row-reverse', // Align items to end
+        flexDirection: 'row-reverse',
     },
     otherMessageContainer: {
         alignSelf: 'flex-start',
-        flexDirection: 'row', // Align avatar and bubble in row
+        flexDirection: 'row',
         alignItems: 'flex-end',
     },
     avatarContainer: {
@@ -1096,10 +1305,10 @@ const styles = StyleSheet.create({
     messageBubble: {
         borderRadius: 18,
         paddingHorizontal: 12,
-        paddingVertical: 6, // Reduced vertical padding
-        maxWidth: '100%',
+        paddingVertical: 6,
         minWidth: 85,
         elevation: 2,
+        flexShrink: 1,
     },
     ownMessageBubble: {
         backgroundColor: '#6366F1', // Primary Indigo

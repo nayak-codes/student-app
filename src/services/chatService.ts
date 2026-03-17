@@ -1,6 +1,7 @@
 import {
     addDoc,
     collection,
+    deleteDoc,
     doc,
     getDoc,
     getDocs,
@@ -38,6 +39,17 @@ export interface Message {
         }[];
         allowMultiple: boolean;
     };
+    // Reactions: emoji → array of userIds
+    reactions?: { [emoji: string]: string[] };
+    // Reply-to
+    replyTo?: {
+        messageId: string;
+        text: string;
+        senderName: string;
+        messageType?: string;
+    };
+    priority?: 'important' | 'medium' | 'normal'; // Message Priority for Groups
+    pinned?: boolean; // Pinned messages in groups
     timestamp: Timestamp;
     read: boolean;
     delivered?: boolean;
@@ -62,6 +74,7 @@ export interface Conversation {
     admins?: string[]; // Array of admin user IDs
     createdBy?: string; // Group creator user ID
     importantMembers?: string[]; // Array of important member user IDs (for quick filter)
+    groupAnnouncement?: string; // One-line banner message set by admin
 
     // Page-specific fields
     pageName?: string;
@@ -153,7 +166,8 @@ export const sendMessage = async (
     messageType: 'text' | 'image' | 'video' | 'file' | 'sharedPost' | 'sharedPDF' | 'poll' = 'text',
     mediaUrl?: string,
     sharedContent?: { contentType: 'post' | 'pdf'; contentId: string; contentData: any },
-    pollData?: { question: string; options: string[]; allowMultiple: boolean }
+    pollData?: { question: string; options: string[]; allowMultiple: boolean },
+    replyTo?: { messageId: string; text: string; senderName: string; messageType?: string }
 ): Promise<void> => {
     try {
         const currentUser = auth.currentUser;
@@ -198,6 +212,11 @@ export const sendMessage = async (
             };
         }
 
+        // Add reply-to if present
+        if (replyTo) {
+            messageData.replyTo = replyTo;
+        }
+
         // Add message to messages subcollection
         const messagesRef = collection(db, 'conversations', conversationId, 'messages');
         await addDoc(messagesRef, messageData);
@@ -232,12 +251,17 @@ export const sendMessage = async (
                 updatedAt: serverTimestamp(),
             });
 
-            // Send Push Notification to all other participants
+            // Send Push Notification to all other participants (Instagram DM style)
             participantsToUpdate.forEach(async (otherUserId: string) => {
-                // Determine notification title based on conversation type
-                let title = userData?.name || currentUser.displayName || 'User';
+                const senderName = userData?.name || userData?.displayName || currentUser.displayName || 'Someone';
+                const senderPhoto = userData?.photoURL || userData?.profilePhoto || currentUser.photoURL;
+
+                // For groups, prefix with group name
+                let pushTitle = senderName;
+                let pushBody = text.length > 100 ? text.substring(0, 100) + '...' : text;
+
                 if (conversationData.type === 'group' && conversationData.groupName) {
-                    title = `${title} in ${conversationData.groupName}`;
+                    pushTitle = `${senderName} • ${conversationData.groupName}`;
                 }
 
                 try {
@@ -245,11 +269,11 @@ export const sendMessage = async (
                     await sendNotification(
                         otherUserId,
                         currentUser.uid,
-                        userData?.name || currentUser.displayName || 'User',
-                        userData?.photoURL || currentUser.photoURL,
+                        pushTitle,         // Title = "Sender Name" or "Sender • Group"
+                        senderPhoto,
                         'message',
-                        `${userData?.name || currentUser.displayName || 'User'} sent a message`,
-                        { conversationId }
+                        pushBody,          // Body = actual message text (truncated if long)
+                        { conversationId, type: 'message' }
                     );
                 } catch (notifError) {
                     console.error('Error sending message notification:', notifError);
@@ -381,6 +405,22 @@ export const subscribeToConversations = (
 
         callback(conversations);
     });
+};
+
+/**
+ * Delete a message from a conversation
+ */
+export const deleteMessage = async (
+    conversationId: string,
+    messageId: string
+): Promise<void> => {
+    try {
+        const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+        await deleteDoc(messageRef);
+    } catch (error) {
+        console.error('Error deleting message:', error);
+        throw error;
+    }
 };
 
 /**
@@ -527,6 +567,132 @@ export const voteOnPoll = async (
         console.error('Error voting on poll:', error);
         throw error;
     }
+};
+
+// ==================== REACTIONS ====================
+
+/**
+ * Add or remove an emoji reaction to a message (toggle)
+ */
+export const addReaction = async (
+    conversationId: string,
+    messageId: string,
+    emoji: string,
+    userId: string
+): Promise<void> => {
+    try {
+        const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+        const messageDoc = await getDoc(messageRef);
+        if (!messageDoc.exists()) return;
+
+        const data = messageDoc.data() as Message;
+        const reactions: { [emoji: string]: string[] } = { ...(data.reactions || {}) };
+
+        if (!reactions[emoji]) reactions[emoji] = [];
+
+        if (reactions[emoji].includes(userId)) {
+            // Toggle off
+            reactions[emoji] = reactions[emoji].filter(id => id !== userId);
+            if (reactions[emoji].length === 0) delete reactions[emoji];
+        } else {
+            reactions[emoji] = [...reactions[emoji], userId];
+        }
+
+        await updateDoc(messageRef, { reactions });
+    } catch (error) {
+        console.error('Error adding reaction:', error);
+    }
+};
+
+// ==================== MESSAGE PRIORITY ====================
+
+/**
+ * Set priority of a message in a group (Important, Medium, Normal)
+ */
+export const setMessagePriority = async (
+    conversationId: string,
+    messageId: string,
+    priority: 'important' | 'medium' | 'normal'
+): Promise<void> => {
+    try {
+        const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+        await updateDoc(messageRef, { priority });
+    } catch (error) {
+        console.error('Error updating message priority:', error);
+        throw error;
+    }
+};
+
+/**
+ * Pin or unpin a message in a group chat
+ */
+export const pinMessage = async (
+    conversationId: string,
+    messageId: string,
+    isPinned: boolean
+): Promise<void> => {
+    try {
+        const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+        await updateDoc(messageRef, { pinned: isPinned });
+    } catch (error) {
+        console.error('Error updating message pin status:', error);
+        throw error;
+    }
+};
+
+// ==================== TYPING INDICATORS ====================
+
+/**
+ * Set typing status for a user in a conversation
+ */
+export const setTypingStatus = async (
+    conversationId: string,
+    userId: string,
+    userName: string,
+    isTyping: boolean
+): Promise<void> => {
+    try {
+        const typingRef = doc(db, 'conversations', conversationId, 'typing', userId);
+        if (isTyping) {
+            await updateDoc(typingRef, { userId, userName, updatedAt: serverTimestamp() }).catch(async () => {
+                // Doc doesn't exist yet, use set via addDoc workaround
+                const { setDoc } = await import('firebase/firestore');
+                await setDoc(typingRef, { userId, userName, updatedAt: serverTimestamp() });
+            });
+        } else {
+            const { deleteDoc } = await import('firebase/firestore');
+            await deleteDoc(typingRef).catch(() => { }); // Ignore if doesn't exist
+        }
+    } catch (error) {
+        // Non-critical, don't throw
+        console.warn('Error setting typing status:', error);
+    }
+};
+
+/**
+ * Subscribe to typing indicators in a conversation
+ * Returns array of names currently typing (other than current user)
+ */
+export const subscribeToTyping = (
+    conversationId: string,
+    currentUserId: string,
+    callback: (typingNames: string[]) => void
+): (() => void) => {
+    const typingRef = collection(db, 'conversations', conversationId, 'typing');
+    return onSnapshot(typingRef, (snapshot) => {
+        const now = Date.now();
+        const names: string[] = [];
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.userId === currentUserId) return; // Skip self
+            // Only consider typing if updated within last 5 seconds
+            const updatedAt = data.updatedAt?.toMillis?.() || 0;
+            if (now - updatedAt < 5000) {
+                names.push(data.userName || 'Someone');
+            }
+        });
+        callback(names);
+    });
 };
 
 // ==================== GROUP FUNCTIONS ====================

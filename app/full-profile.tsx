@@ -552,11 +552,13 @@ const ProfileScreen = () => {
             }
 
             // B. Fetch Posts & Resources
-            const [allPosts, userResources, userEvents] = await Promise.all([
+            const [allPostsRes, userResources, userEvents] = await Promise.all([
                 getAllPosts(),
                 getUserResources(targetUserId),
                 getUserEvents(targetUserId)
-            ]) as [Post[], LibraryResource[], EventItem[]];
+            ]) as [{ posts: Post[], hasMore: boolean, lastVisible: any }, LibraryResource[], EventItem[]];
+
+            const allPosts = allPostsRes.posts;
 
             // Filter posts for this user
             const userPosts = allPosts.filter(p => p.userId === targetUserId);
@@ -1063,7 +1065,7 @@ const ProfileScreen = () => {
                         <View style={styles.ytHandleRow}>
                             <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>@{username}</Text>
                             <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
-                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Followers</Text>
+                            <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.followers} Network</Text>
                             <Text style={[styles.ytHandleSeparator, { color: colors.border }]}>•</Text>
                             <Text style={[styles.ytHandleText, { color: colors.textSecondary }]}>{stats.posts} Posts</Text>
                         </View>
@@ -1101,9 +1103,9 @@ const ProfileScreen = () => {
                                 </>
                             ) : (
                                 <>
-                                    {/* Smart Connection Button */}
+                                    {/* Connection Button */}
                                     <TouchableOpacity
-                                        style={styles.ytPrimaryButton}
+                                        style={[styles.ytPrimaryButton, { flex: 1, marginRight: 8 }]}
                                         onPress={connectionStatus.isFriend ? undefined : handleConnect}
                                         disabled={loadingConnection || connectionStatus.isFriend || connectionStatus.pendingRequestSentByMe}
                                     >
@@ -1112,39 +1114,17 @@ const ProfileScreen = () => {
                                         ) : (
                                             <Text style={styles.ytPrimaryButtonText}>
                                                 {connectionStatus.isFriend
-                                                    ? '✓ Friends'
+                                                    ? '✓ Connected'
                                                     : connectionStatus.pendingRequestSentByMe
                                                         ? 'Request Sent'
-                                                        : 'Add Friend'}
+                                                        : 'Connect'}
                                             </Text>
-                                        )}
-                                    </TouchableOpacity>
-
-                                    {/* Follow Button */}
-                                    <TouchableOpacity
-                                        style={[styles.ytSecondaryButton, { marginRight: 8, backgroundColor: isDark ? '#334155' : '#FFF', borderColor: colors.border }]}
-                                        onPress={handleFollow}
-                                        disabled={loadingConnection}
-                                    >
-                                        {loadingConnection ? (
-                                            <ActivityIndicator size="small" color={colors.primary} />
-                                        ) : (
-                                            <>
-                                                <Ionicons
-                                                    name={connectionStatus.isFollowing ? "checkmark" : "person-add"}
-                                                    size={16}
-                                                    color={colors.primary}
-                                                />
-                                                <Text style={[styles.ytSecondaryButtonText, { marginLeft: 4, color: colors.primary }]}>
-                                                    {connectionStatus.isFollowing ? 'Following' : 'Follow'}
-                                                </Text>
-                                            </>
                                         )}
                                     </TouchableOpacity>
 
                                     {/* Message Button */}
                                     <TouchableOpacity
-                                        style={[styles.ytSecondaryButton, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}
+                                        style={[styles.ytSecondaryButton, { backgroundColor: isDark ? '#334155' : '#F1F5F9', flex: 1 }]}
                                         onPress={async () => {
                                             if (!targetUserId || !authUser) {
                                                 Alert.alert('Error', 'Please log in to send messages');

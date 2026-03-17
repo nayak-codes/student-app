@@ -9,9 +9,11 @@ import {
     limit,
     orderBy,
     query,
+    QueryDocumentSnapshot,
+    startAfter,
     Timestamp,
     updateDoc,
-    where,
+    where
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { uploadToCloudinary } from '../utils/cloudinaryUpload';
@@ -345,6 +347,83 @@ export const getAllResources = async (limitCount: number = 50): Promise<LibraryR
         throw error;
     }
 };
+
+// ─── Paginated Resources ──────────────────────────────────────────────────────
+export interface PaginatedResourcesResult {
+    resources: LibraryResource[];
+    lastDoc: QueryDocumentSnapshot | null;
+    hasMore: boolean;
+}
+
+const LIBRARY_PAGE_SIZE = 15;
+
+export const getResourcesPaginated = async (
+    lastDocument?: QueryDocumentSnapshot | null,
+    pageSize: number = LIBRARY_PAGE_SIZE
+): Promise<PaginatedResourcesResult> => {
+    try {
+        const constraints: any[] = [
+            where('approved', '==', true),
+            orderBy('createdAt', 'desc'),
+            limit(pageSize + 1),
+        ];
+        if (lastDocument) constraints.push(startAfter(lastDocument));
+
+        const q = query(collection(db, LIBRARY_COLLECTION), ...constraints);
+        const snapshot = await getDocs(q);
+        const docs = snapshot.docs;
+        const hasMore = docs.length > pageSize;
+        const pageDocs = hasMore ? docs.slice(0, pageSize) : docs;
+
+        const resources: LibraryResource[] = pageDocs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                title: data.title,
+                description: data.description,
+                type: data.type,
+                exam: data.exam,
+                subject: data.subject,
+                topic: data.topic,
+                fileUrl: data.fileUrl,
+                fileName: data.fileName,
+                fileSize: data.fileSize,
+                pages: data.pages,
+                customCoverUrl: data.customCoverUrl,
+                uploadedBy: data.uploadedBy,
+                uploaderName: data.uploaderName,
+                uploaderExam: data.uploaderExam,
+                uploaderAvatar: data.uploaderAvatar,
+                views: data.views || 0,
+                downloads: data.downloads || 0,
+                likes: data.likes || 0,
+                likedBy: data.likedBy || [],
+                rating: data.rating,
+                ratingCount: data.ratingCount,
+                tags: data.tags || [],
+                approved: data.approved,
+                createdAt: data.createdAt?.toDate() || new Date(),
+                updatedAt: data.updatedAt?.toDate() || new Date(),
+                isPremium: data.isPremium || false,
+                price: data.price || 0,
+                currency: data.currency || 'INR',
+                resourceType: data.resourceType || 'file',
+                accessLevel: data.accessLevel || 'public',
+                accessKey: data.accessKey,
+            } as LibraryResource;
+        });
+
+        return {
+            resources,
+            lastDoc: pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null,
+            hasMore,
+        };
+    } catch (error) {
+        console.error('Error getting paginated resources:', error);
+        throw error;
+    }
+};
+
 
 /**
  * Get resources by exam

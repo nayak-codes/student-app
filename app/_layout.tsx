@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider as AppThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 import { VideoPlayerProvider } from '../src/contexts/VideoPlayerContext';
 import { registerForPushNotificationsAsync } from '../src/services/notificationService';
+import { initializePresenceTracking } from '../src/services/presenceService';
 
 // Prevent splash screen from auto-hiding before fonts are loaded
 SplashScreen.preventAutoHideAsync();
@@ -39,6 +40,7 @@ function RootLayoutNav() {
   useEffect(() => {
     if (user) {
       registerForPushNotificationsAsync(user.uid);
+      initializePresenceTracking();
     }
   }, [user]);
 

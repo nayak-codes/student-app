@@ -34,7 +34,11 @@ export default function CreatePlaylistScreen() {
 
         setIsSubmitting(true);
         try {
-            await createPlaylist(user.uid, name.trim(), description.trim(), isPublic);
+            await createPlaylist(user.uid, {
+                title: name.trim(),
+                description: description.trim(),
+                privacy: isPublic ? 'public' : 'private'
+            });
             Alert.alert('Success', 'Playlist created!');
             router.back();
         } catch (error) {

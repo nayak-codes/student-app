@@ -363,7 +363,7 @@ const SearchScreen = () => {
             try {
                 const [collegesData, postsData, resourcesData, usersData] = await Promise.all([
                     getAllColleges().catch(err => { console.error('Error loading colleges:', err); return []; }),
-                    getAllPosts().catch(err => { console.error('Error loading posts:', err); return []; }),
+                    getAllPosts().then(res => res.posts).catch(err => { console.error('Error loading posts:', err); return []; }),
                     getAllResources().catch(err => { console.error('Error loading resources:', err); return []; }),
                     getAllUsers().catch(err => { console.error('Error loading users:', err); return []; })
                 ]);
