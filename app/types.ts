@@ -1,25 +1,5 @@
-export type RootStackParamList = {
-  search: undefined;
-  collegeProfile: {
-    college: {
-      id: string;
-      name: string;
-      location: string;
-      established: number;
-      type: string;
-      rank: number;
-      city: string;
-      affiliated: string;
-      image: string;
-      about: object;
-      courses: object;
-      admissions: object;
-      rankings: object;
-      placement: object;
-      facilities: string[];
-      faqs: any[];
-      gallery: string[];
-      contact: object;
-    };
-  };
-};
+// Re-exported from _types.ts — expo-router ignores files prefixed with _
+export * from './_types';
+
+// Dummy export to prevent expo-router route warning
+export default {};

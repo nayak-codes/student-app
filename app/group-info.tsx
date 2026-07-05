@@ -19,7 +19,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db, storage } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { UserProfile } from '../src/services/authService';
-import { Conversation } from '../src/services/chatService';
+import { Conversation, GroupResource, GroupEvent, getGroupResources, getGroupEvents } from '../src/services/chatService';
+import GroupResourcesSheet from '../src/components/GroupResourcesSheet';
+import GroupEventsSheet from '../src/components/GroupEventsSheet';
 
 export default function GroupInfoScreen() {
     const router = useRouter();
@@ -41,6 +43,12 @@ export default function GroupInfoScreen() {
     const [editDescription, setEditDescription] = useState('');
     const [editImage, setEditImage] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+
+    // New Features State
+    const [showResourcesSheet, setShowResourcesSheet] = useState(false);
+    const [showEventsSheet, setShowEventsSheet] = useState(false);
+    const [resourceCount, setResourceCount] = useState(0);
+    const [eventCount, setEventCount] = useState(0);
 
     useEffect(() => {
         fetchGroupInfo();
@@ -75,6 +83,10 @@ export default function GroupInfoScreen() {
 
                 const memberData = await Promise.all(memberPromises);
                 setMembers(memberData);
+
+                // Fetch basic counts for new features
+                getGroupResources(conversationId).then(resources => setResourceCount(resources.length));
+                getGroupEvents(conversationId).then(events => setEventCount(events.length));
             }
         } catch (error) {
             console.error('Error fetching group info:', error);
@@ -577,6 +589,74 @@ export default function GroupInfoScreen() {
                     </>
                 )}
 
+                {/* Group Features / Addons Section (New) */}
+                <View style={[styles.section, { backgroundColor: colors.card, paddingVertical: 8, marginTop: 16 }]}>
+                    <TouchableOpacity
+                        style={[styles.actionItem, { borderBottomColor: colors.border }]}
+                        onPress={() => setShowResourcesSheet(true)}
+                    >
+                        <View style={[styles.actionIconContainer, { backgroundColor: 'rgba(99, 102, 241, 0.1)' }]}>
+                            <Ionicons name="folder-outline" size={24} color="#6366F1" />
+                        </View>
+                        <Text style={[styles.actionText, { color: colors.text }]}>Group Resources</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {resourceCount > 0 && (
+                                <View style={[styles.countBadge, { backgroundColor: '#6366F1' }]}>
+                                    <Text style={styles.countText}>{resourceCount}</Text>
+                                </View>
+                            )}
+                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} style={{ marginLeft: 8 }} />
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.actionItem, { borderBottomWidth: 0 }]}
+                        onPress={() => setShowEventsSheet(true)}
+                    >
+                        <View style={[styles.actionIconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                            <Ionicons name="calendar-outline" size={24} color="#10B981" />
+                        </View>
+                        <Text style={[styles.actionText, { color: colors.text }]}>Group Events</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {eventCount > 0 && (
+                                <View style={[styles.countBadge, { backgroundColor: '#10B981' }]}>
+                                    <Text style={styles.countText}>{eventCount}</Text>
+                                </View>
+                            )}
+                            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} style={{ marginLeft: 8 }} />
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Group Stats (New) */}
+                <View style={[styles.section, { backgroundColor: colors.card, padding: 16, marginTop: 16 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Group Stats</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }}>
+                        <View style={{ alignItems: 'center' }}>
+                            <Text style={[{ fontSize: 24, fontWeight: '700', color: '#6366F1' }]}>
+                                {members.length}
+                            </Text>
+                            <Text style={[{ fontSize: 12, color: colors.textSecondary }]}>Members</Text>
+                        </View>
+                        <View style={{ height: 40, width: 1, backgroundColor: colors.border }} />
+                        <View style={{ alignItems: 'center' }}>
+                            <Text style={[{ fontSize: 24, fontWeight: '700', color: '#10B981' }]}>
+                                {resourceCount}
+                            </Text>
+                            <Text style={[{ fontSize: 12, color: colors.textSecondary }]}>Files</Text>
+                        </View>
+                        <View style={{ height: 40, width: 1, backgroundColor: colors.border }} />
+                        <View style={{ alignItems: 'center' }}>
+                            <Text style={[{ fontSize: 24, fontWeight: '700', color: '#F59E0B' }]}>
+                                {eventCount}
+                            </Text>
+                            <Text style={[{ fontSize: 12, color: colors.textSecondary }]}>Events</Text>
+                        </View>
+                    </View>
+                </View>
+
                 {/* Members Section (Redesigned) */}
                 <View style={styles.sectionHeader}>
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -644,6 +724,29 @@ export default function GroupInfoScreen() {
 
                 <View style={{ height: 32 }} />
             </ScrollView>
+
+            {/* Feature Sheets */}
+            {groupData && (
+                <>
+                    <GroupResourcesSheet
+                        visible={showResourcesSheet}
+                        onClose={() => setShowResourcesSheet(false)}
+                        groupId={conversationId}
+                        isAdmin={isAdmin}
+                        colors={colors}
+                        isDark={isDark}
+                    />
+                    
+                    <GroupEventsSheet
+                        visible={showEventsSheet}
+                        onClose={() => setShowEventsSheet(false)}
+                        groupId={conversationId}
+                        isAdmin={isAdmin}
+                        colors={colors}
+                        isDark={isDark}
+                    />
+                </>
+            )}
         </SafeAreaView>
     );
 }
@@ -926,5 +1029,17 @@ const styles = StyleSheet.create({
         marginTop: 4,
         fontSize: 12,
         fontWeight: '500',
+    },
+    countBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    countText: {
+        color: '#FFF',
+        fontSize: 12,
+        fontWeight: '700',
     },
 });

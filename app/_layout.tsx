@@ -3,8 +3,11 @@ import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { AppState, LogBox, Platform } from 'react-native';
+import GlobalNotificationToast from '../src/components/GlobalNotificationToast';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 
 import GlobalVideoPlayer from '../src/components/GlobalVideoPlayer';
 import NetworkStatusToast from '../src/components/NetworkStatusToast';
@@ -43,6 +46,33 @@ function RootLayoutNav() {
       initializePresenceTracking();
     }
   }, [user]);
+
+  useEffect(() => {
+    // Fired when a notification is received while app is actively foregrounded
+    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Foreground notification received:', notification.request.content.title);
+    });
+
+    // Fired when the user taps on a push notification (works from background/killed state too)
+    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      console.log('User interacted with notification, raw data:', data);
+      
+      if (data?.conversationId) {
+        // Safe navigation to group chat
+        router.push({ pathname: '/group-chat', params: { conversationId: data.conversationId as string } });
+      } else if (data?.postId) {
+        router.push({ pathname: '/post-comments', params: { postId: data.postId as string } });
+      } else if (data?.userId || data?.type === 'follow_request' || data?.type === 'friend_request') {
+        router.push('/notifications');
+      }
+    });
+
+    return () => {
+      notificationListener.remove();
+      responseListener.remove();
+    };
+  }, [router]);
 
   return (
     <NavThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -86,6 +116,7 @@ function RootLayoutNav() {
           <Stack.Screen name="select-members" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
         <GlobalVideoPlayer />
+        <GlobalNotificationToast />
       </>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>

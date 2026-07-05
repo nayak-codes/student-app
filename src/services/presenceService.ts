@@ -1,5 +1,5 @@
 import { doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { auth, db } from '../config/firebase';
 
 export interface UserPresence {
@@ -8,6 +8,10 @@ export interface UserPresence {
 }
 
 let appStateSubscription: any = null;
+let heartbeatInterval: any = null;
+
+const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Initializes presence tracking based on AppState.
@@ -16,20 +20,53 @@ let appStateSubscription: any = null;
 export const initializePresenceTracking = () => {
     if (appStateSubscription) return; // Prevent multiple subscriptions
 
+    const startHeartbeat = () => {
+        updatePresence(true);
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            updatePresence(true);
+        }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    const stopHeartbeat = () => {
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+        }
+        updatePresence(false);
+    };
+
     // Determine initial online status if user is already logged in
-    updatePresence(AppState.currentState === 'active');
+    // Web is always considered active on load
+    if (AppState.currentState === 'active' || Platform.OS === 'web') {
+        startHeartbeat();
+    } else {
+        updatePresence(false);
+    }
 
     appStateSubscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-        const isOnline = nextAppState === 'active';
-        updatePresence(isOnline);
+        if (nextAppState === 'active') {
+            startHeartbeat();
+        } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+            stopHeartbeat();
+        }
     });
+
+    // Handle web tab closures specifically
+    if (Platform.OS === 'web') {
+        window.addEventListener('beforeunload', () => {
+            stopHeartbeat();
+        });
+    }
 
     // Also update presence when auth state changes (login/logout)
     auth.onAuthStateChanged((user) => {
         if (user) {
-            updatePresence(AppState.currentState === 'active');
+            if (AppState.currentState === 'active' || Platform.OS === 'web') {
+                startHeartbeat();
+            }
         } else {
-            // Unsubscribe when logged out to prevent mem leaks, but keep the listener running for next login
+            stopHeartbeat();
         }
     });
 };
@@ -72,8 +109,18 @@ export const subscribeToUserPresence = (
     return onSnapshot(userRef, (doc) => {
         if (doc.exists()) {
             const data = doc.data();
+            
+            // Validate real online status based on threshold
+            let isReallyOnline = data.isOnline || false;
+            if (isReallyOnline && data.lastSeen) {
+                const lastSeenTime = data.lastSeen.toMillis ? data.lastSeen.toMillis() : Date.now();
+                if (Date.now() - lastSeenTime > OFFLINE_THRESHOLD_MS) {
+                    isReallyOnline = false; // Mark offline if they haven't sent a heartbeat recently
+                }
+            }
+
             callback({
-                isOnline: data.isOnline || false,
+                isOnline: isReallyOnline,
                 lastSeen: data.lastSeen,
             });
         } else {
@@ -91,8 +138,17 @@ export const getUserPresence = async (userId: string): Promise<UserPresence | nu
         const docSnap = await getDoc(userRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
+            
+            let isReallyOnline = data.isOnline || false;
+            if (isReallyOnline && data.lastSeen) {
+                const lastSeenTime = data.lastSeen.toMillis ? data.lastSeen.toMillis() : Date.now();
+                if (Date.now() - lastSeenTime > OFFLINE_THRESHOLD_MS) {
+                    isReallyOnline = false;
+                }
+            }
+
             return {
-                isOnline: data.isOnline || false,
+                isOnline: isReallyOnline,
                 lastSeen: data.lastSeen,
             };
         }

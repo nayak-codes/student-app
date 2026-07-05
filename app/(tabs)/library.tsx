@@ -42,11 +42,9 @@ const LibraryScreen = () => {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedResource, setSelectedResource] = useState<LibraryResource | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadResources();
-    }, [])
-  );
+  useEffect(() => {
+    loadResources();
+  }, []);
 
   const loadResources = async () => {
     try {

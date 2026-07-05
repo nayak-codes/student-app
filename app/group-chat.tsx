@@ -34,6 +34,7 @@ import { EmojiTray, ReactionChips } from '../src/components/MessageReactions';
 import PollCreator from '../src/components/PollCreator';
 import PollMessage from '../src/components/PollMessage';
 import ReplyPreview, { QuotedMessageBubble } from '../src/components/ReplyPreview';
+import GroupRoleBadge from '../src/components/GroupRoleBadge';
 import { auth, db } from '../src/config/firebase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { UserProfile } from '../src/services/authService';
@@ -49,7 +50,8 @@ import {
     setTypingStatus,
     subscribeToMessages,
     subscribeToTyping,
-    voteOnPoll
+    voteOnPoll,
+    toggleAnnouncementOnly
 } from '../src/services/chatService';
 import { incrementViews, LibraryResource } from '../src/services/libraryService';
 import { pickDocument, pickImage, takePhoto, uploadMedia } from '../src/services/mediaService';
@@ -451,11 +453,14 @@ export default function GroupChatScreen() {
                             )}
 
                             <View style={{ maxWidth: Dimensions.get('window').width * 0.72 }}>
-                                {/* Sender Name with unique color */}
+                                {/* Sender Name with unique color and Role Badge */}
                                 {showSenderName && (
-                                    <Text style={[styles.senderName, { color: senderColor }]}>
-                                        {senderName}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                        <Text style={[styles.senderName, { color: senderColor, marginBottom: 0 }]}>
+                                            {senderName}
+                                        </Text>
+                                        <GroupRoleBadge role={groupData?.roles?.[item.senderId] || 'student'} />
+                                    </View>
                                 )}
 
                                 {/* POLL MESSAGE */}
@@ -929,6 +934,16 @@ export default function GroupChatScreen() {
                 </View>
             ) : null}
 
+            {/* Announcement Mode Banner */}
+            {groupData?.announcementOnly && (
+                <View style={{ backgroundColor: 'rgba(99, 102, 241, 0.15)', paddingVertical: 6, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="megaphone-outline" size={14} color={colors.primary} style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
+                        Announcements Only
+                    </Text>
+                </View>
+            )}
+
             {/* Pinned Message Banner */}
             {latestPinnedMessage && (
                 <TouchableOpacity
@@ -959,13 +974,7 @@ export default function GroupChatScreen() {
             )}
 
             {/* Custom Professional Background */}
-            <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#E5E5E5' }}>
-                <ImageBackground
-                    source={require('../assets/chat-background-doodle.png')}
-                    style={{ flex: 1 }}
-                    resizeMode="cover"
-                    imageStyle={{ opacity: isDark ? 0.08 : 0.05 }}
-                >
+            <View style={{ flex: 1, backgroundColor: isDark ? '#0b141a' : '#EFEAE2' }}>
 
                     {/* Important Members Filter Card */}
                     {importantMembers.length > 0 && (showImportantMembersCard ? (
@@ -1157,45 +1166,52 @@ export default function GroupChatScreen() {
                         <ReplyPreview replyTo={replyTo} onClear={() => setReplyTo(null)} />
 
                         {/* Input Area */}
-                        <View style={[styles.inputContainer, { paddingBottom: 12, opacity: isConnected === false ? 0.5 : 1 }]}>
-                            <TouchableOpacity
-                                style={[styles.plusButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}
-                                onPress={() => setShowAttachmentMenu(true)}
-                                disabled={isConnected === false}
-                            >
-                                <Ionicons name="add" size={24} color={isDark ? '#FFF' : '#0F172A'} />
-                            </TouchableOpacity>
-
-                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#1F2937' : '#F1F5F9' }]}>
-                                <TextInput
-                                    style={[styles.input, { color: isDark ? '#FFFFFF' : '#0F172A' }]}
-                                    placeholder={isConnected === false ? "Offline" : "Message"}
-                                    placeholderTextColor={isDark ? "#9CA3AF" : "#64748B"}
-                                    value={inputText}
-                                    onChangeText={handleInputChange}
-                                    multiline
-                                    cursorColor={isDark ? "#FFFFFF" : "#0F172A"}
-                                    editable={isConnected !== false}
-                                />
+                        {(groupData?.announcementOnly && !groupData.admins?.includes(auth.currentUser?.uid || '') && groupData.createdBy !== auth.currentUser?.uid) ? (
+                            <View style={[styles.inputContainer, { justifyContent: 'center', paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border }]}>
+                                <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center' }}>
+                                    Only admins can send messages
+                                </Text>
                             </View>
+                        ) : (
+                            <View style={[styles.inputContainer, { paddingBottom: 12, opacity: isConnected === false ? 0.5 : 1 }]}>
+                                <TouchableOpacity
+                                    style={[styles.plusButton, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}
+                                    onPress={() => setShowAttachmentMenu(true)}
+                                    disabled={isConnected === false}
+                                >
+                                    <Ionicons name="add" size={24} color={isDark ? '#FFF' : '#0F172A'} />
+                                </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={[
-                                    styles.sendButton,
-                                    { backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? '#4B5563' : '#CBD5E1') }
-                                ]}
-                                onPress={handleSend}
-                                disabled={!inputText.trim() || sending || isConnected === false}
-                            >
-                                {sending ? (
-                                    <ActivityIndicator size="small" color="#FFF" />
-                                ) : (
-                                    <Ionicons name="send" size={20} color="#FFF" />
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                                <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#1F2937' : '#F1F5F9' }]}>
+                                    <TextInput
+                                        style={[styles.input, { color: isDark ? '#FFFFFF' : '#0F172A' }]}
+                                        placeholder={isConnected === false ? "Offline" : "Message"}
+                                        placeholderTextColor={isDark ? "#9CA3AF" : "#64748B"}
+                                        value={inputText}
+                                        onChangeText={handleInputChange}
+                                        multiline
+                                        cursorColor={isDark ? "#FFFFFF" : "#0F172A"}
+                                        editable={isConnected !== false}
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.sendButton,
+                                        { backgroundColor: inputText.trim() ? '#6366F1' : (isDark ? '#4B5563' : '#CBD5E1') }
+                                    ]}
+                                    onPress={handleSend}
+                                    disabled={!inputText.trim() || sending || isConnected === false}
+                                >
+                                    {sending ? (
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                    ) : (
+                                        <Ionicons name="send" size={20} color="#FFF" />
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </KeyboardAvoidingView>
-                </ImageBackground>
             </View>
 
             {/* Poll Creator Modal */}
@@ -1253,7 +1269,24 @@ export default function GroupChatScreen() {
                                 ]
                             );
                         }
-                    }
+                    },
+                    ...(groupData?.admins?.includes(auth.currentUser?.uid || '') || groupData?.createdBy === auth.currentUser?.uid
+                        ? [
+                            {
+                                icon: groupData?.announcementOnly ? 'megaphone' : 'megaphone-outline' as any,
+                                label: groupData?.announcementOnly ? 'Disable Announcements Only' : 'Enable Announcements Only',
+                                onPress: async () => {
+                                    if (!conversationId || !groupData) return;
+                                    try {
+                                        await toggleAnnouncementOnly(conversationId, !groupData.announcementOnly);
+                                        setShowOptionsSheet(false);
+                                    } catch (e) {
+                                        Alert.alert('Error', 'Failed to update announcement mode');
+                                    }
+                                }
+                            }
+                        ]
+                        : [])
                 ]}
             />
             {selectedResource && (

@@ -146,7 +146,7 @@ export default function SignupScreen() {
                     <View style={styles.passwordContainer}>
                         <TextInput
                             style={styles.passwordInput}
-                            placeholder="Password"
+                            placeholder="Create Password"
                             placeholderTextColor="#94A3B8"
                             value={password}
                             onChangeText={setPassword}

@@ -15,6 +15,7 @@ import {
     writeBatch
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { sendNotification } from './notificationService';
 
 export interface Message {
     id: string;
@@ -76,6 +77,11 @@ export interface Conversation {
     importantMembers?: string[]; // Array of important member user IDs (for quick filter)
     groupAnnouncement?: string; // One-line banner message set by admin
 
+    // ── Enhanced Student Group Features ──
+    groupType?: 'class' | 'study' | 'club' | 'college'; // Type of group
+    roles?: { [userId: string]: 'faculty' | 'cr' | 'student' }; // Member roles
+    announcementOnly?: boolean; // If true, only admins can send messages
+
     // Page-specific fields
     pageName?: string;
     pageDescription?: string;
@@ -94,6 +100,34 @@ export interface Conversation {
     };
     createdAt: Timestamp;
     updatedAt: Timestamp;
+}
+
+// ── New: Group Resource Interface ──
+export interface GroupResource {
+    id: string;
+    name: string;
+    url: string;
+    type: 'pdf' | 'image' | 'link' | 'other';
+    uploadedBy: string;
+    uploaderName: string;
+    description?: string;
+    createdAt: Timestamp;
+}
+
+// ── New: Group Event Interface ──
+export interface GroupEvent {
+    id: string;
+    title: string;
+    description?: string;
+    date: Timestamp;
+    createdBy: string;
+    creatorName: string;
+    rsvp: {
+        going: string[];    // Array of userIds
+        notGoing: string[]; // Array of userIds
+        maybe: string[];    // Array of userIds
+    };
+    createdAt: Timestamp;
 }
 
 /**
@@ -265,7 +299,6 @@ export const sendMessage = async (
                 }
 
                 try {
-                    const { sendNotification } = require('./notificationService');
                     await sendNotification(
                         otherUserId,
                         currentUser.uid,
@@ -704,7 +737,8 @@ export const createGroup = async (
     groupName: string,
     groupDescription: string,
     participantIds: string[], // Array of user IDs to add to the group
-    groupIcon?: string
+    groupIcon?: string,
+    groupType?: 'class' | 'study' | 'club' | 'college'
 ): Promise<string> => {
     try {
         const currentUser = auth.currentUser;
@@ -737,7 +771,7 @@ export const createGroup = async (
         });
 
         // Create group conversation
-        const newGroup = {
+        const newGroup: any = {
             type: 'group',
             participants: allParticipants,
             participantDetails,
@@ -750,6 +784,10 @@ export const createGroup = async (
             updatedAt: serverTimestamp(),
         };
 
+        if (groupType) {
+            newGroup.groupType = groupType;
+        }
+
         const conversationsRef = collection(db, 'conversations');
         const docRef = await addDoc(conversationsRef, newGroup);
 
@@ -757,7 +795,6 @@ export const createGroup = async (
         participantIds.forEach(async (userId) => {
             if (userId !== currentUser.uid) {
                 try {
-                    const { sendNotification } = require('./notificationService');
                     await sendNotification(
                         userId,
                         currentUser.uid,
@@ -1264,6 +1301,244 @@ export const getPublicPages = async (): Promise<Conversation[]> => {
         return pages;
     } catch (error) {
         console.error('Error getting public pages:', error);
+        return [];
+    }
+};
+
+// ==================== ENHANCED STUDENT GROUP FEATURES ====================
+
+/**
+ * Set a member's role in a group (faculty / cr / student)
+ */
+export const setMemberRole = async (
+    groupId: string,
+    userId: string,
+    role: 'faculty' | 'cr' | 'student' | null
+): Promise<void> => {
+    try {
+        const groupRef = doc(db, 'conversations', groupId);
+        if (role === null) {
+            // Remove role — use a dynamic key deletion via getDoc + updateDoc
+            const groupDoc = await getDoc(groupRef);
+            const existingRoles = groupDoc.data()?.roles || {};
+            delete existingRoles[userId];
+            await updateDoc(groupRef, { roles: existingRoles });
+        } else {
+            await updateDoc(groupRef, { [`roles.${userId}`]: role });
+        }
+    } catch (error) {
+        console.error('Error setting member role:', error);
+        throw error;
+    }
+};
+
+/**
+ * Toggle announcement-only mode for a group (admin-only messages)
+ */
+export const toggleAnnouncementOnly = async (
+    groupId: string,
+    enabled: boolean
+): Promise<void> => {
+    try {
+        await updateDoc(doc(db, 'conversations', groupId), {
+            announcementOnly: enabled,
+        });
+    } catch (error) {
+        console.error('Error toggling announcement mode:', error);
+        throw error;
+    }
+};
+
+/**
+ * Set the group type (class / study / club / college)
+ */
+export const setGroupType = async (
+    groupId: string,
+    groupType: 'class' | 'study' | 'club' | 'college'
+): Promise<void> => {
+    try {
+        await updateDoc(doc(db, 'conversations', groupId), { groupType });
+    } catch (error) {
+        console.error('Error setting group type:', error);
+        throw error;
+    }
+};
+
+// ── Group Resources ──
+
+/**
+ * Add a resource to the group's resources subcollection
+ */
+export const addGroupResource = async (
+    groupId: string,
+    resource: Omit<GroupResource, 'id' | 'createdAt'>
+): Promise<string> => {
+    try {
+        const resourcesRef = collection(db, 'conversations', groupId, 'resources');
+        const docRef = await addDoc(resourcesRef, {
+            ...resource,
+            createdAt: serverTimestamp(),
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error('Error adding group resource:', error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a group resource
+ */
+export const deleteGroupResource = async (
+    groupId: string,
+    resourceId: string
+): Promise<void> => {
+    try {
+        await deleteDoc(doc(db, 'conversations', groupId, 'resources', resourceId));
+    } catch (error) {
+        console.error('Error deleting group resource:', error);
+        throw error;
+    }
+};
+
+/**
+ * Subscribe to real-time group resources
+ */
+export const subscribeToGroupResources = (
+    groupId: string,
+    callback: (resources: GroupResource[]) => void
+): (() => void) => {
+    const resourcesRef = collection(db, 'conversations', groupId, 'resources');
+    const q = query(resourcesRef, orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+        const resources = snapshot.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+        })) as GroupResource[];
+        callback(resources);
+    });
+};
+
+/**
+ * Get all group resources once
+ */
+export const getGroupResources = async (groupId: string): Promise<GroupResource[]> => {
+    try {
+        const resourcesRef = collection(db, 'conversations', groupId, 'resources');
+        const q = query(resourcesRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as GroupResource[];
+    } catch (error) {
+        console.error('Error fetching group resources:', error);
+        return [];
+    }
+};
+
+// ── Group Events ──
+
+/**
+ * Create a new event inside a group
+ */
+export const createGroupEvent = async (
+    groupId: string,
+    event: Omit<GroupEvent, 'id' | 'createdAt' | 'rsvp'>
+): Promise<string> => {
+    try {
+        const eventsRef = collection(db, 'conversations', groupId, 'events');
+        const docRef = await addDoc(eventsRef, {
+            ...event,
+            rsvp: { going: [], notGoing: [], maybe: [] },
+            createdAt: serverTimestamp(),
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error('Error creating group event:', error);
+        throw error;
+    }
+};
+
+/**
+ * RSVP to a group event
+ * status: 'going' | 'notGoing' | 'maybe'
+ */
+export const rsvpGroupEvent = async (
+    groupId: string,
+    eventId: string,
+    userId: string,
+    status: 'going' | 'notGoing' | 'maybe'
+): Promise<void> => {
+    try {
+        const eventRef = doc(db, 'conversations', groupId, 'events', eventId);
+        const eventDoc = await getDoc(eventRef);
+        if (!eventDoc.exists()) throw new Error('Event not found');
+
+        const data = eventDoc.data() as GroupEvent;
+        // Remove user from all RSVP lists first
+        const rsvp = {
+            going: (data.rsvp?.going || []).filter((id) => id !== userId),
+            notGoing: (data.rsvp?.notGoing || []).filter((id) => id !== userId),
+            maybe: (data.rsvp?.maybe || []).filter((id) => id !== userId),
+        };
+        // Add user to the chosen status
+        rsvp[status] = [...rsvp[status], userId];
+
+        await updateDoc(eventRef, { rsvp });
+    } catch (error) {
+        console.error('Error updating RSVP:', error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a group event
+ */
+export const deleteGroupEvent = async (
+    groupId: string,
+    eventId: string
+): Promise<void> => {
+    try {
+        await deleteDoc(doc(db, 'conversations', groupId, 'events', eventId));
+    } catch (error) {
+        console.error('Error deleting group event:', error);
+        throw error;
+    }
+};
+
+/**
+ * Subscribe to real-time group events
+ */
+export const subscribeToGroupEvents = (
+    groupId: string,
+    callback: (events: GroupEvent[]) => void
+): (() => void) => {
+    const eventsRef = collection(db, 'conversations', groupId, 'events');
+    const q = query(eventsRef, orderBy('date', 'asc'));
+    return onSnapshot(q, (snapshot) => {
+        const events = snapshot.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+        })) as GroupEvent[];
+        callback(events);
+    });
+};
+
+/**
+ * Get all group events once
+ */
+export const getGroupEvents = async (groupId: string): Promise<GroupEvent[]> => {
+    try {
+        const eventsRef = collection(db, 'conversations', groupId, 'events');
+        const q = query(eventsRef, orderBy('date', 'asc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as GroupEvent[];
+    } catch (error) {
+        console.error('Error fetching group events:', error);
         return [];
     }
 };

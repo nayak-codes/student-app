@@ -18,8 +18,15 @@ import {
 import { Platform } from 'react-native';
 import { db } from '../config/firebase';
 
-// Notification Types
-export type NotificationType = 'friend_request' | 'follow_request' | 'like' | 'comment' | 'system' | 'message' | 'group_invite';
+// ─── Notification Types ────────────────────────────────────────────────────────
+export type NotificationType =
+    | 'friend_request'
+    | 'follow_request'
+    | 'like'
+    | 'comment'
+    | 'system'
+    | 'message'
+    | 'group_invite';
 
 export interface NotificationItem {
     id: string;
@@ -34,13 +41,9 @@ export interface NotificationItem {
     data?: any;
 }
 
-// Collection Name
 const NOTIFICATIONS_COLLECTION = 'notifications';
 
-// ─── CRITICAL FIX: setNotificationHandler MUST run unconditionally ───────────
-// The previous version had a guard that BLOCKED this from running in standalone
-// APK builds (executionEnvironment === 'storeClient'), causing all foreground
-// notifications to be silently dropped.
+// ─── Foreground handler: show alert even when app is open ─────────────────────
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowAlert: true,
@@ -51,92 +54,78 @@ Notifications.setNotificationHandler({
     }),
 });
 
-/**
- * Registers the device for Push Notifications and saves the token to Firestore.
- * Call this once after the user logs in.
- */
-export async function registerForPushNotificationsAsync(userId?: string): Promise<string | undefined> {
-    // MUST be a real physical device
+// ─── Register Device & Save Token to Firestore ────────────────────────────────
+export async function registerForPushNotificationsAsync(
+    userId?: string
+): Promise<string | undefined> {
+    if (Platform.OS === 'web') return;
+
     if (!Device.isDevice) {
-        console.log('Push Notifications: Must use a physical device');
+        console.log('⚠️ Push Notifications only work on physical devices');
         return;
     }
 
-    // Set Android notification channel FIRST (required before requesting permissions)
+    // Set Android channel FIRST (required before requesting permissions)
     if (Platform.OS === 'android') {
-        try {
-            await Notifications.setNotificationChannelAsync('default', {
-                name: 'Vidhyardhi Notifications',
-                importance: Notifications.AndroidImportance.MAX,
-                vibrationPattern: [0, 250, 250, 250],
-                lightColor: '#4F46E5',
-                sound: 'default',
-                showBadge: true,
-            });
-            console.log('Android notification channel set');
-        } catch (e) {
-            console.error('Error setting notification channel:', e);
-        }
+        await Notifications.setNotificationChannelAsync('default', {
+            name: 'Vidhyardhi',               // ✅ Channel name = App name
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#4F46E5',
+            sound: 'default',
+            showBadge: true,
+        });
     }
 
     // Request permissions
-    let finalStatus: Notifications.PermissionStatus;
-    try {
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-            const { status } = await Notifications.requestPermissionsAsync();
-            finalStatus = status;
-        }
-    } catch (e) {
-        console.error('Error requesting notification permissions:', e);
-        return;
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
     }
 
     if (finalStatus !== 'granted') {
-        console.log('❌ Push notification permission DENIED');
+        console.log('❌ Notification permission denied');
         return;
     }
 
-    // Get the Expo Push Token
-    let token: string | undefined;
+    // Skip token fetch in Expo Go (crashes SDK 53)
+    if (
+        Constants.executionEnvironment === 'storeClient' ||
+        Constants.appOwnership === 'expo'
+    ) {
+        console.log('ℹ️ Skipping push token in Expo Go - use real APK');
+        return;
+    }
+
+    // Get Expo Push Token
     try {
-        // The projectId MUST match app.json extra.eas.projectId
-        const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
-        if (!projectId) {
-            console.error('❌ No projectId found. Check app.json extra.eas.projectId');
-            return;
+        const projectId =
+            Constants?.expoConfig?.extra?.eas?.projectId ??
+            Constants?.easConfig?.projectId ??
+            '3a51c3ac-c39d-4cc4-8457-1ce142a37105';
+
+        const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+        console.log('✅ Push token:', token);
+
+        // Save to Firestore → Cloud Function will use this to send pushes
+        if (userId && token) {
+            await setDoc(doc(db, 'users', userId), { pushToken: token }, { merge: true });
+            console.log('✅ Token saved to Firestore');
         }
-        const pushTokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-        token = pushTokenData.data;
-        console.log('✅ Expo Push Token obtained:', token);
+
+        return token;
     } catch (e: any) {
-        // In Expo Go (SDK 53+), push tokens are not supported — that's okay
-        if (e?.message?.includes('Expo Go') || e?.message?.includes('Development Build') || e?.message?.includes('expo-dev-client')) {
-            console.log('ℹ️ Push tokens not supported in Expo Go. This will work in the real APK.');
-        } else {
-            console.error('❌ Error getting push token:', e);
-        }
+        console.error('❌ Error getting push token:', e?.message);
         return;
     }
-
-    // Save the token to Firestore so we can send pushes later
-    if (userId && token) {
-        try {
-            await setDoc(doc(db, 'users', userId), { pushToken: token }, { merge: true });
-            console.log('✅ Push token saved to Firestore for user:', userId);
-        } catch (e) {
-            console.error('❌ Error saving push token to Firestore:', e);
-        }
-    }
-
-    return token;
 }
 
-/**
- * Sends a notification to a user — saves to Firestore AND sends a real push.
- * The push title will be the sender's name (Instagram/YouTube style).
- */
+// ─── Send Notification ────────────────────────────────────────────────────────
+// Saves to Firestore (in-app feed) AND sends push directly via Expo API.
+// Since the SENDER is always active when triggering a notification,
+// calling Expo Push API from client works perfectly — no server needed! ✅
 export const sendNotification = async (
     recipientId: string,
     senderId: string,
@@ -147,9 +136,9 @@ export const sendNotification = async (
     data: any = {}
 ) => {
     try {
-        if (recipientId === senderId) return; // Never notify yourself
+        if (recipientId === senderId) return;
 
-        // 1. Save to Firestore (shows in the in-app notifications tab)
+        // 1. Save to Firestore → shows in in-app notification feed
         await addDoc(collection(db, NOTIFICATIONS_COLLECTION), {
             recipientId,
             actorId: senderId,
@@ -159,59 +148,41 @@ export const sendNotification = async (
             message,
             read: false,
             data,
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
         });
-        console.log(`✅ Notification [${type}] saved to Firestore for`, recipientId);
 
-        // 2. Send real OS Push Notification using sender's name as the title
-        await sendPushNotificationToUser(recipientId, senderName || 'Vidhyardhi', message, data);
+        // 2. Send OS push notification directly from client
+        //    (sender's app is always open when this runs)
+        await sendDirectPush(recipientId, senderName, message, data);
+
+        console.log(`✅ Notification [${type}] saved + push sent`);
 
     } catch (error) {
-        console.error('Error sending notification:', error);
+        console.error('❌ Error sending notification:', error);
     }
 };
 
-/**
- * Fetches recipient's push token from Firestore and sends the push.
- */
-async function sendPushNotificationToUser(userId: string, title: string, body: string, data: any) {
+// ─── Direct Push via Expo API (no server/billing needed) ──────────────────────
+const sendDirectPush = async (
+    recipientId: string,
+    actorName: string,
+    message: string,
+    data: any = {}
+) => {
     try {
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (!userDoc.exists()) {
-            console.log('User not found for push notification:', userId);
-            return;
-        }
+        // Get recipient's push token from Firestore
+        const userDoc = await getDoc(doc(db, 'users', recipientId));
+        if (!userDoc.exists()) return;
 
-        const userData = userDoc.data();
-        const pushToken = userData?.pushToken;
-
+        const pushToken = userDoc.data()?.pushToken;
         if (!pushToken) {
-            console.log('ℹ️ Recipient has no push token saved:', userId);
+            console.log(`ℹ️ No pushToken for user ${recipientId}`);
             return;
         }
 
-        await sendExpoPush(pushToken, title, body, data);
-    } catch (error) {
-        console.error('Error fetching user token for push:', error);
-    }
-}
+        // Format body: "SenderName: message" (WhatsApp style)
+        const body = actorName ? `${actorName}: ${message}` : message;
 
-/**
- * Makes the HTTP call to Expo's Push API.
- * This is what actually delivers the notification to the phone.
- */
-async function sendExpoPush(expoPushToken: string, title: string, body: string, data: any) {
-    const payload = {
-        to: expoPushToken,
-        sound: 'default',
-        title: title,
-        body: body,
-        data: data,
-        channelId: 'default', // Must match the Android channel we registered
-        priority: 'high',
-    };
-
-    try {
         const response = await fetch('https://exp.host/--/api/v2/push/send', {
             method: 'POST',
             headers: {
@@ -219,25 +190,31 @@ async function sendExpoPush(expoPushToken: string, title: string, body: string, 
                 'Accept-encoding': 'gzip, deflate',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+                to: pushToken,
+                sound: 'default',
+                title: 'Vidhyardhi',
+                body,
+                data,
+                channelId: 'default',
+                priority: 'high',
+            }),
         });
-        const result = await response.json();
 
+        const result = await response.json();
         if (result?.data?.status === 'ok') {
-            console.log('✅ Push notification delivered successfully');
+            console.log(`✅ Push delivered to ${recipientId}`);
         } else if (result?.data?.status === 'error') {
-            console.error('❌ Expo Push Error:', result.data.message, '| Details:', result.data.details);
-        } else {
-            console.log('Push API response:', JSON.stringify(result));
+            console.warn(`⚠️ Push error for ${recipientId}:`, result.data.message);
         }
     } catch (error) {
-        console.error('Error calling Expo Push API:', error);
+        console.error('❌ Error sending direct push:', error);
     }
-}
+};
 
-/**
- * Subscribes to real-time notifications for a user.
- */
+
+
+// ─── Real-time listener ───────────────────────────────────────────────────────
 export const subscribeToNotifications = (
     userId: string,
     onUpdate: (notifications: NotificationItem[]) => void
@@ -249,47 +226,48 @@ export const subscribeToNotifications = (
         limit(50)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const notifications: NotificationItem[] = snapshot.docs.map(docSnap => {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                type: data.type,
-                actorId: data.actorId,
-                actorName: data.actorName,
-                actorPhotoURL: data.actorPhotoURL,
-                recipientId: data.recipientId,
-                message: data.message,
-                timestamp: data.createdAt?.toMillis() || Date.now(),
-                read: data.read,
-                data: data.data
-            };
-        });
-        onUpdate(notifications);
-    }, (error) => {
-        console.error('Error listening to notifications:', error);
-    });
-
-    return unsubscribe;
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const notifications: NotificationItem[] = snapshot.docs.map((docSnap) => {
+                const data = docSnap.data();
+                return {
+                    id: docSnap.id,
+                    type: data.type,
+                    actorId: data.actorId,
+                    actorName: data.actorName,
+                    actorPhotoURL: data.actorPhotoURL,
+                    recipientId: data.recipientId,
+                    message: data.message,
+                    timestamp: data.createdAt?.toMillis() || Date.now(),
+                    read: data.read,
+                    data: data.data,
+                };
+            });
+            onUpdate(notifications);
+        },
+        (error) => {
+            console.error('❌ Notification listener error:', error);
+        }
+    );
 };
 
-/**
- * Marks a single notification as read.
- */
+// ─── Mark as Read ─────────────────────────────────────────────────────────────
 export const markNotificationAsRead = async (notificationId: string) => {
     try {
-        const ref = doc(db, NOTIFICATIONS_COLLECTION, notificationId);
-        await updateDoc(ref, { read: true });
+        await updateDoc(doc(db, NOTIFICATIONS_COLLECTION, notificationId), {
+            read: true,
+        });
     } catch (error) {
-        console.error('Error marking notification read:', error);
+        console.error('❌ Error marking notification read:', error);
     }
 };
 
-// Legacy support
+// ─── Legacy support ───────────────────────────────────────────────────────────
 export const getNotifications = async (userId: string): Promise<NotificationItem[]> => {
     return new Promise((resolve) => {
-        const unsubscribe = subscribeToNotifications(userId, (data) => {
-            unsubscribe();
+        const unsub = subscribeToNotifications(userId, (data) => {
+            unsub();
             resolve(data);
         });
     });

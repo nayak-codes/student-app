@@ -27,6 +27,7 @@ export default function CreateGroupScreen() {
 
     const [groupName, setGroupName] = useState('');
     const [groupDescription, setGroupDescription] = useState('');
+    const [groupType, setGroupType] = useState<'class' | 'study' | 'club' | 'college' | ''>('');
     const [groupIcon, setGroupIcon] = useState('');
     const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
@@ -70,6 +71,11 @@ export default function CreateGroupScreen() {
             return;
         }
 
+        if (!groupType) {
+            Alert.alert('Group Type Required', 'Please select a group type');
+            return;
+        }
+
         if (selectedMembers.length === 0) {
             Alert.alert('Add Members', 'Please add at least one member to the group');
             return;
@@ -90,7 +96,8 @@ export default function CreateGroupScreen() {
                 groupName,
                 groupDescription,
                 selectedMembers,
-                groupIcon
+                groupIcon,
+                groupType || undefined
             );
 
             Alert.alert(
@@ -156,6 +163,34 @@ export default function CreateGroupScreen() {
                                 </View>
                             )}
                         </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.section}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Group Type *</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                            {[
+                                { id: 'class', label: 'Class', icon: 'school' },
+                                { id: 'study', label: 'Study Group', icon: 'book' },
+                                { id: 'club', label: 'Club', icon: 'planet' },
+                                { id: 'college', label: 'College Official', icon: 'business' }
+                            ].map(type => (
+                                <TouchableOpacity
+                                    key={type.id}
+                                    style={[
+                                        styles.typeBtn,
+                                        { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.border },
+                                        groupType === type.id && { backgroundColor: `${colors.primary}15`, borderColor: colors.primary }
+                                    ]}
+                                    onPress={() => setGroupType(type.id as any)}
+                                >
+                                    <Ionicons name={type.icon as any} size={18} color={groupType === type.id ? colors.primary : colors.textSecondary} />
+                                    <Text style={[
+                                        styles.typeBtnText,
+                                        { color: groupType === type.id ? colors.primary : colors.text }
+                                    ]}>{type.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     </View>
 
                     {/* Group Name */}
@@ -378,4 +413,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
     },
+    typeBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        gap: 8,
+        flexGrow: 1,
+        justifyContent: 'center'
+    },
+    typeBtnText: {
+        fontSize: 14,
+        fontWeight: '600'
+    }
 });
